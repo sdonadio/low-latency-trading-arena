@@ -1,0 +1,1543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" href="data:," />
+<title>Week 9 · Concurrency I — Atomics &amp; Memory Models — Low-Latency Trading Arena</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    /* ── Low-Latency Trading Arena · shared palette (identical on every page) ── */
+    --accent:       #7c3aed;
+    --accent-2:     #c4b5fd;
+    --accent-3:     #ede9fe;
+    --accent-rgb:   124,58,237;
+    --accent-2-rgb: 196,181,253;
+    --bg:           #0f1115;
+    --panel:        #181b22;
+    --panel2:       #1e222b;
+    --panel-2:      #13161b;
+    --ink:          #e8e6e3;
+    --ink-dim:      #c6c3bf;
+    --ink-mute:     #6f757f;
+    --muted:        #9aa0a6;
+    --dim:          #5f6673;
+    --line:         #272c36;
+    --line-2:       #333a47;
+    --border:       #272c36;
+    --ok:           #3fb950;
+    --warn:         #d29922;
+    --bad:          #f85149;
+    --info:         #6cb6ff;
+    --sky:          #58a6ff;
+    --violet:       #a78bfa;
+    --teal:         #2dd4bf;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.62;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent-2);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  /* ── nav / footer ─────────────────────────────────────────── */
+  nav.top{position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+    padding:11px 22px;background:rgba(15,17,21,.94);border-bottom:1px solid var(--line)}
+  nav.top>a:first-child{font-weight:800;letter-spacing:-.2px;color:var(--ink);font-size:14.5px;
+    border-left:3px solid var(--accent);padding-left:10px}
+  nav.top .crumbs{font-size:12px;color:var(--muted)}
+  nav.top .crumbs b{color:var(--ink);font-weight:700}
+  footer{border-top:1px solid var(--line);background:var(--panel);
+    padding:26px 22px 34px;text-align:center;font-size:11.5px;color:var(--dim);letter-spacing:.3px}
+
+  /* ── sections & typography ────────────────────────────────── */
+  section{max-width:1180px;margin:0 auto;padding:36px 22px 42px;border-top:1px solid var(--line)}
+  section#hero{border-top:none}
+  .kicker{font-size:10.5px;font-weight:800;letter-spacing:1.9px;text-transform:uppercase;color:var(--accent-2)}
+  h1{font-size:clamp(26px,4.2vw,40px);font-weight:800;letter-spacing:-.9px;line-height:1.13;margin:10px 0 6px}
+  h2{font-size:21px;font-weight:700;letter-spacing:-.3px;margin:4px 0 4px}
+  h3{font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);margin-bottom:11px}
+  h4{font-size:13.5px;font-weight:700;margin-bottom:5px}
+  p{margin:9px 0;max-width:82ch}
+  .lead{color:var(--muted);font-size:15px;max-width:84ch}
+  .sub{color:var(--muted);font-size:12.5px}
+  strong{color:#fff;font-weight:650}
+  em.hi{color:var(--accent-2);font-style:normal;font-weight:600}
+  code,.mono{font-family:var(--mono);font-size:12.5px}
+  code{background:rgba(var(--accent-2-rgb),.13);color:#ddd4fb;padding:1px 5px;border-radius:4px}
+  ul.you{list-style:none;margin:16px 0 0;display:grid;gap:8px}
+  ul.you li{position:relative;padding-left:26px;font-size:13.5px;color:var(--ink);max-width:78ch}
+  ul.you li::before{content:"";position:absolute;left:4px;top:8px;width:8px;height:8px;border-radius:2px;
+    background:var(--accent);box-shadow:0 0 0 3px rgba(var(--accent-rgb),.22)}
+  ul.plain{list-style:none;display:grid;gap:7px;font-size:13px;color:var(--muted)}
+  ul.plain li{padding-left:16px;position:relative}
+  ul.plain li::before{content:"\2022";position:absolute;left:2px;color:var(--accent-2)}
+
+  /* ── panels & layout ──────────────────────────────────────── */
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .panel.tight{padding:13px 14px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;align-items:start}
+  .split{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:18px;align-items:start}
+  .split-r{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:18px;align-items:start}
+  .stack{display:grid;gap:14px}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+
+  /* ── controls ─────────────────────────────────────────────── */
+  .btn{font-family:inherit;font-size:12px;font-weight:650;cursor:pointer;color:var(--ink);
+    background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:7px 14px;transition:.15s}
+  .btn:hover:not(:disabled){border-color:var(--accent-2);color:#fff}
+  .btn:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .btn:disabled{opacity:.35;cursor:not-allowed}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.primary:hover:not(:disabled){filter:brightness(1.25)}
+  .btn.on{background:rgba(var(--accent-rgb),.28);border-color:var(--accent-2);color:#fff}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+  .tab{font-family:inherit;font-size:12px;font-weight:650;cursor:pointer;color:var(--muted);
+    background:transparent;border:1px solid var(--line);border-radius:20px;padding:6px 14px;transition:.15s}
+  .tab:hover{color:var(--ink)}
+  .tab[aria-selected="true"]{background:rgba(var(--accent-rgb),.3);border-color:var(--accent-2);color:#fff}
+  .tab:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .ctl{display:grid;gap:4px;margin-bottom:12px}
+  .ctl label{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);
+    display:flex;justify-content:space-between;gap:10px}
+  .ctl label b{font-family:var(--mono);color:var(--accent-2);font-size:12px;text-transform:none;letter-spacing:0}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:3px;
+    background:#2b313d;outline:none;cursor:pointer}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;
+    background:var(--accent-2);border:2px solid var(--bg);cursor:pointer}
+  input[type=range]::-moz-range-thumb{width:15px;height:15px;border-radius:50%;background:var(--accent-2);
+    border:2px solid var(--bg);cursor:pointer}
+  input[type=range]:focus-visible{box-shadow:0 0 0 3px rgba(var(--accent-2-rgb),.4)}
+  select,textarea,input[type=text]{font-family:var(--mono);font-size:12.5px;color:var(--ink);
+    background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:7px 9px;width:100%}
+  select:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px solid var(--accent-2);outline-offset:1px}
+  textarea{line-height:1.55;resize:vertical}
+
+  /* ── stats / pills / code ─────────────────────────────────── */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:1px;
+    background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .stat{background:var(--panel);padding:10px 12px}
+  .stat .sl{font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--dim)}
+  .stat .sv{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--ink);margin-top:3px}
+  .stat .sv.ok{color:var(--ok)} .stat .sv.bad{color:var(--bad)} .stat .sv.warn{color:var(--warn)}
+  .stat .sv.acc{color:var(--accent-2)}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;letter-spacing:.5px;
+    padding:3px 9px;border-radius:20px;border:1px solid var(--line);color:var(--muted)}
+  .pill.ok{color:var(--ok);border-color:rgba(63,185,80,.5);background:rgba(63,185,80,.1)}
+  .pill.bad{color:var(--bad);border-color:rgba(248,81,73,.5);background:rgba(248,81,73,.1)}
+  .pill.warn{color:var(--warn);border-color:rgba(210,153,34,.5);background:rgba(210,153,34,.1)}
+  .pill.acc{color:var(--accent-2);border-color:rgba(var(--accent-2-rgb),.5);background:rgba(var(--accent-rgb),.18)}
+  pre.code{font-family:var(--mono);font-size:11.8px;line-height:1.62;background:#0b0e14;color:#dbe3ea;
+    border:1px solid var(--line);border-radius:10px;padding:13px 14px;overflow-x:auto;white-space:pre}
+  pre.code .k{color:#6cb6ff} pre.code .s{color:#8ddb8c} pre.code .c{color:#6b7484;font-style:italic}
+  pre.code .n{color:#e0b070} pre.code .b{color:#ddd4fb;font-weight:700}
+  .note{border-left:3px solid var(--accent);background:rgba(var(--accent-rgb),.12);border-radius:0 8px 8px 0;
+    padding:10px 13px;font-size:12.5px;color:var(--muted)}
+  .note b{color:var(--ink)}
+  .log{font-family:var(--mono);font-size:11.5px;max-height:230px;overflow-y:auto;display:grid;gap:5px}
+  .log div{background:var(--panel2);border-left:3px solid var(--line);border-radius:0 6px 6px 0;padding:6px 9px;color:var(--muted)}
+  .log div.hl{border-left-color:var(--accent-2);color:var(--ink);background:rgba(var(--accent-rgb),.15)}
+  .log div.ok{border-left-color:var(--ok)} .log div.bad{border-left-color:var(--bad)}
+  svg{display:block;max-width:100%;height:auto}
+  .svgwrap{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px;overflow-x:auto}
+  table.t{width:100%;border-collapse:collapse;font-size:12px}
+  table.t th{font-size:9.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--dim);
+    text-align:left;padding:0 8px 7px;border-bottom:1px solid var(--line)}
+  table.t td{padding:7px 8px;border-bottom:1px solid rgba(39,44,54,.6);color:var(--muted);font-family:var(--mono);font-size:11.8px}
+  table.t td.n{color:var(--ink);font-weight:600}
+
+  /* ── pitfalls ─────────────────────────────────────────────── */
+  details.pit{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:10px;overflow:hidden}
+  details.pit>summary{cursor:pointer;padding:12px 15px;font-size:13.5px;font-weight:650;color:var(--ink);
+    list-style:none;display:flex;gap:11px;align-items:flex-start}
+  details.pit>summary::-webkit-details-marker{display:none}
+  details.pit>summary::before{content:"\25B8";color:var(--accent-2);font-size:12px;line-height:1.5;transition:.2s}
+  details.pit[open]>summary::before{transform:rotate(90deg)}
+  details.pit>summary:focus-visible{outline:2px solid var(--accent-2);outline-offset:-2px}
+  details.pit .body{padding:0 15px 15px 39px;font-size:13px;color:var(--muted);display:grid;gap:9px}
+  details.pit .body .fix{color:var(--ok);font-weight:600}
+
+  /* ── MCQ ──────────────────────────────────────────────────── */
+  .mcq{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 17px;margin-bottom:13px}
+  .mcq .q{font-size:13.8px;font-weight:650;color:var(--ink);margin:0 0 11px;max-width:84ch}
+  .mcq .q span{color:var(--accent-2);font-family:var(--mono);margin-right:7px}
+  .opts{display:grid;gap:7px}
+  .opt{text-align:left;font-family:inherit;font-size:13px;cursor:pointer;color:var(--muted);
+    background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:9px 12px;transition:.15s}
+  .opt:hover:not(:disabled){border-color:var(--accent-2);color:var(--ink)}
+  .opt:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .opt.right{border-color:var(--ok);background:rgba(63,185,80,.13);color:#bce8c4}
+  .opt.wrong{border-color:var(--bad);background:rgba(248,81,73,.12);color:#f4b6b1}
+  .opt.dim{opacity:.5}
+  .fb{margin-top:11px;font-size:12.5px;line-height:1.6;color:var(--muted);display:none;
+    border-left:3px solid var(--line);padding-left:11px}
+  .fb.show{display:block}
+  .fb.show.good{border-left-color:var(--ok)} .fb.show.poor{border-left-color:var(--bad)}
+  .fb b{color:var(--ink)}
+
+  /* ── next ─────────────────────────────────────────────────── */
+  .nextgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+  .nextcard{display:block;background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:15px 17px;transition:.18s;color:inherit}
+  .nextcard:hover{border-color:var(--accent-2);transform:translateY(-2px);text-decoration:none}
+  .nextcard .nl{font-size:10px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--accent-2)}
+  .nextcard .nt{font-size:14.5px;font-weight:700;color:var(--ink);margin-top:5px}
+  .nextcard .nd{font-size:12px;color:var(--muted);margin-top:5px}
+
+  @media (max-width:720px){
+    .grid2,.grid3,.split,.split-r{grid-template-columns:1fr}
+    section{padding:26px 15px 32px}
+    nav.top{padding:10px 15px;gap:8px}
+    nav.top .crumbs{font-size:11px}
+    p,.lead{max-width:none}
+  }
+
+
+  /* ── week-page shared ─────────────────────────────────────── */
+  #hero{padding:52px 22px 40px;
+    background:radial-gradient(ellipse 820px 340px at 22% -14%,rgba(var(--accent-rgb),.3),transparent 66%)}
+  #hero .wk{font-family:var(--mono);font-size:12px;letter-spacing:2px;color:var(--accent-2);font-weight:700}
+  #hero h1{max-width:24ch}
+  #hero .promise{font-size:16.5px;color:var(--ink);max-width:74ch;margin-top:10px;line-height:1.55}
+  .secnum{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;
+    background:rgba(var(--accent-rgb),.35);border:1px solid var(--accent-2);color:#fff;font-family:var(--mono);
+    font-size:11px;font-weight:700;margin-right:9px;vertical-align:2px}
+  .sw{display:inline-flex;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex-wrap:wrap}
+  .sw button{font-family:inherit;font-size:11.5px;font-weight:650;cursor:pointer;color:var(--muted);
+    background:var(--panel2);border:none;padding:7px 13px;transition:.15s}
+  .sw button[aria-pressed="true"]{background:rgba(var(--accent-rgb),.32);color:#fff}
+  .sw button:focus-visible{outline:2px solid var(--accent-2);outline-offset:-2px}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-top:10px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
+
+
+
+  /* ── week-9 specifics ─────────────────────────────────────── */
+  canvas{display:block;width:100%;height:auto;border-radius:10px;background:#0b0e14;border:1px solid var(--line)}
+  .lanes{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:12px;color:var(--muted)}
+  .kv b{color:var(--ink);font-weight:600}
+  .dsrow{display:grid;grid-template-columns:minmax(0,168px) minmax(0,1fr);gap:10px;align-items:center;margin-bottom:7px}
+  .dsrow .dsn{font-size:11.5px;font-weight:700;color:var(--ink);line-height:1.3}
+  .dsrow .dsn em{display:block;font-style:normal;font-family:var(--mono);font-size:10px;color:var(--dim)}
+  .bar{height:20px;border-radius:4px;background:var(--panel2);position:relative;overflow:hidden}
+  .bar i{position:absolute;left:0;top:0;bottom:0;border-radius:4px;display:block}
+  .bar span{position:absolute;right:6px;top:1px;font-family:var(--mono);font-size:10.5px;color:var(--ink)}
+  .togs{display:grid;gap:6px}
+  .togs label{display:flex;align-items:flex-start;gap:9px;cursor:pointer;background:var(--panel2);
+    border:1px solid var(--line);border-radius:8px;padding:8px 11px;font-size:12.5px;line-height:1.45}
+  .togs label:hover{border-color:var(--accent-2)}
+  .togs label input{margin-top:3px;flex-shrink:0;width:14px;height:14px;accent-color:var(--accent)}
+  .togs label .sn{font-family:var(--mono);font-size:11.5px;color:var(--accent-2)}
+  .togs label .sd{display:block;color:var(--muted);font-size:11px}
+  @media (max-width:720px){ .dsrow{grid-template-columns:minmax(0,1fr)} }
+  /* ── mobile guard (identical on every page): single column under 720px,
+        no horizontal overflow. Must stay last in the sheet. ───────────── */
+  @media (max-width:720px){
+    .grid2,.grid3,.grid2.narrow-right,.split,.split-r,.codepair,
+    .nextgrid,.dash,.toggles,.lanes,.weeknav,.weeks,.roles,.stack{
+      grid-template-columns:minmax(0,1fr)}
+    [class*="grid"]>*,.stack>*,.wrap>*,.panel,.panel.tight,.nextcard,.wk,.row>*{min-width:0}
+    pre,pre.code,.svgwrap,svg,canvas,table,select,input,textarea,.mono{max-width:100%}
+    pre,pre.code,.svgwrap,.tablewrap{overflow-x:auto}
+    code,.mono{overflow-wrap:anywhere}
+    .ctl,.ctl>*,.controls>*,.row,.legend>*{min-width:0}
+    .ctl{flex-wrap:wrap} .ctl select,.ctl input[type=range]{flex:1 1 100%;width:100%}
+    p,.lead,.sub,.promise{max-width:none}
+  }
+</style>
+</head>
+<body>
+
+<nav class="top"><a href="index.html">Low-Latency Trading Arena</a><span class="crumbs"><a href="week8.html">← Week 8</a> · <b>Week 9 · Concurrency I — Atomics &amp; Memory Models</b> · <a href="week10.html">Week 10 →</a></span></nav>
+
+<!-- ══════════════ HERO ══════════════ -->
+<section id="hero">
+  <div class="wk">WEEK 9 · 15-WEEK TRACK  ·  SESSION 5 · 9-SESSION TRACK</div>
+  <h1>Concurrency I — Atomics &amp; Memory Models</h1>
+  <p class="promise">One thread cannot both read the socket and run the strategy without one of them waiting.
+  So you add a second — and the instant two threads touch the same bytes, <em class="hi">correctness stops
+  being obvious</em>. Neither the compiler nor the CPU is on your side; the only thing that is, is the
+  happens-before relation, and you have to build it by hand.</p>
+  <ul class="you">
+    <li>Recognise a data race as undefined behaviour, not as "a wrong number", and produce one on demand under ThreadSanitizer.</li>
+    <li>Price an atomic read-modify-write: uncontended, contended, and per additional core.</li>
+    <li>Choose <code>relaxed</code> / <code>acquire</code> / <code>release</code> / <code>seq_cst</code> per operation and defend the choice with a happens-before argument.</li>
+    <li>Spot false sharing from a struct definition, and say when a spinlock beats a mutex and when it is the worst possible choice.</li>
+  </ul>
+  <div class="row" style="margin-top:22px">
+    <span class="pill acc">HW9 · an atomic handoff with a memory-order justification</span>
+    <span class="pill">Lab · a race, a TSan report, then the same program clean</span>
+    <span class="pill">No mutex on the <code>on_book</code> path — graded</span>
+  </div>
+</section>
+
+<!-- ══════════════ WHAT ══════════════ -->
+<section id="what">
+  <div class="kicker">Part 1</div>
+  <h2><span class="secnum">1</span>What a data race actually is</h2>
+  <p class="lead">Two threads access the same memory location, at least one of them writes, and nothing in the
+  program orders the two accesses. That is the definition, and the consequence is not a wrong value — it is
+  undefined behaviour, which is a much stronger and much worse claim.</p>
+
+  <div class="split">
+    <div>
+      <p>The distinction matters because people reason about races as if the hardware simply interleaves their
+      source lines. It does not. <strong>The compiler reorders</strong> loads and stores of non-atomic data
+      freely, as long as a single-threaded observer could not tell — it may hoist your shared variable into a
+      register for the whole loop and write it back once, deleting every intermediate value another thread
+      might have seen. <strong>The CPU reorders</strong> too: store buffers, out-of-order execution and the
+      cache-coherency protocol let a core make its writes visible in an order it did not issue them.</p>
+      <p>Both layers preserve single-threaded semantics perfectly. The illusion only breaks when a second
+      thread looks — which is why a race can pass every test on your laptop, hold under light load, and then
+      produce a number that no interleaving of your source code could ever produce.</p>
+      <p>Start with the concrete version. <code>++counter</code> is not one operation; it is a load, an add and
+      a store, and two threads can interleave between any of them:</p>
+      <pre class="code"><span class="k">long</span> counter = <span class="n">0</span>;                      <span class="c">// shared, unsynchronised -&gt; UB</span>
+
+<span class="k">void</span> work() { <span class="k">for</span> (<span class="k">int</span> i = <span class="n">0</span>; i &lt; <span class="n">1000000</span>; ++i) ++counter; }
+
+<span class="k">int</span> main() {
+    std::thread a(work), b(work);
+    a.join(); b.join();
+    std::printf(<span class="s">"counter = %ld (expected 2000000)\n"</span>, counter);
+}
+<span class="c">// Run it three times: three different answers, all below 2 000 000.</span>
+<span class="c">// That non-determinism is the signature. Now build it under TSan:</span>
+<span class="c">//   clang++ -std=c++20 -O1 -g -pthread -fsanitize=thread race.cpp</span>
+<span class="c">// and the tool names it: WARNING: ThreadSanitizer: data race</span></pre>
+      <div class="note"><b><code>volatile</code> does not fix this.</b> It means "do not cache this in a
+      register, do not optimise the access away" — it says nothing about atomicity and nothing about
+      inter-thread ordering. Rebuild the loop with <code>volatile long counter</code> under TSan and the race
+      is still reported. <code>volatile</code> is for memory-mapped I/O; it has never been a threading tool
+      in C++.</div>
+    </div>
+    <div class="panel">
+      <h3>Happens-before, the only rule</h3>
+      <ul class="plain">
+        <li><b>sequenced-before</b> — within one thread, program order gives you an ordering (subject to the
+        reordering above, which is invisible to that thread).</li>
+        <li><b>synchronizes-with</b> — a release store synchronizes-with an acquire load that <em>observes
+        it</em>. This is the only way to build an edge between two threads by hand.</li>
+        <li><b>transitive</b> — A happens-before B and B happens-before C gives you A happens-before C. Chains
+        of these are how you prove a value is visible.</li>
+        <li><b>no edge means a race</b> — if nothing orders two conflicting accesses, the program has undefined
+        behaviour. Full stop; there is no "probably fine".</li>
+      </ul>
+      <div class="note" style="margin-top:14px"><b>Never reason in clocks.</b> "This thread runs first because
+      it started earlier" is not an argument. The only question is: which release/acquire pair, or which
+      mutex unlock/lock pair, creates the edge that makes this write visible to that read?</div>
+      <div class="stats" style="margin-top:14px">
+        <div class="stat"><div class="sl">plain load</div><div class="sv acc">~1 ns</div></div>
+        <div class="stat"><div class="sl">uncontended RMW</div><div class="sv">~7 ns</div></div>
+        <div class="stat"><div class="sl">contended RMW</div><div class="sv warn">~60 ns</div></div>
+        <div class="stat"><div class="sl">futex sleep/wake</div><div class="sv bad">~5 µs</div></div>
+      </div>
+      <p class="sub" style="margin-top:10px">Four numbers, four orders of magnitude. Every decision in this
+      week's material is a choice between them, and the tail of your tick-to-trade is decided by how often you
+      land on the last one.</p>
+    </div>
+  </div>
+
+  <!-- ── WIDGET 1 ─────────────────────────────────────────── -->
+  <div class="panel" style="margin-top:22px">
+    <h3>Widget 1 · the race-condition stepper</h3>
+    <p class="sub" style="margin-bottom:14px">Two threads, one shared counter, three micro-operations each:
+    <code>LOAD</code>, <code>ADD</code>, <code>STORE</code>. You choose who steps next. Find the interleaving
+    that loses an update — then find the ones that do not, and notice how few of them there are.</p>
+
+    <div class="split">
+      <div>
+        <div class="svgwrap">
+          <svg id="raSvg" viewBox="0 0 720 320" role="img"
+               aria-label="Two thread timelines showing load, add and store micro-operations against a shared counter, with each thread's register value"></svg>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <button class="btn primary" id="raA" type="button">Step thread A →</button>
+          <button class="btn primary" id="raB" type="button">Step thread B →</button>
+          <button class="btn" id="raLost" type="button">Show a lost update</button>
+          <button class="btn" id="raSafe" type="button">Show a safe interleaving</button>
+          <button class="btn" id="raRst" type="button">Reset</button>
+        </div>
+      </div>
+      <div>
+        <div class="stats">
+          <div class="stat"><div class="sl">memory</div><div class="sv acc" id="raMem">0</div></div>
+          <div class="stat"><div class="sl">A register</div><div class="sv" id="raRegA">—</div></div>
+          <div class="stat"><div class="sl">B register</div><div class="sv" id="raRegB">—</div></div>
+        </div>
+        <div class="stats" style="margin-top:1px">
+          <div class="stat"><div class="sl">increments issued</div><div class="sv" id="raIssued">0</div></div>
+          <div class="stat"><div class="sl">updates lost</div><div class="sv" id="raLostN">0</div></div>
+          <div class="stat"><div class="sl">verdict</div><div class="sv" id="raVerdictS">—</div></div>
+        </div>
+        <div class="note" id="raVerdict" style="margin-top:12px"></div>
+        <h3 style="margin-top:16px">interleaving</h3>
+        <div class="log" id="raLog" role="status" aria-label="Micro-operation trace of the two threads"></div>
+      </div>
+    </div>
+    <div class="note" style="margin-top:14px"><b>Two threads, one increment each, and only some orders are
+    right.</b> With one increment per thread there are twenty distinct interleavings of the six micro-ops, and
+    the correct answer appears in exactly the ones where A's <code>STORE</code> precedes B's
+    <code>LOAD</code> or vice versa. Scale that to a million increments each and the probability that every
+    single one of them happens to be ordered is indistinguishable from zero — which is why the final count is
+    always short, and short by a different amount each run.</div>
+  </div>
+</section>
+
+<!-- ══════════════ HOW ══════════════ -->
+<section id="how">
+  <div class="kicker">Part 2</div>
+  <h2><span class="secnum">2</span>How does it work? Atomics, and what each ordering costs</h2>
+  <p class="lead"><code>std::atomic</code> does two separable jobs: it makes an operation indivisible, and it
+  gives you a knob for cross-thread ordering. Conflating them is the most common source of both bugs and
+  unnecessary cost.</p>
+
+  <p>Atomicity is about a single location: no torn reads, no lost updates, the operation either happened or it
+  did not. Ordering is about <em>everything else</em> — which other memory operations become visible along
+  with this one. A free-running statistics counter needs the first and none of the second, so
+  <code>fetch_add(1, memory_order_relaxed)</code> is exactly right and anything stronger is a fence you paid
+  for and did not use. A handoff of data needs both, and that is what <code>release</code>/<code>acquire</code>
+  is for.</p>
+
+  <!-- ── WIDGET 2 ─────────────────────────────────────────── -->
+  <div class="panel" style="margin-top:18px">
+    <h3>Widget 2 · what an atomic read-modify-write costs</h3>
+    <p class="sub" style="margin-bottom:14px">An atomic RMW must own the cache line exclusively. Uncontended
+    that is a local operation; the moment a second core wants the same line, every increment becomes a line
+    transfer, and the cost grows with the number of cores fighting over it.</p>
+
+    <div class="split">
+      <div>
+        <div class="ctl"><label for="atCores">cores hitting the same variable<b id="vatCores">4</b></label>
+          <input type="range" id="atCores" min="1" max="32" step="1" value="4"
+                 aria-label="Number of cores performing atomic operations on the same variable" /></div>
+        <div class="ctl"><label for="atOps">operations per core, millions<b id="vatOps">10</b></label>
+          <input type="range" id="atOps" min="1" max="100" step="1" value="10"
+                 aria-label="Millions of atomic operations per core" /></div>
+        <div class="ctl" style="margin-bottom:0"><label for="atSock">topology</label>
+          <select id="atSock" aria-label="How the cores are arranged relative to each other">
+            <option value="same" selected>all cores on one socket, shared LLC</option>
+            <option value="cross">split across two sockets, coherency over the interconnect</option>
+          </select></div>
+        <div class="stats" style="margin-top:14px">
+          <div class="stat"><div class="sl">ns / op</div><div class="sv bad" id="atNs">—</div></div>
+          <div class="stat"><div class="sl">total throughput</div><div class="sv" id="atThr">—</div></div>
+          <div class="stat"><div class="sl">per-core rate</div><div class="sv" id="atPer">—</div></div>
+        </div>
+        <div class="note" id="atVerdict" style="margin-top:12px"></div>
+      </div>
+      <div>
+        <h3>ns per operation, by ordering</h3>
+        <div id="atBars"></div>
+        <div class="svgwrap" style="margin-top:12px">
+          <svg id="atSvg" viewBox="0 0 720 190" role="img"
+               aria-label="Cost per atomic operation and aggregate throughput against the number of contending cores"></svg>
+        </div>
+      </div>
+    </div>
+    <div class="note" style="margin-top:14px"><b>The shape to remember.</b> Aggregate throughput on a single
+    contended atomic does not scale with cores — it <em>falls</em>, because the line has to be handed from
+    core to core and only one owner makes progress at a time. Adding threads to a shared counter makes it
+    slower in total. The fix is never a cleverer atomic; it is one counter per thread, summed when someone
+    asks.</div>
+  </div>
+
+  <!-- ── WIDGET 3 ─────────────────────────────────────────── -->
+  <div class="panel" style="margin-top:22px">
+    <h3>Widget 3 · message passing — pick the ordering on each side</h3>
+    <p class="sub" style="margin-bottom:14px">The producer writes a payload then sets a flag; the consumer
+    reads the flag then the payload. Choose the memory order on each atomic operation and see which readings
+    the standard permits — and which reorderings you have just legalised.</p>
+
+    <div class="split">
+      <div>
+        <div class="ctl"><label for="mpProd">producer · <code>flag.store(true, …)</code></label>
+          <select id="mpProd" aria-label="Memory order on the producer's store to the flag">
+            <option value="relaxed">memory_order_relaxed</option>
+            <option value="release" selected>memory_order_release</option>
+            <option value="seq_cst">memory_order_seq_cst</option>
+          </select></div>
+        <div class="ctl"><label for="mpCons">consumer · <code>flag.load(…)</code></label>
+          <select id="mpCons" aria-label="Memory order on the consumer's load of the flag">
+            <option value="relaxed">memory_order_relaxed</option>
+            <option value="acquire" selected>memory_order_acquire</option>
+            <option value="seq_cst">memory_order_seq_cst</option>
+          </select></div>
+        <div class="ctl" style="margin-bottom:0"><label for="mpArch">hardware you happen to test on</label>
+          <select id="mpArch" aria-label="Which architecture the program is executed on">
+            <option value="x86" selected>x86-64 — strongly ordered, hides bugs</option>
+            <option value="arm">AArch64 — weakly ordered, finds them</option>
+          </select></div>
+        <div class="stats" style="margin-top:14px">
+          <div class="stat"><div class="sl">payload read</div><div class="sv" id="mpRead">—</div></div>
+          <div class="stat"><div class="sl">sound?</div><div class="sv" id="mpSound">—</div></div>
+          <div class="stat"><div class="sl">fences emitted</div><div class="sv acc" id="mpFence">—</div></div>
+        </div>
+        <div class="note" id="mpVerdict" style="margin-top:12px"></div>
+      </div>
+      <div>
+        <div class="svgwrap">
+          <svg id="mpSvg" viewBox="0 0 720 300" role="img"
+               aria-label="Producer and consumer instruction streams showing which reorderings the chosen memory orders permit and whether a happens-before edge exists"></svg>
+        </div>
+        <h3 style="margin-top:14px">reorderings this choice allows</h3>
+        <div class="log" id="mpLog" role="status" aria-label="List of reorderings permitted by the chosen memory orders"></div>
+      </div>
+    </div>
+    <pre class="code" style="margin-top:16px"><span class="c">// The pattern behind every lock-free handoff you will write.</span>
+<span class="c">// Compiles and passes TSan under clang++ -std=c++20 -O2 -pthread.</span>
+std::atomic&lt;<span class="k">bool</span>&gt; ready{<span class="n">false</span>};
+<span class="k">int</span> payload = <span class="n">0</span>;                        <span class="c">// plain data, published by `ready`</span>
+
+<span class="k">void</span> producer() {
+    payload = <span class="n">42</span>;                                        <span class="c">// (1) write the data</span>
+    ready.store(<span class="n">true</span>, std::memory_order_release);        <span class="c">// (2) publish it</span>
+}
+<span class="k">void</span> consumer() {
+    <span class="k">while</span> (!ready.load(std::memory_order_acquire)) {}    <span class="c">// (3) observe it</span>
+    assert(payload == <span class="n">42</span>);                               <span class="c">// (4) guaranteed to see (1)</span>
+}
+<span class="c">// release (2) synchronizes-with acquire (3), so (1) happens-before (4).</span>
+<span class="c">// Read the two halves as sentences:</span>
+<span class="c">//   release = "no earlier write in this thread may move AFTER this store"</span>
+<span class="c">//   acquire = "no later read in this thread may move BEFORE this load"</span></pre>
+  </div>
+</section>
+
+<!-- ══════════════ WHY ══════════════ -->
+<section id="why">
+  <div class="kicker">Part 3</div>
+  <h2><span class="secnum">3</span>Why it is harder than it looks: sharing you did not ask for, and locks</h2>
+  <p class="lead">Two failures that are invisible in the source. One is two variables that happen to sit on the
+  same sixty-four bytes. The other is a mutex that is correct, cheap on average, and a tail bomb.</p>
+
+  <!-- ── WIDGET 4 ─────────────────────────────────────────── -->
+  <div class="panel" style="margin-top:18px">
+    <h3>Widget 4 · false sharing — two counters, one cache line</h3>
+    <p class="sub" style="margin-bottom:14px">Nothing here is shared logically: each thread owns its own
+    counter. But coherency works on whole lines, so two counters in one line means every increment steals the
+    line back from the other core. Toggle the padding and watch the throughput change by an order of
+    magnitude.</p>
+
+    <div class="split-r">
+      <div>
+        <div class="ctl"><label for="fsThreads">threads, one counter each<b id="vfsThreads">4</b></label>
+          <input type="range" id="fsThreads" min="2" max="16" step="1" value="4"
+                 aria-label="Number of threads, each owning its own counter" /></div>
+        <div class="ctl" style="margin-bottom:0"><label for="fsStride">bytes between counters<b id="vfsStride">8 B</b></label>
+          <input type="range" id="fsStride" min="8" max="128" step="8" value="8"
+                 aria-label="Stride in bytes between adjacent counters" /></div>
+        <div class="togs" style="margin-top:12px">
+          <label><input type="checkbox" id="fsPad" aria-label="Pad each counter to its own cache line" />
+            <span class="sn">alignas(64) on every counter</span>
+            <span class="sd">Forces one counter per line. Costs 56 bytes of padding each and buys back all the
+            lost throughput.</span></label>
+        </div>
+        <div class="stats" style="margin-top:12px">
+          <div class="stat"><div class="sl">counters / line</div><div class="sv" id="fsPerLine">—</div></div>
+          <div class="stat"><div class="sl">ns / increment</div><div class="sv" id="fsNs">—</div></div>
+          <div class="stat"><div class="sl">line transfers</div><div class="sv bad" id="fsXfer">—</div></div>
+        </div>
+        <div class="stats" style="margin-top:1px">
+          <div class="stat"><div class="sl">throughput</div><div class="sv" id="fsThr">—</div></div>
+          <div class="stat"><div class="sl">vs padded</div><div class="sv acc" id="fsRatio">—</div></div>
+          <div class="stat"><div class="sl">memory cost</div><div class="sv" id="fsMem">—</div></div>
+        </div>
+      </div>
+      <div>
+        <div class="svgwrap">
+          <svg id="fsSvg" viewBox="0 0 720 300" role="img"
+               aria-label="Cache line diagram showing which counters share a sixty-four byte line, with throughput bars for the shared and padded layouts"></svg>
+        </div>
+        <div class="note" id="fsVerdict" style="margin-top:12px"></div>
+      </div>
+    </div>
+    <pre class="code" style="margin-top:16px"><span class="c">// Two counters, ONE cache line: every increment by either thread invalidates</span>
+<span class="c">// the other core's copy of the line. Correct, and an order of magnitude slow.</span>
+<span class="k">struct</span> <span class="b">Shared</span> { std::atomic&lt;uint64_t&gt; a{<span class="n">0</span>}, b{<span class="n">0</span>}; };
+
+<span class="c">// The same two counters, one cache line EACH. Nothing is shared but the name.</span>
+<span class="k">struct</span> <span class="b">Padded</span> {
+    <span class="k">alignas</span>(<span class="n">64</span>) std::atomic&lt;uint64_t&gt; a{<span class="n">0</span>};
+    <span class="k">alignas</span>(<span class="n">64</span>) std::atomic&lt;uint64_t&gt; b{<span class="n">0</span>};
+};
+<span class="k">static_assert</span>(<span class="k">sizeof</span>(Padded) == <span class="n">128</span>, <span class="s">"each counter owns its own line"</span>);</pre>
+    <div class="note" style="margin-top:14px"><b>Where this bites you in an SPSC ring.</b> The producer writes
+    <code>tail_</code> and reads <code>head_</code>; the consumer does the opposite. Put both indices in one
+    struct and they land on one line, so the two threads ping-pong that line on every single push and pop —
+    the exact structure you build next week, ruined by two adjacent declarations. This is why
+    <code>spsc_ring.hpp</code>'s comment tells you to pad the indices before you write a line of the algorithm.</div>
+  </div>
+
+  <!-- ── WIDGET 5 ─────────────────────────────────────────── -->
+  <div class="panel" style="margin-top:22px">
+    <h3>Widget 5 · spinlock versus mutex — latency and fairness</h3>
+    <p class="sub" style="margin-bottom:14px">Both are correct. A spinlock burns a core to keep the handoff in
+    user space; a mutex hands the core back and pays a syscall to get it again. Which one wins depends on the
+    critical section, the contention, and whether you have a core to spare — and the answer shows up in the
+    tail, not the median.</p>
+
+    <div class="split">
+      <div>
+        <div class="ctl"><label for="lkCrit">critical section length<b id="vlkCrit">200 ns</b></label>
+          <input type="range" id="lkCrit" min="10" max="20000" step="10" value="200"
+                 aria-label="Length of the critical section in nanoseconds" /></div>
+        <div class="ctl"><label for="lkThreads">contending threads<b id="vlkThreads">4</b></label>
+          <input type="range" id="lkThreads" min="1" max="16" step="1" value="4"
+                 aria-label="Number of threads contending for the lock" /></div>
+        <div class="ctl" style="margin-bottom:0"><label for="lkCores">physical cores available<b id="vlkCores">8</b></label>
+          <input type="range" id="lkCores" min="1" max="16" step="1" value="8"
+                 aria-label="Number of physical cores available" /></div>
+        <div class="tablewrap" style="margin-top:14px;overflow-x:auto">
+          <table class="t" id="lkTable">
+            <tr><th>primitive</th><th>p50</th><th>p99</th><th>p99.9</th><th>fairness</th><th>core burned</th></tr>
+          </table>
+        </div>
+        <div class="note" id="lkVerdict" style="margin-top:12px"></div>
+      </div>
+      <div>
+        <div class="svgwrap">
+          <svg id="lkSvg" viewBox="0 0 720 320" role="img"
+               aria-label="Latency percentiles for a spinlock, a mutex and a lock-free handoff, with a fairness illustration"></svg>
+        </div>
+        <div class="note" style="margin-top:12px"><b>Fairness is the axis nobody quotes.</b> A test-and-set
+        spinlock has none: whichever core happens to own the line wins again, so one thread can be starved for
+        millions of iterations while the throughput number looks fine. A mutex queues its waiters, so it is
+        roughly FIFO. If your threads are peers, unfairness is a tail. If one of them is the hot path and the
+        rest are housekeeping, unfairness is precisely what you want — and the honest way to get it is to not
+        share the structure at all.</div>
+      </div>
+    </div>
+    <pre class="code" style="margin-top:16px"><span class="c">// Test-and-test-and-set: spin on a relaxed LOAD, not on the exchange, so a</span>
+<span class="c">// waiter reads its own cached copy instead of stealing the line every try.</span>
+<span class="k">class</span> <span class="b">SpinLock</span> {
+    std::atomic&lt;<span class="k">bool</span>&gt; held_{<span class="n">false</span>};
+  <span class="k">public</span>:
+    <span class="k">void</span> lock() {
+        <span class="k">for</span> (;;) {
+            <span class="k">if</span> (!held_.exchange(<span class="n">true</span>, std::memory_order_acquire)) <span class="k">return</span>;   <span class="c">// got it</span>
+            <span class="k">while</span> (held_.load(std::memory_order_relaxed))                   <span class="c">// no transfer</span>
+                std::this_thread::yield();                                  <span class="c">// or a PAUSE</span>
+        }
+    }
+    <span class="k">void</span> unlock() { held_.store(<span class="n">false</span>, std::memory_order_release); }        <span class="c">// publishes</span>
+    <span class="k">bool</span> try_lock() { <span class="k">return</span> !held_.exchange(<span class="n">true</span>, std::memory_order_acquire); }
+};</pre>
+    <div class="note" style="margin-top:14px"><b>Read the two orderings.</b> <code>acquire</code> on the
+    successful exchange stops any read inside the critical section from being hoisted above the lock;
+    <code>release</code> on the unlock stops any write inside it from sinking below. That pair is what makes a
+    lock a lock — a mutex does exactly the same thing, and its <code>unlock</code> synchronizes-with the next
+    <code>lock</code> for the same reason.</div>
+  </div>
+
+  <div class="panel" style="margin-top:22px">
+    <h3>When to use what</h3>
+    <div class="grid3" style="margin-top:12px">
+      <div class="panel tight"><h4>relaxed atomic</h4>
+        <p class="sub">A counter or statistic nobody synchronises on. Message counts, fill counts, a
+        <code>RollingCounter</code>'s tally. You want indivisibility and nothing else — and one counter per
+        thread if more than one writes.</p></div>
+      <div class="panel tight"><h4>acquire / release</h4>
+        <p class="sub">Any handoff of data between two threads: an SPSC ring, a seqlock snapshot, publishing a
+        freshly built config. The workhorse, and the only one you need for next week's pipeline.</p></div>
+      <div class="panel tight"><h4>seq_cst</h4>
+        <p class="sub">When you genuinely need one global total order over several variables — rare, and
+        usually a sign the design should be simpler. It is the default because it is the easiest to reason
+        about, not because it is the right cost.</p></div>
+      <div class="panel tight"><h4>spinlock</h4>
+        <p class="sub">A critical section shorter than a context switch, on a machine where the waiter has its
+        own core and no chance of being descheduled while holding the lock. Otherwise it is the worst option
+        available.</p></div>
+      <div class="panel tight"><h4>std::mutex</h4>
+        <p class="sub">Anything off the hot path: start-up, configuration, the control plane, a long critical
+        section. Correct, fair, well understood — and it may sleep, which is why it stays off
+        <code>on_book</code>.</p></div>
+      <div class="panel tight"><h4>share nothing</h4>
+        <p class="sub">The answer more often than any of the above. Per-thread state, a single-writer ring,
+        one owner per cache line. You cannot have a race over memory only one thread touches.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ PITFALLS ══════════════ -->
+<section id="pitfalls">
+  <div class="kicker">Part 4</div>
+  <h2><span class="secnum">4</span>Five ways a threaded hot path goes wrong</h2>
+  <p class="lead">Every one of these passes its unit tests on your laptop. Open them.</p>
+
+  <details class="pit"><summary>Reaching for <code>volatile</code></summary>
+    <div class="body">
+      <p>It looks like the threading keyword — it appears in every old codebase near shared variables, and
+      declaring it does make the symptom change. What <code>volatile</code> guarantees is that the compiler
+      will not cache the value in a register or elide the access. What it does not guarantee is that
+      <code>++x</code> is indivisible, or that a write to <code>x</code> is ordered against a write to
+      anything else.</p>
+      <p>So the lost-update race survives untouched, and TSan still reports it. In Java <code>volatile</code>
+      does imply ordering; in C++ it never has. That cross-language false friend is why the mistake is so
+      persistent.</p>
+      <p class="fix">Fix: <code>std::atomic&lt;T&gt;</code> for anything two threads touch, with an explicit
+      memory order. Reserve <code>volatile</code> for memory-mapped device registers, where "do not optimise
+      this access away" is exactly and only what you mean.</p>
+    </div></details>
+
+  <details class="pit"><summary>Using <code>relaxed</code> on both sides of a handoff</summary>
+    <div class="body">
+      <p>You made the flag atomic, so TSan is quiet on the flag, and the test passes on x86 every time. What
+      you have actually written is: the payload write may become visible <em>after</em> the flag, so a consumer
+      that sees <code>ready == true</code> may still read the old payload. Nothing forbids it.</p>
+      <p>It passes on x86 because x86-64 does not reorder stores with stores, so the hardware accidentally
+      provides the guarantee you failed to ask for. Run the identical binary logic on AArch64 and the consumer
+      reads zero. This is the single most common way "it works on my machine" becomes a production incident
+      when the fleet is heterogeneous.</p>
+      <p class="fix">Fix: <code>release</code> on the publishing store, <code>acquire</code> on the observing
+      load — Widget 3 shows exactly which readings each combination permits. Then write the happens-before
+      argument in a comment, because that comment is the only thing that will stop the next person
+      "optimising" it back to relaxed.</p>
+    </div></details>
+
+  <details class="pit"><summary>Declaring the producer and consumer indices next to each other</summary>
+    <div class="body">
+      <p><code>struct Ring { std::atomic&lt;size_t&gt; head, tail; ... };</code> — two eight-byte members, so
+      they share a cache line. The producer writes <code>tail</code> every push and reads <code>head</code> to
+      check for space; the consumer does the mirror image. Every operation on either side invalidates the
+      other core's copy of that one line.</p>
+      <p>The algorithm is lock-free and wait-free and correct, and it runs an order of magnitude slower than it
+      should for a reason that is nowhere in the algorithm — it is in the struct layout. Nothing in a profiler
+      points at a line of code; the cost is spread across every access.</p>
+      <p class="fix">Fix: <code>alignas(64)</code> (or <code>std::hardware_destructive_interference_size</code>)
+      on each index so each owns its line, and keep a per-side cached copy of the other index so you only
+      re-read it when you have to. Widget 4 is the throughput difference.</p>
+    </div></details>
+
+  <details class="pit"><summary>A mutex on the <code>on_book</code> path</summary>
+    <div class="body">
+      <p>An uncontended <code>std::mutex</code> lock/unlock is a couple of atomic operations — genuinely cheap,
+      and your benchmark says so. Under contention it blocks in the kernel on a futex, and now your latency
+      includes a context switch out and a scheduler decision about when to come back: microseconds, not
+      nanoseconds, and not under your control.</p>
+      <p>Worse, the contention is correlated with exactly what you care about. Threads collide when the
+      message rate is high, which is when there is something to trade. And priority inversion turns it
+      unbounded: a low-priority thread holding your lock cannot release it until the scheduler runs it.</p>
+      <p class="fix">Fix: no blocking primitive on the hot path. Publish with release/acquire, use a
+      single-producer ring for the handoff, and keep the mutex for the control plane where a five-microsecond
+      pause is free. If you must have mutual exclusion in the hot path, the right question is how to remove
+      the sharing instead.</p>
+    </div></details>
+
+  <details class="pit"><summary>Trusting a green test run instead of the model</summary>
+    <div class="body">
+      <p>You ran the racy version a hundred times and it produced the right answer every time, so you shipped
+      it. Races are timing-dependent: on an idle laptop, with two threads and short loops, the interleaving
+      that breaks you may need a preemption that simply never happened. Under load, on more cores, with a
+      different compiler version that keeps the value in a register a little longer, it happens constantly.</p>
+      <p>The deeper problem is that a race is undefined behaviour, so a passing run proves nothing at all — the
+      optimiser is entitled to assume the race cannot occur and to delete the code that would have handled it.</p>
+      <p class="fix">Fix: reason from the memory model, and let ThreadSanitizer check the reasoning —
+      <code>-fsanitize=thread -O1 -g</code>, which is what CI greps for. TSan finds races the schedule did not
+      happen to expose, because it tracks happens-before rather than watching for wrong answers. A clean TSan
+      run plus a written ordering argument is the standard; "it passed" is not.</p>
+    </div></details>
+</section>
+
+<!-- ══════════════ CHECK ══════════════ -->
+<section id="check">
+  <div class="kicker">Part 5</div>
+  <h2><span class="secnum">5</span>Check yourself</h2>
+  <p class="lead">Instant feedback, no grading. Pick the answer you would defend in a design review.</p>
+
+  <div class="mcq" data-a="2" data-exp="<b>Unsound, and x86 is hiding it.</b> Two relaxed operations give you atomicity on the flag and no ordering whatsoever, so the standard permits the payload write to become visible after the flag store — a consumer that observes <code>ready == true</code> may legally read the old payload. It passes on x86-64 because that architecture does not reorder stores with other stores, so the hardware accidentally supplies the edge you did not request. On AArch64, which does, the consumer reads zero. The lesson is that a passing test on a strongly ordered machine is not evidence about a memory-ordering bug; the argument has to come from the model.">
+    <p class="q"><span>Q1</span>Producer: <code>payload = 42; ready.store(true, relaxed);</code> Consumer:
+    <code>while (!ready.load(relaxed)); read payload;</code> It passes every test on your x86 laptop. What is
+    the status of this code?</p>
+    <div class="opts">
+      <button class="opt" type="button">Correct — the flag is atomic, which is what was missing</button>
+      <button class="opt" type="button">Correct on any machine, because the payload write is sequenced before the store</button>
+      <button class="opt" type="button">Unsound — nothing orders the payload write against the flag, and x86's strong ordering is masking it</button>
+      <button class="opt" type="button">Unsound only if the payload is larger than a machine word</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+
+  <div class="mcq" data-a="1" data-exp="<b>False sharing — the sharing is in the layout, not the logic.</b> Each thread owns its own counter, so there is no logical contention and no correctness problem at all. But coherency is granted per 64-byte line, and eight <code>uint64_t</code> counters fit in one line, so every increment by any thread invalidates the line in all the other cores and the next increment has to fetch it back. Throughput collapses and the profiler cannot point at a guilty line of code, because the cost is spread evenly across every access. The fix is <code>alignas(64)</code> on each counter — 56 bytes of padding each, and an order of magnitude of throughput back.">
+    <p class="q"><span>Q2</span>Eight threads each increment their own <code>std::atomic&lt;uint64_t&gt;</code>
+    in one array with <code>relaxed</code> ordering. Throughput is twenty times worse than one thread alone.
+    What is wrong?</p>
+    <div class="opts">
+      <button class="opt" type="button">Nothing — atomics simply do not scale, and this is the expected cost</button>
+      <button class="opt" type="button">False sharing: eight 8-byte counters fit in one 64-byte line, so every increment invalidates the others</button>
+      <button class="opt" type="button"><code>relaxed</code> is too weak, so the hardware inserts a fence on every operation</button>
+      <button class="opt" type="button">The counters need to be <code>seq_cst</code> to be visible across cores</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+
+  <div class="mcq" data-a="3" data-exp="<b>Neither: take the sharing out.</b> A mutex may block in the kernel on a futex, so its tail includes a context switch and a scheduler decision — microseconds, and not yours to control. A spinlock avoids the syscall but burns a core, is unfair (whoever owns the line wins again), and is catastrophic if the holder is descheduled mid-section, because now every waiter spins until the scheduler comes back. Both are the wrong shape for a hot path whose contention rises exactly when the market is busy. The right move is the one next week builds on: a single-producer ring with padded indices and release/acquire, so the two threads never contend for a line at all.">
+    <p class="q"><span>Q3</span>Your receive thread hands book updates to your strategy thread on the hot path,
+    thousands of times a second. Spinlock or mutex?</p>
+    <div class="opts">
+      <button class="opt" type="button">Mutex — it is correct, fair, and the uncontended cost is only a few nanoseconds</button>
+      <button class="opt" type="button">Spinlock — no syscall, so the tail is bounded</button>
+      <button class="opt" type="button">Spinlock, but only after pinning both threads to dedicated cores</button>
+      <button class="opt" type="button">Neither — remove the shared mutable state: a single-producer ring with padded indices and release/acquire</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+</section>
+
+<!-- ══════════════ NEXT ══════════════ -->
+<section id="next">
+  <div class="kicker">Part 6</div>
+  <h2><span class="secnum">6</span>Do the work</h2>
+  <div class="grid2" style="margin-top:14px">
+    <div class="panel"><h4>In class</h4><ul class="plain">
+      <li>Reproduce the race: two threads, one million <code>++counter</code> each on a plain
+      <code>long</code>. Run it three times and record three different answers.</li>
+      <li>Build it with <code>-O1 -g -pthread -fsanitize=thread</code> and capture the
+      <code>ThreadSanitizer: data race</code> report — that is your HW9 evidence.</li>
+      <li>Try <code>volatile</code> first, watch TSan report the race anyway, then fix it with
+      <code>std::atomic</code> and <code>fetch_add(1, relaxed)</code>.</li>
+      <li>Write the release/acquire handoff, confirm it is TSan-clean, then deliberately weaken both sides to
+      <code>relaxed</code> and argue in a comment why it is now unsound even though it still passes.</li>
+      <li>Time the same handoff through a <code>std::mutex</code> and through the atomic. Compare the
+      <em>maxima</em>, not the means.</li>
+    </ul></div>
+    <div class="panel"><h4>Before next class</h4><ul class="plain">
+      <li><b>HW9</b> — an atomic handoff between two threads, with a written memory-order justification: which
+      ordering on each operation, and the happens-before edge that makes it correct.</li>
+      <li>Audit your bot: trace how a book update crosses from the transport's receive thread into
+      <code>on_book</code>, and name the edge that makes the payload visible.</li>
+      <li>Remove any mutex from that path. It is a graded constraint, and Widget 5 is the reason.</li>
+      <li>Read the header comment in <code>include/spsc_ring.hpp</code>. Padded indices, acquire/release on
+      head and tail — everything you built today, assembled into next week's pipeline.</li>
+    </ul></div>
+  </div>
+  <div class="nextgrid" style="margin-top:18px">
+    <a class="nextcard" href="https://github.com/sdonadio/hft-cpp-starter-columbia"><div class="nl">Code</div>
+      <div class="nt">Get the code · 15-week track starter</div><div class="nd">The stubs, the TSan-enabled CI,
+      and the C++ arena client whose transport already runs on its own thread.</div></a>
+    <a class="nextcard" href="https://github.com/sdonadio/hft-cpp-starter-uchicago"><div class="nl">Code</div>
+      <div class="nt">Get the code · 9-session track starter</div><div class="nd">The same stubs and the same
+      grader, packaged for the condensed nine-session schedule.</div></a>
+    <a class="nextcard" href="index.html"><div class="nl">Map</div>
+      <div class="nt">Course home</div><div class="nd">Both tracks, and where the concurrency block sits in each.</div></a>
+    <a class="nextcard" href="week10.html"><div class="nl">Next</div>
+      <div class="nt">Week 10 · Concurrency II — Lock-Free Pipelines →</div><div class="nd">Assemble today's
+      primitives into an SPSC ring, a seqlock snapshot, and a feed handler that never blocks.</div></a>
+  </div>
+  <div class="row" style="margin-top:16px">
+    <a class="btn" href="week8.html">← Week 8 · Algorithmic Complexity &amp; Time-Series</a>
+    <a class="btn" href="week10.html">Week 10 · Concurrency II — Lock-Free Pipelines →</a>
+  </div>
+</section>
+
+<footer>Low-Latency Trading Arena · an interactive companion for a course on low-latency trading systems in C++ · <a href="https://github.com/sdonadio/low-latency-trading-arena">Source</a></footer>
+
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════
+   Week 9 — Concurrency I: Atomics & Memory Models
+   Five widgets, no dependencies, no network, everything drawn from data.
+   ════════════════════════════════════════════════════════════════ */
+var $ = function (id) { return document.getElementById(id); };
+
+/* SVG namespace taken from the document so no absolute URL appears in this file */
+var SVGNS = $("raSvg").namespaceURI;
+function mk(tag, attrs) {
+  var e = document.createElementNS(SVGNS, tag);
+  for (var k in attrs) { if (attrs.hasOwnProperty(k)) e.setAttribute(k, attrs[k]); }
+  return e;
+}
+function clear(el) {
+  if (!el) return;
+  if (el.removeChild) { while (el.firstChild) el.removeChild(el.firstChild); }
+  else { el.innerHTML = ""; }
+}
+function tx(p, x, y, s, o) {
+  o = o || {};
+  var e = mk("text", {
+    x: x, y: y, fill: o.fill || "#9aa0a6", "font-size": o.size || 10,
+    "font-family": o.sans ? "system-ui, sans-serif" : "ui-monospace, Menlo, monospace",
+    "font-weight": o.weight || 400, "text-anchor": o.anchor || "start"
+  });
+  e.textContent = s;
+  p.appendChild(e);
+  return e;
+}
+function pathOf(pts) {
+  var d = "", i;
+  for (i = 0; i < pts.length; i++) d += (i ? "L" : "M") + pts[i][0].toFixed(2) + " " + pts[i][1].toFixed(2);
+  return d;
+}
+var C = {
+  ink: "#e8e6e3", muted: "#9aa0a6", dim: "#5f6673", line: "#272c36",
+  acc: "#7c3aed", acc2: "#c4b5fd", ok: "#3fb950", warn: "#d29922",
+  bad: "#f85149", sky: "#58a6ff", violet: "#a78bfa", teal: "#2dd4bf"
+};
+function fmtNs(ns) {
+  if (ns < 1000) return ns.toFixed(ns < 10 ? 2 : 1) + " ns";
+  if (ns < 1e6) return (ns / 1000).toFixed(2) + " µs";
+  return (ns / 1e6).toFixed(2) + " ms";
+}
+function grp(n) { return Math.round(n).toLocaleString("en-US").replace(/,/g, " "); }
+var LINE = 64;
+
+/* ══════════════════════════════════════════════════════════════
+   WIDGET 1 — the race-condition stepper
+   ++counter is LOAD, ADD, STORE. You pick who steps next.
+   ══════════════════════════════════════════════════════════════ */
+var RA_OPS = ["LOAD", "ADD", "STORE"];
+var ra = null;
+function raReset() {
+  ra = { mem: 0, pc: { A: 0, B: 0 }, reg: { A: null, B: null }, trace: [], issued: 0, done: { A: false, B: false } };
+}
+function raStep(th) {
+  if (ra.pc[th] > 2) return false;
+  var op = RA_OPS[ra.pc[th]];
+  if (op === "LOAD") { ra.reg[th] = ra.mem; ra.trace.push({ th: th, op: op, txt: th + ": LOAD  reg" + th + " <- memory (" + ra.mem + ")" }); }
+  else if (op === "ADD") { ra.reg[th] = ra.reg[th] + 1; ra.trace.push({ th: th, op: op, txt: th + ": ADD   reg" + th + " = " + ra.reg[th] }); }
+  else {
+    var before = ra.mem;
+    ra.mem = ra.reg[th];
+    ra.issued++;
+    ra.done[th] = true;
+    ra.trace.push({
+      th: th, op: op,
+      txt: th + ": STORE memory <- " + ra.mem + (ra.mem <= before && before > 0 ? "   << overwrote " + before : ""),
+      lost: ra.mem <= before && before > 0
+    });
+  }
+  ra.pc[th]++;
+  return true;
+}
+function raDraw() {
+  var svg = $("raSvg");
+  clear(svg);
+  var x0 = 96, cw = 82, i;
+  tx(svg, 14, 20, "shared memory · one long", { fill: C.muted, size: 10.5, weight: 700 });
+  svg.appendChild(mk("rect", { x: x0, y: 8, width: 120, height: 30, rx: 5, fill: "rgba(124,58,237,.2)", stroke: C.acc2, "stroke-width": 1.4 }));
+  tx(svg, x0 + 60, 28, "counter = " + ra.mem, { fill: "#fff", size: 12.5, anchor: "middle", weight: 700 });
+
+  ["A", "B"].forEach(function (th, ti) {
+    var y = 70 + ti * 96;
+    tx(svg, 14, y + 22, "thread " + th, { fill: ti ? C.sky : C.acc2, size: 11.5, weight: 700 });
+    tx(svg, 14, y + 38, "reg" + th + " = " + (ra.reg[th] === null ? "—" : ra.reg[th]), { fill: C.dim, size: 10 });
+    for (i = 0; i < 3; i++) {
+      var st = ra.pc[th] > i ? "done" : (ra.pc[th] === i ? "next" : "todo");
+      svg.appendChild(mk("rect", {
+        x: x0 + i * cw, y: y, width: cw - 8, height: 34, rx: 5,
+        fill: st === "done" ? (ti ? "rgba(88,166,255,.28)" : "rgba(196,181,253,.26)") : "#14171f",
+        stroke: st === "next" ? (ti ? C.sky : C.acc2) : C.line,
+        "stroke-width": st === "next" ? 1.8 : 1,
+        "stroke-dasharray": st === "next" ? "4 3" : "0"
+      }));
+      tx(svg, x0 + i * cw + (cw - 8) / 2, y + 22, RA_OPS[i], {
+        fill: st === "todo" ? C.dim : C.ink, size: 10.5, anchor: "middle", weight: st === "todo" ? 400 : 700
+      });
+    }
+    if (ra.pc[th] > 2) tx(svg, x0 + 3 * cw + 6, y + 22, "retired", { fill: C.ok, size: 10, weight: 700 });
+  });
+
+  /* the interleaving so far, as a ribbon */
+  var ry = 262;
+  tx(svg, 14, ry - 8, "issue order", { fill: C.muted, size: 10.5, weight: 700 });
+  ra.trace.forEach(function (t, k) {
+    svg.appendChild(mk("rect", {
+      x: 96 + k * 46, y: ry, width: 42, height: 26, rx: 4,
+      fill: t.lost ? "rgba(248,81,73,.3)" : (t.th === "A" ? "rgba(196,181,253,.24)" : "rgba(88,166,255,.24)"),
+      stroke: t.lost ? C.bad : C.line, "stroke-width": 1
+    }));
+    tx(svg, 96 + k * 46 + 21, ry + 12, t.th, { fill: t.th === "A" ? C.acc2 : C.sky, size: 10.5, anchor: "middle", weight: 700 });
+    tx(svg, 96 + k * 46 + 21, ry + 23, t.op.slice(0, 2), { fill: C.dim, size: 8.5, anchor: "middle" });
+  });
+  if (!ra.trace.length) tx(svg, 96, ry + 17, "nothing issued yet — step a thread", { fill: C.dim, size: 10.5 });
+}
+function raRender() {
+  raDraw();
+  $("raMem").textContent = ra.mem;
+  $("raRegA").textContent = ra.reg.A === null ? "—" : ra.reg.A;
+  $("raRegB").textContent = ra.reg.B === null ? "—" : ra.reg.B;
+  $("raIssued").textContent = ra.issued;
+  var lost = ra.issued - ra.mem;
+  $("raLostN").textContent = lost;
+  $("raLostN").className = "sv " + (lost > 0 ? "bad" : "ok");
+  var finished = ra.pc.A > 2 && ra.pc.B > 2;
+  $("raVerdictS").textContent = finished ? (ra.mem === 2 ? "correct" : "WRONG") : "running";
+  $("raVerdictS").className = "sv " + (finished ? (ra.mem === 2 ? "ok" : "bad") : "");
+  $("raA").disabled = ra.pc.A > 2;
+  $("raB").disabled = ra.pc.B > 2;
+
+  var box = $("raLog");
+  clear(box);
+  ra.trace.forEach(function (t) {
+    var d = document.createElement("div");
+    d.className = t.lost ? "bad" : (t.op === "STORE" ? "hl" : "");
+    d.textContent = t.txt;
+    box.appendChild(d);
+  });
+
+  var v = $("raVerdict");
+  if (!finished) {
+    v.innerHTML = "<b>Two increments in flight.</b> Each thread must LOAD the counter, ADD one in its own " +
+      "register, then STORE the result back. Nothing in the program forces those six steps into any " +
+      "particular order — that is the definition of the race. Interleave them and see what you get.";
+  } else if (ra.mem === 2) {
+    v.innerHTML = "<b>Correct — this time.</b> You happened to let one thread's STORE land before the other's " +
+      "LOAD, so the second increment saw the first. That is the only family of interleavings that works, and " +
+      "nothing in the code arranged it. Reset and try letting both threads LOAD before either STORES.";
+  } else {
+    v.innerHTML = "<b>A lost update.</b> Both threads issued an increment, so the counter should read 2 — it " +
+      "reads " + ra.mem + ". Both LOADed the same value, both ADDed one to their own register, and the second " +
+      "STORE overwrote the first with a value computed from stale data. No instruction was skipped and nothing " +
+      "crashed; one increment simply evaporated. Scale this to a million per thread and the final count is " +
+      "always short, by a different amount each run.";
+  }
+}
+function raPreset(kind) {
+  raReset();
+  var seq = kind === "lost" ? ["A", "B", "A", "B", "A", "B"] : ["A", "A", "A", "B", "B", "B"];
+  seq.forEach(function (t) { raStep(t); });
+  raRender();
+}
+$("raA").addEventListener("click", function () { raStep("A"); raRender(); });
+$("raB").addEventListener("click", function () { raStep("B"); raRender(); });
+$("raLost").addEventListener("click", function () { raPreset("lost"); });
+$("raSafe").addEventListener("click", function () { raPreset("safe"); });
+$("raRst").addEventListener("click", function () { raReset(); raRender(); });
+raReset();
+raRender();
+
+/* ══════════════════════════════════════════════════════════════
+   WIDGET 2 — what an atomic read-modify-write costs
+   ══════════════════════════════════════════════════════════════ */
+var AT_ORD = [
+  { key: "relaxed", nm: "fetch_add · relaxed", sub: "atomic, no ordering", f: 1.0, col: C.acc2 },
+  { key: "acqrel", nm: "fetch_add · acq_rel", sub: "orders surrounding accesses", f: 1.06, col: C.sky },
+  { key: "seqcst", nm: "fetch_add · seq_cst", sub: "one global total order", f: 1.14, col: C.warn },
+  { key: "plain", nm: "plain non-atomic ++", sub: "for scale — and a data race", f: 0.14, col: C.dim }
+];
+function atModel(cores, cross) {
+  /* uncontended lock xadd on a line you already own */
+  var base = 7.0;
+  if (cores <= 1) return { ns: base, xfer: 0 };
+  /* every op needs the line exclusively, so it is a transfer per op; the queue
+     of requesters grows with cores, and a cross-socket hop is far worse */
+  var hop = cross ? 130 : 42;
+  var ns = base + hop * (1 - 1 / cores) * Math.min(1, 0.55 + 0.45 * Math.log(cores) / Math.log(32)) * (1 + (cores - 2) * 0.16);
+  return { ns: ns, xfer: 1 };
+}
+function atRender() {
+  var cores = +$("atCores").value, ops = +$("atOps").value;
+  var cross = $("atSock").value === "cross";
+  $("vatCores").textContent = cores;
+  $("vatOps").textContent = ops;
+  var m = atModel(cores, cross);
+  var thr = cores > 1 ? 1000 / m.ns : 1000 / m.ns;      /* Mops/s, aggregate: one owner at a time */
+  var per = thr / cores;
+  $("atNs").textContent = fmtNs(m.ns);
+  $("atNs").className = "sv " + (m.ns < 15 ? "ok" : m.ns < 60 ? "warn" : "bad");
+  $("atThr").textContent = thr.toFixed(1) + " Mops/s";
+  $("atPer").textContent = per.toFixed(1) + " Mops/s";
+
+  var box = $("atBars");
+  clear(box);
+  var maxNs = atModel(cores, cross).ns * 1.14;
+  AT_ORD.forEach(function (o) {
+    var ns = o.key === "plain" ? (cores > 1 ? 1.2 : 0.9) : m.ns * o.f;
+    var row = document.createElement("div");
+    row.className = "dsrow";
+    var lab = document.createElement("div");
+    lab.className = "dsn";
+    lab.innerHTML = o.nm + "<em>" + o.sub + "</em>";
+    var bar = document.createElement("div");
+    bar.className = "bar";
+    var fill = document.createElement("i");
+    fill.style.width = Math.max(1.5, 100 * ns / maxNs) + "%";
+    fill.style.background = o.col;
+    fill.style.opacity = "0.88";
+    var val = document.createElement("span");
+    val.textContent = fmtNs(ns);
+    bar.appendChild(fill); bar.appendChild(val);
+    row.appendChild(lab); row.appendChild(bar);
+    box.appendChild(row);
+  });
+
+  /* cost and aggregate throughput against core count */
+  var svg = $("atSvg");
+  clear(svg);
+  var x0 = 46, x1 = 690, y0 = 140, y1 = 30;
+  var top = atModel(32, cross).ns;
+  var X = function (c) { return x0 + (x1 - x0) * (c - 1) / 31; };
+  var Y = function (ns) { return y0 - (y0 - y1) * Math.min(1, ns / top); };
+  var Yt = function (t) { return y0 - (y0 - y1) * Math.min(1, t / (1000 / atModel(1, cross).ns)); };
+  tx(svg, x0, 18, "ns per op (red) and aggregate throughput (green) against contending cores",
+    { fill: C.muted, size: 10.5, weight: 700 });
+  var pn = [], pt = [], c;
+  for (c = 1; c <= 32; c++) {
+    pn.push([X(c), Y(atModel(c, cross).ns)]);
+    pt.push([X(c), Yt(1000 / atModel(c, cross).ns)]);
+  }
+  svg.appendChild(mk("path", { d: pathOf(pn), fill: "none", stroke: C.bad, "stroke-width": 2 }));
+  svg.appendChild(mk("path", { d: pathOf(pt), fill: "none", stroke: C.ok, "stroke-width": 2 }));
+  svg.appendChild(mk("circle", { cx: X(cores), cy: Y(m.ns), r: 4.5, fill: C.bad, stroke: "#0b0e14", "stroke-width": 1.4 }));
+  svg.appendChild(mk("circle", { cx: X(cores), cy: Yt(thr), r: 4.5, fill: C.ok, stroke: "#0b0e14", "stroke-width": 1.4 }));
+  [1, 4, 8, 16, 32].forEach(function (cc) { tx(svg, X(cc), y0 + 18, cc + (cc === 1 ? " core" : ""), { fill: C.dim, size: 9, anchor: "middle" }); });
+  tx(svg, x1, Y(m.ns) - 7, fmtNs(m.ns) + " / op", { fill: C.bad, size: 10, anchor: "end", weight: 700 });
+  tx(svg, x1, Yt(thr) + 14, thr.toFixed(1) + " Mops/s total", { fill: C.ok, size: 10, anchor: "end", weight: 700 });
+
+  var solo = atModel(1, cross).ns;
+  $("atVerdict").innerHTML = cores === 1
+    ? "<b>Uncontended: " + fmtNs(m.ns) + ".</b> A <code>lock xadd</code> on a line this core already owns " +
+      "exclusively — about seven times a plain increment, and cheap enough to put anywhere. Note that the " +
+      "ordering barely matters at one core: the difference between <code>relaxed</code> and " +
+      "<code>seq_cst</code> is a fence the hardware can mostly satisfy locally. Now add a second core."
+    : "<b>" + cores + " cores on one variable: " + fmtNs(m.ns) + " per op, " +
+      (m.ns / solo).toFixed(1) + "× the uncontended cost.</b> Every read-modify-write needs the line in " +
+      "exclusive state, so the line is dragged from core to core and only its current owner makes progress. " +
+      "Aggregate throughput is " + thr.toFixed(1) + " Mops/s — <em>lower</em> than the " +
+      (1000 / solo).toFixed(0) + " Mops/s a single core managed alone, which means adding threads to this " +
+      "counter made the program slower in total. " +
+      (cross ? "Across sockets the coherency traffic leaves the chip, which is why the cost roughly triples again. "
+        : "") +
+      "The fix is never a smarter atomic. It is one counter per thread, padded to its own line, summed when " +
+      "someone actually asks for the total.";
+}
+["atCores", "atOps"].forEach(function (id) {
+  $(id).addEventListener("input", atRender);
+  $(id).addEventListener("change", atRender);
+});
+$("atSock").addEventListener("change", atRender);
+atRender();
+
+/* ══════════════════════════════════════════════════════════════
+   WIDGET 3 — message passing: pick the ordering on each side
+   ══════════════════════════════════════════════════════════════ */
+function mpModel() {
+  var prod = $("mpProd").value, cons = $("mpCons").value, arch = $("mpArch").value;
+  /* the happens-before edge exists iff the store publishes AND the load observes */
+  var pubs = prod === "release" || prod === "seq_cst";
+  var obs = cons === "acquire" || cons === "seq_cst";
+  var sound = pubs && obs;
+  /* what the hardware happens to do when the model does not guarantee it */
+  var luckyOnX86 = arch === "x86";
+  var reorder = [];
+  if (!pubs) {
+    reorder.push({
+      t: "producer: the payload store may sink BELOW the flag store",
+      why: "a relaxed store imposes no ordering on earlier writes",
+      real: !luckyOnX86 || prod === "relaxed"
+    });
+  }
+  if (!obs) {
+    reorder.push({
+      t: "consumer: the payload load may be hoisted ABOVE the flag load",
+      why: "a relaxed load imposes no ordering on later reads",
+      real: true
+    });
+  }
+  if (pubs && obs) {
+    reorder.push({ t: "none — the release/acquire pair forbids both directions", why: "happens-before established", real: false });
+  }
+  /* fences actually emitted */
+  var fences = 0;
+  if (prod === "seq_cst") fences += (arch === "x86" ? 1 : 1);
+  else if (prod === "release" && arch === "arm") fences += 1;
+  if (cons === "seq_cst") fences += 1;
+  else if (cons === "acquire" && arch === "arm") fences += 1;
+  return { prod: prod, cons: cons, arch: arch, pubs: pubs, obs: obs, sound: sound, reorder: reorder, fences: fences, lucky: luckyOnX86 };
+}
+function mpDraw(m) {
+  var svg = $("mpSvg");
+  clear(svg);
+  var px = 24, cx2 = 388, bw = 300;
+  function stream(x, title, lines, col) {
+    tx(svg, x, 20, title, { fill: col, size: 11, weight: 700 });
+    lines.forEach(function (L, i) {
+      var y = 34 + i * 42;
+      svg.appendChild(mk("rect", {
+        x: x, y: y, width: bw, height: 34, rx: 5,
+        fill: L.atomic ? "rgba(124,58,237,.20)" : "#14171f",
+        stroke: L.atomic ? C.acc2 : C.line, "stroke-width": L.atomic ? 1.4 : 1
+      }));
+      tx(svg, x + 10, y + 15, L.code, { fill: C.ink, size: 10.5, weight: L.atomic ? 700 : 400 });
+      tx(svg, x + 10, y + 28, L.note, { fill: C.dim, size: 9 });
+    });
+  }
+  stream(px, "PRODUCER thread", [
+    { code: "payload = 42;", note: "plain write · not atomic", atomic: false },
+    { code: "flag.store(true, " + m.prod + ");", note: m.pubs ? "publishes everything above it" : "publishes nothing", atomic: true }
+  ], C.acc2);
+  stream(cx2, "CONSUMER thread", [
+    { code: "while (!flag.load(" + m.cons + ")) {}", note: m.obs ? "observes the publication" : "observes only the flag", atomic: true },
+    { code: "read payload;", note: m.obs ? "sees 42, guaranteed" : "may see 0 — nothing forbids it", atomic: false }
+  ], C.sky);
+
+  /* the happens-before edge, or its absence */
+  var y1 = 34 + 34, y2 = 34 + 17;
+  if (m.sound) {
+    svg.appendChild(mk("path", {
+      d: "M" + (px + bw) + " " + (34 + 42 + 17) + " C " + (px + bw + 30) + " " + (34 + 42 + 17) +
+        ", " + (cx2 - 30) + " " + y2 + ", " + cx2 + " " + y2,
+      fill: "none", stroke: C.ok, "stroke-width": 2.2
+    }));
+    tx(svg, (px + bw + cx2) / 2, 34 + 42 + 34, "synchronizes-with", { fill: C.ok, size: 9.5, anchor: "middle", weight: 700 });
+  } else {
+    svg.appendChild(mk("line", {
+      x1: px + bw, y1: 34 + 42 + 17, x2: cx2, y2: y2,
+      stroke: C.bad, "stroke-width": 2, "stroke-dasharray": "5 4"
+    }));
+    tx(svg, (px + bw + cx2) / 2, 34 + 42 + 34, "NO EDGE", { fill: C.bad, size: 9.5, anchor: "middle", weight: 700 });
+  }
+
+  /* the permitted readings */
+  var ry = 158;
+  tx(svg, px, ry, "readings the standard permits at `read payload`", { fill: C.muted, size: 10.5, weight: 700 });
+  [["42", true], ["0", !m.sound]].forEach(function (p, i) {
+    var x = px + i * 160;
+    svg.appendChild(mk("rect", {
+      x: x, y: ry + 10, width: 148, height: 42, rx: 6,
+      fill: p[1] ? (p[0] === "42" ? "rgba(63,185,80,.16)" : "rgba(248,81,73,.18)") : "#14171f",
+      stroke: p[1] ? (p[0] === "42" ? C.ok : C.bad) : C.line, "stroke-width": 1.4
+    }));
+    tx(svg, x + 74, ry + 30, "payload == " + p[0], {
+      fill: p[1] ? (p[0] === "42" ? C.ok : C.bad) : C.dim, size: 11.5, anchor: "middle", weight: 700
+    });
+    tx(svg, x + 74, ry + 44, p[1] ? "permitted" : "forbidden", {
+      fill: p[1] ? C.muted : C.dim, size: 9, anchor: "middle"
+    });
+  });
+  /* what the hardware does anyway */
+  var hy = 236;
+  svg.appendChild(mk("rect", { x: px, y: hy, width: 672, height: 52, rx: 6, fill: "#12151c", stroke: C.line, "stroke-width": 1 }));
+  tx(svg, px + 12, hy + 20, "on " + (m.arch === "x86" ? "x86-64" : "AArch64") + ":", { fill: C.ink, size: 10.5, weight: 700 });
+  tx(svg, px + 92, hy + 20,
+    m.sound ? "correct by the model, so correct everywhere"
+      : (m.arch === "x86"
+        ? (!m.pubs && m.obs ? "store-store is not reordered here, so it accidentally works — and is still UB"
+          : "the compiler alone can break this; the ISA will not save you")
+        : "weakly ordered: this reads 0 in practice, not just in theory"),
+    { fill: m.sound ? C.ok : (m.arch === "x86" ? C.warn : C.bad), size: 10.5 });
+  tx(svg, px + 12, hy + 40,
+    m.fences === 0 ? "fences emitted: none — both sides compile to plain loads and stores"
+      : "fences emitted: " + m.fences + " · each one is a pipeline and store-buffer constraint you pay for",
+    { fill: C.dim, size: 9.5 });
+}
+function mpRender() {
+  var m = mpModel();
+  mpDraw(m);
+  $("mpRead").textContent = m.sound ? "42 only" : "42 or 0";
+  $("mpRead").className = "sv " + (m.sound ? "ok" : "bad");
+  $("mpSound").textContent = m.sound ? "sound" : "undefined";
+  $("mpSound").className = "sv " + (m.sound ? "ok" : "bad");
+  $("mpFence").textContent = m.fences === 0 ? "none" : String(m.fences);
+
+  var box = $("mpLog");
+  clear(box);
+  m.reorder.forEach(function (r) {
+    var d = document.createElement("div");
+    d.className = r.real ? "bad" : (m.sound ? "ok" : "");
+    d.textContent = r.t + "  —  " + r.why;
+    box.appendChild(d);
+  });
+
+  var v = $("mpVerdict");
+  if (m.sound) {
+    v.innerHTML = "<b>" + (m.prod === "seq_cst" || m.cons === "seq_cst" ? "Correct, and more than you needed."
+      : "Correct, and minimal.") + "</b> The " + m.prod + " store synchronizes-with the " + m.cons +
+      " load that observes it, so the payload write happens-before the payload read: 42 is the only permitted " +
+      "reading, on every architecture, forever. " +
+      (m.prod === "seq_cst" || m.cons === "seq_cst"
+        ? "But <code>seq_cst</code> additionally places this operation in a single global total order with " +
+          "every other <code>seq_cst</code> operation in the program, which costs a full barrier on both " +
+          "architectures and buys you nothing here — there is only one flag. Release/acquire is the right pair."
+        : "Nothing stronger is required: you asked for exactly one edge and paid for exactly one edge. This is " +
+          "the pattern next week's SPSC ring is built from.");
+  } else if (!m.pubs && !m.obs) {
+    v.innerHTML = "<b>Both sides relaxed: no edge at all.</b> You have made the flag atomic, so TSan will not " +
+      "complain about the flag, and the program will pass on x86 essentially always. It is still undefined " +
+      "behaviour: the producer's payload write may become visible after the flag, <em>and</em> the consumer may " +
+      "hoist its payload read above the flag load. Two independent ways to read zero, and " +
+      (m.arch === "x86" ? "the only reason you do not is that this ISA does not reorder stores with stores. Switch to AArch64."
+        : "on this weakly ordered machine you will.");
+  } else if (!m.pubs) {
+    v.innerHTML = "<b>The consumer is careful and the producer is not.</b> <code>acquire</code> on the load " +
+      "stops the payload read from being hoisted, but a relaxed store publishes nothing, so the payload write " +
+      "is free to become visible <em>after</em> the flag. An acquire that observes a non-releasing store " +
+      "synchronizes with nothing — the pair has to be complete. " +
+      (m.arch === "x86" ? "x86 does not reorder store-store, so you will not catch this by running it."
+        : "On AArch64 this reads zero.");
+  } else {
+    v.innerHTML = "<b>The producer is careful and the consumer is not.</b> <code>release</code> makes the " +
+      "payload write visible to anyone who <em>acquires</em> this flag — and a relaxed load does not acquire. " +
+      "The consumer's payload read may be hoisted above the flag load by the compiler alone, before the " +
+      "hardware gets a say, so this one is not even architecture-dependent: it is a legal optimisation on " +
+      "x86 too.";
+  }
+}
+["mpProd", "mpCons", "mpArch"].forEach(function (id) { $(id).addEventListener("change", mpRender); });
+mpRender();
+
+/* ══════════════════════════════════════════════════════════════
+   WIDGET 4 — false sharing
+   ══════════════════════════════════════════════════════════════ */
+function fsModel() {
+  var th = +$("fsThreads").value, stride = +$("fsStride").value, pad = $("fsPad").checked;
+  var eff = pad ? 64 : stride;
+  var perLine = Math.max(1, Math.floor(LINE / eff));
+  var sharers = Math.min(th, perLine);
+  var base = 7.0, hop = 42;
+  /* the line is contended by however many threads land on it */
+  var ns = sharers <= 1 ? base : base + hop * (1 - 1 / sharers) * (1 + (sharers - 2) * 0.18);
+  var padNs = base;
+  return {
+    th: th, stride: stride, pad: pad, eff: eff, perLine: perLine, sharers: sharers,
+    ns: ns, padNs: padNs, xfer: sharers > 1 ? 1 : 0,
+    thr: 1000 / ns * th / Math.max(1, sharers),
+    mem: th * eff
+  };
+}
+function fsDraw(m) {
+  var svg = $("fsSvg");
+  clear(svg);
+  var x0 = 24, lw = 656, i;
+  /* the cache line, and which counters land in it */
+  tx(svg, x0, 20, "one 64-byte cache line · " + m.eff + " B per counter", { fill: C.muted, size: 10.5, weight: 700 });
+  svg.appendChild(mk("rect", { x: x0, y: 28, width: lw, height: 46, rx: 6, fill: "#12151c", stroke: C.acc2, "stroke-width": 1.4 }));
+  var slots = Math.max(1, Math.floor(LINE / Math.min(64, m.eff)));
+  var sw = lw / slots;
+  for (i = 0; i < slots; i++) {
+    var used = i < m.sharers;
+    svg.appendChild(mk("rect", {
+      x: x0 + i * sw + 2, y: 32, width: sw - 4, height: 38, rx: 4,
+      fill: used ? (m.sharers > 1 ? "rgba(248,81,73,.26)" : "rgba(63,185,80,.22)") : "#171b23",
+      stroke: used ? (m.sharers > 1 ? C.bad : C.ok) : C.line, "stroke-width": 1
+    }));
+    if (used && sw > 40) {
+      tx(svg, x0 + i * sw + sw / 2, 48, "T" + i, { fill: C.ink, size: 10.5, anchor: "middle", weight: 700 });
+      tx(svg, x0 + i * sw + sw / 2, 62, "counter", { fill: C.dim, size: 8.5, anchor: "middle" });
+    } else if (!used && sw > 40) {
+      tx(svg, x0 + i * sw + sw / 2, 54, "pad", { fill: C.dim, size: 9, anchor: "middle" });
+    }
+  }
+  tx(svg, x0, 92, m.sharers > 1
+    ? m.sharers + " threads write this ONE line → every increment invalidates the other cores' copies"
+    : "one thread owns this line → no coherency traffic at all",
+    { fill: m.sharers > 1 ? C.bad : C.ok, size: 10.5, weight: 700 });
+
+  /* the coherency ping-pong, as arrows between cores */
+  var cy = 132;
+  tx(svg, x0, cy, "line ownership over time", { fill: C.muted, size: 10.5, weight: 700 });
+  var steps = 10, stw = lw / steps;
+  for (i = 0; i < steps; i++) {
+    var owner = m.sharers > 1 ? i % m.sharers : 0;
+    svg.appendChild(mk("rect", {
+      x: x0 + i * stw + 2, y: cy + 8, width: stw - 4, height: 26, rx: 3,
+      fill: m.sharers > 1 ? "rgba(248,81,73,.22)" : "rgba(63,185,80,.18)",
+      stroke: m.sharers > 1 ? C.bad : C.ok, "stroke-width": 1
+    }));
+    tx(svg, x0 + i * stw + stw / 2, cy + 25, "T" + owner, { fill: C.ink, size: 9.5, anchor: "middle", weight: 700 });
+    if (i && m.sharers > 1) {
+      tx(svg, x0 + i * stw, cy + 48, "↯", { fill: C.bad, size: 12, anchor: "middle", weight: 700 });
+    }
+  }
+  tx(svg, x0, cy + 66, m.sharers > 1
+    ? "each ↯ is a line transfer: exclusive ownership taken away from the previous core"
+    : "no transfers — the core keeps the line in Exclusive state and never gives it up",
+    { fill: C.dim, size: 9.5 });
+
+  /* throughput bars */
+  var by = 232, mx = Math.max(1000 / m.padNs * m.th, 1);
+  tx(svg, x0, by - 6, "increments per second", { fill: C.muted, size: 10.5, weight: 700 });
+  [["as laid out", m.thr, m.sharers > 1 ? C.bad : C.ok], ["one line each (padded)", 1000 / m.padNs * m.th, C.acc2]]
+    .forEach(function (p, k) {
+      var yy = by + 4 + k * 26;
+      tx(svg, x0 + 152, yy + 13, p[0], { fill: C.ink, size: 10, anchor: "end" });
+      svg.appendChild(mk("rect", { x: x0 + 160, y: yy, width: Math.max(2, (lw - 220) * p[1] / mx), height: 18, rx: 3, fill: p[2], opacity: 0.86 }));
+      tx(svg, x0 + 166 + Math.max(2, (lw - 220) * p[1] / mx), yy + 13, p[1].toFixed(0) + " M/s", { fill: p[2], size: 10, weight: 700 });
+    });
+}
+function fsRender() {
+  var m = fsModel();
+  $("vfsThreads").textContent = m.th;
+  $("vfsStride").textContent = m.stride + " B";
+  $("fsPerLine").textContent = m.sharers + " of " + m.perLine;
+  $("fsNs").textContent = fmtNs(m.ns);
+  $("fsNs").className = "sv " + (m.ns < 12 ? "ok" : m.ns < 40 ? "warn" : "bad");
+  $("fsXfer").textContent = m.xfer ? "1 per increment" : "none";
+  $("fsXfer").className = "sv " + (m.xfer ? "bad" : "ok");
+  $("fsThr").textContent = m.thr.toFixed(0) + " M/s";
+  var padThr = 1000 / m.padNs * m.th;
+  $("fsRatio").textContent = (padThr / Math.max(0.01, m.thr)).toFixed(1) + "× slower";
+  $("fsRatio").className = "sv " + (padThr / Math.max(0.01, m.thr) < 1.2 ? "ok" : "bad");
+  $("fsMem").textContent = m.mem + " B";
+  fsDraw(m);
+  var v = $("fsVerdict");
+  if (m.sharers <= 1) {
+    v.innerHTML = "<b>One counter per line: no false sharing.</b> At " + m.eff + " bytes of stride each " +
+      "counter owns its own 64-byte line, so every core holds its line in Exclusive state and never gives it " +
+      "up — " + fmtNs(m.ns) + " per increment, the uncontended cost, and it stays there as you add threads. " +
+      "You paid " + (m.eff - 8) + " bytes of padding per counter for that, which is the cheapest trade in " +
+      "this entire course.";
+  } else {
+    v.innerHTML = "<b>" + m.sharers + " counters in one line — and nothing is logically shared.</b> Each " +
+      "thread writes only its own variable, so there is no race and no correctness problem whatsoever. But " +
+      "coherency is granted per line, so every increment takes the line away from the other " +
+      (m.sharers - 1) + " core" + (m.sharers > 2 ? "s" : "") + " and the next increment has to drag it back: " +
+      fmtNs(m.ns) + " per operation against " + fmtNs(m.padNs) + " padded, a factor of " +
+      (padThr / Math.max(0.01, m.thr)).toFixed(1) + " in throughput. This is the failure that no profiler " +
+      "attributes to a line of code — the cost is smeared evenly across every access, and the bug is in the " +
+      "struct definition. Tick the padding box.";
+  }
+}
+["fsThreads", "fsStride"].forEach(function (id) {
+  $(id).addEventListener("input", fsRender);
+  $(id).addEventListener("change", fsRender);
+});
+$("fsPad").addEventListener("change", fsRender);
+fsRender();
+
+/* ══════════════════════════════════════════════════════════════
+   WIDGET 5 — spinlock versus mutex: latency and fairness
+   ══════════════════════════════════════════════════════════════ */
+var LK = [
+  { key: "spin", nm: "TTAS spinlock", col: C.warn },
+  { key: "mutex", nm: "std::mutex", col: C.bad },
+  { key: "free", nm: "SPSC ring (no lock)", col: C.acc2 }
+];
+function lkModel() {
+  var crit = +$("lkCrit").value, th = +$("lkThreads").value, cores = +$("lkCores").value;
+  var oversub = th > cores;                       /* more runnable threads than cores */
+  var acq = 20, futex = 5000;                     /* uncontended acquire; a sleep/wake pair */
+  var waiters = Math.max(0, th - 1);
+  var o = {};
+  /* spinlock: you wait for everyone ahead of you, in user space. If the holder
+     can be descheduled (oversubscribed), a waiter burns its whole quantum. */
+  o.spin = {
+    p50: acq + crit,
+    p99: acq + crit + waiters * (crit + acq) * 0.75,
+    p999: oversub ? acq + crit + 2500000 : acq + crit + waiters * (crit + acq) * 1.6,
+    fair: waiters === 0 ? "n/a" : "none — line owner wins",
+    burn: waiters > 0 ? waiters + " core" + (waiters > 1 ? "s" : "") : "none"
+  };
+  /* mutex: cheap uncontended, but a contended acquire may sleep on a futex and
+     wake at the scheduler's convenience */
+  var contendP = waiters === 0 ? 0 : Math.min(0.95, waiters * crit / (crit + 4000));
+  o.mutex = {
+    p50: acq + crit + (contendP > 0.5 ? futex : 0),
+    p99: acq + crit + waiters * crit + futex,
+    p999: acq + crit + waiters * crit + futex * 6,
+    fair: waiters === 0 ? "n/a" : "queued, ~FIFO",
+    burn: "none — the core is handed back"
+  };
+  /* no lock at all: a release store and an acquire load, no waiting */
+  o.free = {
+    p50: 12 + crit, p99: 30 + crit, p999: 90 + crit,
+    fair: "n/a — nothing to queue for",
+    burn: "none"
+  };
+  return { crit: crit, th: th, cores: cores, oversub: oversub, waiters: waiters, o: o };
+}
+function lkRender() {
+  var m = lkModel();
+  $("vlkCrit").textContent = fmtNs(m.crit);
+  $("vlkThreads").textContent = m.th;
+  $("vlkCores").textContent = m.cores;
+
+  var t = $("lkTable");
+  while (t.rows.length > 1) t.deleteRow(1);
+  LK.forEach(function (L) {
+    var s = m.o[L.key], r = t.insertRow(-1);
+    [L.nm, fmtNs(s.p50), fmtNs(s.p99), fmtNs(s.p999), s.fair, s.burn].forEach(function (v, i) {
+      var c = r.insertCell(-1);
+      c.textContent = v;
+      if (i === 0) c.className = "n";
+      if (i === 3 && s.p999 > 100000) c.style.color = C.bad;
+    });
+  });
+
+  var svg = $("lkSvg");
+  clear(svg);
+  var x0 = 130, x1 = 690;
+  var mx = Math.max(m.o.spin.p999, m.o.mutex.p999, m.o.free.p999);
+  var W = function (ns) { return Math.max(2, (x1 - x0) * Math.log(1 + ns) / Math.log(1 + mx)); };
+  tx(svg, 20, 18, "latency to acquire, run and release · log scale", { fill: C.muted, size: 10.5, weight: 700 });
+  LK.forEach(function (L, i) {
+    var s = m.o[L.key], y = 32 + i * 74;
+    tx(svg, x0 - 8, y + 12, L.nm, { fill: C.ink, size: 10.5, anchor: "end", weight: 700 });
+    [["p50", s.p50, 0.95], ["p99", s.p99, 0.6], ["p99.9", s.p999, 0.34]].forEach(function (p, j) {
+      var yy = y + j * 20;
+      svg.appendChild(mk("rect", { x: x0, y: yy, width: W(p[1]), height: 16, rx: 3, fill: L.col, opacity: p[2] }));
+      tx(svg, x0 + W(p[1]) + 7, yy + 12, p[0] + "  " + fmtNs(p[1]), { fill: L.col, size: 9.5, weight: j === 2 ? 700 : 400 });
+    });
+  });
+  /* the tick-budget wall at 1 µs */
+  svg.appendChild(mk("line", { x1: x0 + W(1000), y1: 26, x2: x0 + W(1000), y2: 254, stroke: C.bad, "stroke-width": 1.6, "stroke-dasharray": "5 4" }));
+  tx(svg, x0 + W(1000) + 4, 272, "1 µs tick budget", { fill: C.bad, size: 9.5, weight: 700 });
+  tx(svg, 20, 292, m.oversub
+    ? "⚠ " + m.th + " threads on " + m.cores + " cores: the spinlock's holder CAN be descheduled mid-section"
+    : m.th + " threads on " + m.cores + " cores: every thread has a core, so a spinning waiter cannot starve the holder",
+    { fill: m.oversub ? C.bad : C.ok, size: 10, weight: 700 });
+
+  var v = $("lkVerdict");
+  if (m.waiters === 0) {
+    v.innerHTML = "<b>Uncontended, so everything looks fine.</b> One thread, no waiting: all three primitives " +
+      "cost about " + fmtNs(m.o.mutex.p50) + " and the choice looks like a matter of taste. This is exactly " +
+      "the benchmark people ship on. Add a second thread.";
+  } else if (m.oversub) {
+    v.innerHTML = "<b>The spinlock has become the worst possible choice.</b> With " + m.th +
+      " threads on " + m.cores + " cores the kernel must preempt someone, and if it preempts the thread " +
+      "<em>holding</em> the lock then every waiter spins uselessly until that thread is scheduled again — a " +
+      "whole quantum, milliseconds, and its p99.9 is " + fmtNs(m.o.spin.p999) + ". The mutex is far better " +
+      "here because a blocked waiter hands its core back, which is the one thing the spinlock structurally " +
+      "cannot do. And the lock-free handoff avoids the question: at " + fmtNs(m.o.free.p999) +
+      " p99.9 there is nothing to wait for.";
+  } else if (m.crit < 1000) {
+    v.innerHTML = "<b>Short section, dedicated cores: this is the spinlock's home turf.</b> A " + fmtNs(m.crit) +
+      " critical section is shorter than the " + fmtNs(5000) + " it costs a mutex to sleep and wake, so " +
+      "spinning is strictly cheaper — p99.9 of " + fmtNs(m.o.spin.p999) + " against " + fmtNs(m.o.mutex.p999) +
+      ". What you are paying is " + m.waiters + " core" + (m.waiters > 1 ? "s" : "") + " burning cycles doing " +
+      "nothing, plus unfairness: a TTAS lock has no queue, so whichever core happens to hold the line acquires " +
+      "again and a waiter can starve for millions of iterations while throughput looks healthy. Note the " +
+      "third row: the lock-free handoff is faster than both at every percentile, because it never waits.";
+  } else {
+    v.innerHTML = "<b>The section is long enough that spinning is waste.</b> At " + fmtNs(m.crit) +
+      " per critical section a waiter burns " + fmtNs(m.crit) + " of a core to save a " + fmtNs(5000) +
+      " sleep — and it does that for every thread ahead of it. This is where the mutex is simply the right " +
+      "primitive: it gives the core back and lets someone do useful work. But look at the p99.9 column and " +
+      "remember what it means on a hot path: " + fmtNs(m.o.mutex.p999) + " is thousands of ticks. Anything " +
+      "with a critical section this long does not belong on the path that answers a market-data message.";
+  }
+}
+["lkCrit", "lkThreads", "lkCores"].forEach(function (id) {
+  $(id).addEventListener("input", lkRender);
+  $(id).addEventListener("change", lkRender);
+});
+lkRender();
+
+/* ── MCQ engine (shared across week pages) ───────────────────── */
+Array.prototype.forEach.call(document.querySelectorAll(".mcq"), function (q) {
+  var answer = parseInt(q.getAttribute("data-a"), 10);
+  var opts = Array.prototype.slice.call(q.querySelectorAll(".opt"));
+  var fb = q.querySelector(".fb");
+  opts.forEach(function (o, i) {
+    o.addEventListener("click", function () {
+      if (q.dataset.done === "1") return;
+      q.dataset.done = "1";
+      var right = i === answer;
+      opts.forEach(function (b, j) {
+        b.disabled = true;
+        if (j === answer) b.classList.add("right");
+        else if (j === i) b.classList.add("wrong");
+        else b.classList.add("dim");
+      });
+      fb.innerHTML = (right ? "<b>Correct.</b> " : "<b>Not quite.</b> ") + q.getAttribute("data-exp");
+      fb.className = "fb show " + (right ? "good" : "poor");
+    });
+  });
+});
+</script>
+</body>
+</html>
