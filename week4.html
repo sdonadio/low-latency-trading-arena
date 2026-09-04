@@ -1,0 +1,1525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" href="data:," />
+<title>Week 4 · Custom Allocators &amp; Memory Pools — Low-Latency Trading Arena</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    /* ── Low-Latency Trading Arena · shared palette (identical on every page) ── */
+    --accent:       #7c3aed;
+    --accent-2:     #c4b5fd;
+    --accent-3:     #ede9fe;
+    --accent-rgb:   124,58,237;
+    --accent-2-rgb: 196,181,253;
+    --bg:           #0f1115;
+    --panel:        #181b22;
+    --panel2:       #1e222b;
+    --panel-2:      #13161b;
+    --ink:          #e8e6e3;
+    --ink-dim:      #c6c3bf;
+    --ink-mute:     #6f757f;
+    --muted:        #9aa0a6;
+    --dim:          #5f6673;
+    --line:         #272c36;
+    --line-2:       #333a47;
+    --border:       #272c36;
+    --ok:           #3fb950;
+    --warn:         #d29922;
+    --bad:          #f85149;
+    --info:         #6cb6ff;
+    --sky:          #58a6ff;
+    --violet:       #a78bfa;
+    --teal:         #2dd4bf;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.62;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent-2);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  /* ── nav / footer ─────────────────────────────────────────── */
+  nav.top{position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+    padding:11px 22px;background:rgba(15,17,21,.94);border-bottom:1px solid var(--line)}
+  nav.top>a:first-child{font-weight:800;letter-spacing:-.2px;color:var(--ink);font-size:14.5px;
+    border-left:3px solid var(--accent);padding-left:10px}
+  nav.top .crumbs{font-size:12px;color:var(--muted)}
+  nav.top .crumbs b{color:var(--ink);font-weight:700}
+  footer{border-top:1px solid var(--line);background:var(--panel);
+    padding:26px 22px 34px;text-align:center;font-size:11.5px;color:var(--dim);letter-spacing:.3px}
+
+  /* ── sections & typography ────────────────────────────────── */
+  section{max-width:1180px;margin:0 auto;padding:36px 22px 42px;border-top:1px solid var(--line)}
+  section#hero{border-top:none}
+  .kicker{font-size:10.5px;font-weight:800;letter-spacing:1.9px;text-transform:uppercase;color:var(--accent-2)}
+  h1{font-size:clamp(26px,4.2vw,40px);font-weight:800;letter-spacing:-.9px;line-height:1.13;margin:10px 0 6px}
+  h2{font-size:21px;font-weight:700;letter-spacing:-.3px;margin:4px 0 4px}
+  h3{font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);margin-bottom:11px}
+  h4{font-size:13.5px;font-weight:700;margin-bottom:5px}
+  p{margin:9px 0;max-width:82ch}
+  .lead{color:var(--muted);font-size:15px;max-width:84ch}
+  .sub{color:var(--muted);font-size:12.5px}
+  strong{color:#fff;font-weight:650}
+  em.hi{color:var(--accent-2);font-style:normal;font-weight:600}
+  code,.mono{font-family:var(--mono);font-size:12.5px}
+  code{background:rgba(var(--accent-2-rgb),.13);color:#ddd6fe;padding:1px 5px;border-radius:4px}
+  ul.you{list-style:none;margin:16px 0 0;display:grid;gap:8px}
+  ul.you li{position:relative;padding-left:26px;font-size:13.5px;color:var(--ink);max-width:78ch}
+  ul.you li::before{content:"";position:absolute;left:4px;top:8px;width:8px;height:8px;border-radius:2px;
+    background:var(--accent);box-shadow:0 0 0 3px rgba(var(--accent-rgb),.22)}
+  ul.plain{list-style:none;display:grid;gap:7px;font-size:13px;color:var(--muted)}
+  ul.plain li{padding-left:16px;position:relative}
+  ul.plain li::before{content:"\2022";position:absolute;left:2px;color:var(--accent-2)}
+
+  /* ── panels & layout ──────────────────────────────────────── */
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .panel.tight{padding:13px 14px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;align-items:start}
+  .split{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:18px;align-items:start}
+  .split-r{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:18px;align-items:start}
+  .stack{display:grid;gap:14px}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+
+  /* ── controls ─────────────────────────────────────────────── */
+  .btn{font-family:inherit;font-size:12px;font-weight:650;cursor:pointer;color:var(--ink);
+    background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:7px 14px;transition:.15s}
+  .btn:hover:not(:disabled){border-color:var(--accent-2);color:#fff}
+  .btn:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .btn:disabled{opacity:.35;cursor:not-allowed}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.primary:hover:not(:disabled){filter:brightness(1.25)}
+  .btn.on{background:rgba(var(--accent-rgb),.28);border-color:var(--accent-2);color:#fff}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+  .tab{font-family:inherit;font-size:12px;font-weight:650;cursor:pointer;color:var(--muted);
+    background:transparent;border:1px solid var(--line);border-radius:20px;padding:6px 14px;transition:.15s}
+  .tab:hover{color:var(--ink)}
+  .tab[aria-selected="true"]{background:rgba(var(--accent-rgb),.3);border-color:var(--accent-2);color:#fff}
+  .tab:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .ctl{display:grid;gap:4px;margin-bottom:12px}
+  .ctl label{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);
+    display:flex;justify-content:space-between;gap:10px}
+  .ctl label b{font-family:var(--mono);color:var(--accent-2);font-size:12px;text-transform:none;letter-spacing:0}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:3px;
+    background:#2b313d;outline:none;cursor:pointer}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;
+    background:var(--accent-2);border:2px solid var(--bg);cursor:pointer}
+  input[type=range]::-moz-range-thumb{width:15px;height:15px;border-radius:50%;background:var(--accent-2);
+    border:2px solid var(--bg);cursor:pointer}
+  input[type=range]:focus-visible{box-shadow:0 0 0 3px rgba(var(--accent-2-rgb),.4)}
+  select,textarea,input[type=text]{font-family:var(--mono);font-size:12.5px;color:var(--ink);
+    background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:7px 9px;width:100%}
+  select:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px solid var(--accent-2);outline-offset:1px}
+  textarea{line-height:1.55;resize:vertical}
+
+  /* ── stats / pills / code ─────────────────────────────────── */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:1px;
+    background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .stat{background:var(--panel);padding:10px 12px}
+  .stat .sl{font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--dim)}
+  .stat .sv{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--ink);margin-top:3px}
+  .stat .sv.ok{color:var(--ok)} .stat .sv.bad{color:var(--bad)} .stat .sv.warn{color:var(--warn)}
+  .stat .sv.acc{color:var(--accent-2)}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;letter-spacing:.5px;
+    padding:3px 9px;border-radius:20px;border:1px solid var(--line);color:var(--muted)}
+  .pill.ok{color:var(--ok);border-color:rgba(63,185,80,.5);background:rgba(63,185,80,.1)}
+  .pill.bad{color:var(--bad);border-color:rgba(248,81,73,.5);background:rgba(248,81,73,.1)}
+  .pill.warn{color:var(--warn);border-color:rgba(210,153,34,.5);background:rgba(210,153,34,.1)}
+  .pill.acc{color:var(--accent-2);border-color:rgba(var(--accent-2-rgb),.5);background:rgba(var(--accent-rgb),.18)}
+  pre.code{font-family:var(--mono);font-size:11.8px;line-height:1.62;background:#0b0e14;color:#dbe3ea;
+    border:1px solid var(--line);border-radius:10px;padding:13px 14px;overflow-x:auto;white-space:pre}
+  pre.code .k{color:#6cb6ff} pre.code .s{color:#8ddb8c} pre.code .c{color:#6b7484;font-style:italic}
+  pre.code .n{color:#e0b070} pre.code .b{color:#ddd6fe;font-weight:700}
+  .note{border-left:3px solid var(--accent);background:rgba(var(--accent-rgb),.12);border-radius:0 8px 8px 0;
+    padding:10px 13px;font-size:12.5px;color:var(--muted)}
+  .note b{color:var(--ink)}
+  .log{font-family:var(--mono);font-size:11.5px;max-height:230px;overflow-y:auto;display:grid;gap:5px}
+  .log div{background:var(--panel2);border-left:3px solid var(--line);border-radius:0 6px 6px 0;padding:6px 9px;color:var(--muted)}
+  .log div.hl{border-left-color:var(--accent-2);color:var(--ink);background:rgba(var(--accent-rgb),.15)}
+  .log div.ok{border-left-color:var(--ok)} .log div.bad{border-left-color:var(--bad)}
+  svg{display:block;max-width:100%;height:auto}
+  .svgwrap{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px;overflow-x:auto}
+  table.t{width:100%;border-collapse:collapse;font-size:12px}
+  table.t th{font-size:9.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--dim);
+    text-align:left;padding:0 8px 7px;border-bottom:1px solid var(--line)}
+  table.t td{padding:7px 8px;border-bottom:1px solid rgba(39,44,54,.6);color:var(--muted);font-family:var(--mono);font-size:11.8px}
+  table.t td.n{color:var(--ink);font-weight:600}
+
+  /* ── pitfalls ─────────────────────────────────────────────── */
+  details.pit{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:10px;overflow:hidden}
+  details.pit>summary{cursor:pointer;padding:12px 15px;font-size:13.5px;font-weight:650;color:var(--ink);
+    list-style:none;display:flex;gap:11px;align-items:flex-start}
+  details.pit>summary::-webkit-details-marker{display:none}
+  details.pit>summary::before{content:"\25B8";color:var(--accent-2);font-size:12px;line-height:1.5;transition:.2s}
+  details.pit[open]>summary::before{transform:rotate(90deg)}
+  details.pit>summary:focus-visible{outline:2px solid var(--accent-2);outline-offset:-2px}
+  details.pit .body{padding:0 15px 15px 39px;font-size:13px;color:var(--muted);display:grid;gap:9px}
+  details.pit .body .fix{color:var(--ok);font-weight:600}
+
+  /* ── MCQ ──────────────────────────────────────────────────── */
+  .mcq{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 17px;margin-bottom:13px}
+  .mcq .q{font-size:13.8px;font-weight:650;color:var(--ink);margin:0 0 11px;max-width:84ch}
+  .mcq .q span{color:var(--accent-2);font-family:var(--mono);margin-right:7px}
+  .opts{display:grid;gap:7px}
+  .opt{text-align:left;font-family:inherit;font-size:13px;cursor:pointer;color:var(--muted);
+    background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:9px 12px;transition:.15s}
+  .opt:hover:not(:disabled){border-color:var(--accent-2);color:var(--ink)}
+  .opt:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .opt.right{border-color:var(--ok);background:rgba(63,185,80,.13);color:#bce8c4}
+  .opt.wrong{border-color:var(--bad);background:rgba(248,81,73,.12);color:#f4b6b1}
+  .opt.dim{opacity:.5}
+  .fb{margin-top:11px;font-size:12.5px;line-height:1.6;color:var(--muted);display:none;
+    border-left:3px solid var(--line);padding-left:11px}
+  .fb.show{display:block}
+  .fb.show.good{border-left-color:var(--ok)} .fb.show.poor{border-left-color:var(--bad)}
+  .fb b{color:var(--ink)}
+
+  /* ── next ─────────────────────────────────────────────────── */
+  .nextgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+  .nextcard{display:block;background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:15px 17px;transition:.18s;color:inherit}
+  .nextcard:hover{border-color:var(--accent-2);transform:translateY(-2px);text-decoration:none}
+  .nextcard .nl{font-size:10px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--accent-2)}
+  .nextcard .nt{font-size:14.5px;font-weight:700;color:var(--ink);margin-top:5px}
+  .nextcard .nd{font-size:12px;color:var(--muted);margin-top:5px}
+
+  @media (max-width:720px){
+    .grid2,.grid3,.split,.split-r{grid-template-columns:1fr}
+    section{padding:26px 15px 32px}
+    nav.top{padding:10px 15px;gap:8px}
+    nav.top .crumbs{font-size:11px}
+    p,.lead{max-width:none}
+  }
+
+  /* ── week-page shared ─────────────────────────────────────── */
+  #hero{padding:52px 22px 40px;
+    background:radial-gradient(ellipse 820px 340px at 22% -14%,rgba(var(--accent-rgb),.3),transparent 66%)}
+  #hero .wk{font-family:var(--mono);font-size:12px;letter-spacing:2px;color:var(--accent-2);font-weight:700}
+  #hero h1{max-width:24ch}
+  #hero .promise{font-size:16.5px;color:var(--ink);max-width:74ch;margin-top:10px;line-height:1.55}
+  .secnum{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;
+    background:rgba(var(--accent-rgb),.35);border:1px solid var(--accent-2);color:#fff;font-family:var(--mono);
+    font-size:11px;font-weight:700;margin-right:9px;vertical-align:2px}
+  .sw{display:inline-flex;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex-wrap:wrap}
+  .sw button{font-family:inherit;font-size:11.5px;font-weight:650;cursor:pointer;color:var(--muted);
+    background:var(--panel2);border:none;padding:7px 13px;transition:.15s}
+  .sw button[aria-pressed="true"]{background:rgba(var(--accent-rgb),.32);color:#fff}
+  .sw button:focus-visible{outline:2px solid var(--accent-2);outline-offset:-2px}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-top:10px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
+
+  /* ── week-4 specific ──────────────────────────────────────── */
+  .tablewrap{overflow-x:auto}
+  .codepair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+  .lanes{display:grid;gap:12px}
+  .toggles{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:16px;align-items:start}
+  .dash{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}
+  a.btn{display:inline-flex;align-items:center;text-decoration:none}
+  a.btn:hover{text-decoration:none}
+  .verdict{border:1px solid var(--accent-2);border-radius:12px;padding:14px 16px;
+    background:rgba(var(--accent-rgb),.14)}
+  .verdict .vt{font-size:15px;font-weight:750;color:#fff}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:5px 12px;font-size:12px;color:var(--muted)}
+  .kv b{font-family:var(--mono);font-size:11.5px;color:var(--ink-dim);font-weight:600;white-space:nowrap}
+
+  /* ── mobile guard (identical on every page): single column under 720px,
+        no horizontal overflow. Must stay last in the sheet. ───────────── */
+  @media (max-width:720px){
+    .grid2,.grid3,.grid2.narrow-right,.split,.split-r,.codepair,
+    .nextgrid,.dash,.toggles,.lanes,.weeknav,.weeks,.roles,.stack{
+      grid-template-columns:minmax(0,1fr)}
+    [class*="grid"]>*,.stack>*,.wrap>*,.panel,.panel.tight,.nextcard,.wk,.row>*{min-width:0}
+    pre,pre.code,.svgwrap,svg,canvas,table,select,input,textarea,.mono{max-width:100%}
+    pre,pre.code,.svgwrap,.tablewrap{overflow-x:auto}
+    code,.mono{overflow-wrap:anywhere}
+    .ctl,.ctl>*,.controls>*,.row,.legend>*{min-width:0}
+    .ctl{flex-wrap:wrap} .ctl select,.ctl input[type=range]{flex:1 1 100%;width:100%}
+    p,.lead,.sub,.promise{max-width:none}
+  }
+</style>
+</head>
+<body>
+
+<nav class="top"><a href="index.html">Low-Latency Trading Arena</a><span class="crumbs"><a href="week3.html">← Week 3</a> · <b>Week 4 · Custom Allocators &amp; Memory Pools</b> · <a href="week5.html">Week 5 →</a></span></nav>
+
+<!-- ══════════════ HERO ══════════════ -->
+<section id="hero">
+  <div class="wk">WEEK 4 · 15-WEEK TRACK  ·  SESSION 3 · 9-SESSION TRACK</div>
+  <h1>Custom Allocators &amp; Memory Pools</h1>
+  <p class="promise">Week 3 taught you to own a lifetime. This week you own the <em class="hi">memory
+  itself</em>. <code>malloc</code> is a correct, thread-safe, general-purpose service and it is the single
+  largest source of unbounded jitter in a tick-to-trade path — so you take it out and put a pointer
+  swap in its place.</p>
+  <ul class="you">
+    <li>Explain, with numbers, why the <strong>same</strong> <code>new</code> call is 22&#8239;ns on one tick and 18&#8239;µs on the next — and which of those two numbers your deadline actually sees.</li>
+    <li>Build a fixed-size <code>Pool</code> with an intrusive free-list: <strong>O(1) allocate, O(1) free, zero fragmentation</strong>, and a documented answer for what happens when it runs dry.</li>
+    <li>Choose correctly between a <em class="hi">pool</em>, an <em class="hi">arena</em>, <code>std::pmr</code> and plain <code>new</code> — including the cases where pooling is the wrong answer.</li>
+    <li>Say why <code>alignas(64)</code> is a latency decision and not a cosmetic one.</li>
+  </ul>
+  <div class="row" style="margin-top:22px">
+    <span class="pill acc">Lab: <code>make pool</code> — four tests green, then <code>METRIC|pool_ns_per_op</code></span>
+    <span class="pill">HW4: <code>include/pool.hpp</code>, autograded on ns/alloc</span>
+    <span class="pill warn">Project Phase 1: no <code>new</code> on the hot path</span>
+  </div>
+</section>
+
+<!-- ══════════════ WHAT ══════════════ -->
+<section id="what">
+  <div class="kicker">Part 1</div>
+  <h2><span class="secnum">1</span>What is it? An allocator you sized before the session opened</h2>
+  <p class="lead">A custom allocator is not a faster <code>malloc</code>. It is a <em class="hi">different
+  contract</em>: you give up generality — arbitrary sizes, unbounded growth, thread safety you did not
+  ask for — and in exchange you get a cost that is the same on every single call. In a system graded on
+  p99.9, a predictable 4&#8239;ns beats an average of 22&#8239;ns every time.</p>
+
+  <div class="grid2" style="margin-top:16px">
+    <div class="panel">
+      <h4>What the general-purpose heap has to do</h4>
+      <p class="sub"><code>malloc</code> serves every size, from every thread, forever. That forces four
+      things into your call: a <strong>size-class lookup</strong>, a <strong>free-list walk</strong> that
+      lengthens as the heap fragments, a <strong>lock</strong> (or a per-thread cache that can miss and
+      then take one), and — when the arena is exhausted — a <strong>syscall</strong>
+      (<code>mmap</code>/<code>brk</code>) that leaves user space entirely.</p>
+      <div class="note" style="margin-top:11px"><b>None of those four is a bug.</b> Each is the correct
+      implementation of a promise you never needed. The fast path is genuinely fast; it is the
+      <em class="hi">distribution</em> that is unusable.</div>
+    </div>
+    <div class="panel">
+      <h4>What the hot path needs instead</h4>
+      <ul class="plain">
+        <li><b>O(1), always.</b> A pointer bump or a free-list pop. No search, no coalescing, no fit.</li>
+        <li><b>No locks.</b> One pool per thread, so there is nothing to contend for.</li>
+        <li><b>No syscalls.</b> All memory is reserved before the session opens.</li>
+        <li><b>No fragmentation.</b> Every slot is the same size, so a freed slot always fits the next request.</li>
+        <li><b>Bounded.</b> You size it for the worst tick, and you decide what happens past that.</li>
+      </ul>
+      <p class="sub" style="margin-top:10px">That last one is the part students skip. A pool that silently
+      falls back to <code>new</code> when it is full has all the complexity of a pool and none of the guarantee.</p>
+    </div>
+  </div>
+
+  <h3 style="margin-top:30px">Interactive · the malloc latency distribution</h3>
+  <p class="sub" style="margin-bottom:12px">20,000 simulated <code>malloc</code> calls, drawn on a
+  logarithmic axis. Move the fragmentation slider and watch the <em class="hi">mean barely move</em>
+  while p99.9 walks two decades to the right. The violet marker is the pool you build in lab —
+  it does not have a tail to walk.</p>
+
+  <div class="split">
+    <div class="stack">
+      <div class="svgwrap">
+        <svg id="mdSvg" viewBox="0 0 660 320" role="img" aria-label="A logarithmic histogram of malloc call latencies with markers for the mean, p50, p99, p99.9 and the pool baseline"></svg>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="sl">Mean</div><div class="sv" id="mdMean">—</div></div>
+        <div class="stat"><div class="sl">p50</div><div class="sv ok" id="mdP50">—</div></div>
+        <div class="stat"><div class="sl">p99</div><div class="sv warn" id="mdP99">—</div></div>
+        <div class="stat"><div class="sl">p99.9</div><div class="sv bad" id="mdP999">—</div></div>
+        <div class="stat"><div class="sl">Max</div><div class="sv bad" id="mdMax">—</div></div>
+        <div class="stat"><div class="sl">p99.9 / p50</div><div class="sv acc" id="mdRatio">—</div></div>
+      </div>
+      <div class="legend">
+        <span><i style="background:var(--accent)"></i>samples</span>
+        <span><i style="background:var(--info)"></i>mean</span>
+        <span><i style="background:var(--warn)"></i>p99</span>
+        <span><i style="background:var(--bad)"></i>p99.9</span>
+        <span><i style="background:var(--accent-2)"></i>pool (3.7&#8239;ns, measured)</span>
+      </div>
+    </div>
+    <div class="stack">
+      <div class="panel">
+        <h3>Heap conditions</h3>
+        <div class="ctl"><label for="mdFrag">Heap fragmentation <b id="mdFragV">30%</b></label>
+          <input type="range" id="mdFrag" min="0" max="100" step="5" value="30" aria-label="Heap fragmentation, percent"/></div>
+        <div class="ctl"><label for="mdTh">Threads sharing this arena <b id="mdThV">2</b></label>
+          <input type="range" id="mdTh" min="1" max="8" value="2" aria-label="Number of threads sharing the heap arena"/></div>
+        <div class="ctl"><label for="mdMix">Allocation size mix</label>
+          <select id="mdMix" aria-label="Allocation size mix">
+            <option value="same">all one size — 64&#8239;B objects</option>
+            <option value="mixed" selected>mixed — 32&#8239;B to 4&#8239;KB</option>
+            <option value="wide">wide — 32&#8239;B to 256&#8239;KB</option>
+          </select></div>
+        <div class="row">
+          <button class="btn" type="button" id="mdCalm">Fresh heap, one thread</button>
+          <button class="btn" type="button" id="mdUgly">Hour 6 of a session</button>
+        </div>
+        <div class="note" id="mdMsg" style="margin-top:12px"></div>
+      </div>
+      <div class="panel tight">
+        <h3>Where the tail comes from</h3>
+        <div class="kv" id="mdKv"></div>
+        <p class="sub" style="margin-top:10px">Every row is a real code path inside a production
+        allocator. You cannot tune them away — you can only stop calling them.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="note" style="margin-top:20px"><b>The habit.</b> Nobody in this course is impressed by a mean.
+  When you report an allocator, report p50, p99, p99.9 and max — and if p99.9/p50 is above about
+  <em class="hi">3</em>, you have a distribution problem, not a speed problem.</div>
+</section>
+
+<!-- ══════════════ HOW ══════════════ -->
+<section id="how">
+  <div class="kicker">Part 2</div>
+  <h2><span class="secnum">2</span>How does it work? A free-list threaded through the free slots</h2>
+  <p class="lead">The fixed-size pool is the cheapest allocator that exists, and it is about twelve lines
+  of real code. One slab, owned once. Every slot is the same size. A <em class="hi">free</em> slot has
+  no live object in it, so you store the address of the next free slot <strong>inside the slot
+  itself</strong> — an intrusive free-list that costs zero extra memory. Allocate is a pop; free is a push.</p>
+
+  <div class="split">
+    <div class="stack">
+      <div class="svgwrap">
+        <svg id="plSvg" viewBox="0 0 640 330" role="img" aria-label="A pool slab drawn as a grid of slots, with the intrusive free-list chain threaded through the free ones"></svg>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="sl">Live objects</div><div class="sv acc" id="plLive">0</div></div>
+        <div class="stat"><div class="sl">Free slots</div><div class="sv ok" id="plFree">32</div></div>
+        <div class="stat"><div class="sl">High-water mark</div><div class="sv" id="plHwm">0</div></div>
+        <div class="stat"><div class="sl">Ops per alloc</div><div class="sv ok" id="plOps">1</div></div>
+        <div class="stat"><div class="sl">Fragmentation</div><div class="sv ok" id="plFrag">0%</div></div>
+        <div class="stat"><div class="sl">nullptr returns</div><div class="sv bad" id="plExh">0</div></div>
+      </div>
+      <div class="panel tight">
+        <h3>Replay · live objects per tick <span class="sub" id="plRepLab"></span></h3>
+        <div class="svgwrap" style="padding:4px">
+          <svg id="plHist" viewBox="0 0 620 96" role="img" aria-label="A sparkline of the number of live pool objects across a replayed sequence of ticks, with the pool capacity drawn as a ceiling"></svg>
+        </div>
+      </div>
+      <div class="panel tight"><h3>Pool log · newest first</h3><div class="log" id="plLog"></div></div>
+    </div>
+
+    <div class="stack">
+      <div class="panel">
+        <h3>Size the pool, then abuse it</h3>
+        <div class="ctl"><label for="plCap">Capacity <code>ObjectPool&lt;Order,N&gt;</code> <b id="plCapV">32</b></label>
+          <input type="range" id="plCap" min="8" max="64" step="8" value="32" aria-label="Pool capacity in slots"/></div>
+        <div class="ctl"><label for="plPeak">Peak orders per tick <b id="plPeakV">10</b></label>
+          <input type="range" id="plPeak" min="2" max="40" step="2" value="10" aria-label="Peak orders allocated per tick during replay"/></div>
+        <div class="row">
+          <button class="btn primary" type="button" id="plA">alloc()</button>
+          <button class="btn" type="button" id="plF">free() newest</button>
+          <button class="btn" type="button" id="plFr">free() random</button>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn" type="button" id="plBurst">Burst · 8 allocs</button>
+          <button class="btn" type="button" id="plRep">Replay 240 ticks</button>
+          <button class="btn" type="button" id="plReset">Reset pool</button>
+        </div>
+        <div class="note" id="plMsg" style="margin-top:12px"></div>
+      </div>
+      <pre class="code">
+<span class="c">// include/pool.hpp — HW4. Slot is at least sizeof(void*)</span>
+<span class="c">// because a FREE slot stores the next free slot in itself.</span>
+<span class="k">template</span> &lt;<span class="k">class</span> <span class="b">T</span>, std::size_t <span class="b">N</span>&gt;
+<span class="k">class</span> <span class="b">ObjectPool</span> {
+  <span class="k">union</span> Slot { Slot* next; <span class="k">alignas</span>(T) <span class="k">unsigned char</span> buf[<span class="k">sizeof</span>(T)]; };
+  Slot  slots_[N];
+  Slot* free_ = <span class="k">nullptr</span>;
+ <span class="k">public</span>:
+  ObjectPool() {                          <span class="c">// thread the list once</span>
+    <span class="k">for</span> (std::size_t i = N; i-- &gt; <span class="n">0</span>;) { slots_[i].next = free_; free_ = &amp;slots_[i]; }
+  }
+  <span class="k">template</span> &lt;<span class="k">class</span>... A&gt; T* alloc(A&amp;&amp;... a) {
+    <span class="k">if</span> (!free_) <span class="k">return</span> <span class="k">nullptr</span>;           <span class="c">// exhausted: caller must cope</span>
+    Slot* s = free_; free_ = s-&gt;next;     <span class="c">// O(1) pop</span>
+    <span class="k">return</span> <span class="k">new</span> (s-&gt;buf) T{std::forward&lt;A&gt;(a)...};   <span class="c">// placement new</span>
+  }
+  <span class="k">void</span> release(T* p) {                    <span class="c">// O(1) push</span>
+    <span class="k">if</span> (!p) <span class="k">return</span>;
+    p-&gt;~T();                              <span class="c">// YOU call the dtor. The pool never does.</span>
+    Slot* s = <span class="k">reinterpret_cast</span>&lt;Slot*&gt;(p);
+    s-&gt;next = free_; free_ = s;
+  }
+};</pre>
+      <div class="note"><b>Say it out loud.</b> Placement <code>new</code> to construct, explicit
+      <code>~T()</code> to destroy, <code>pool.release</code> to reclaim. The global allocator is never
+      touched after construction.</div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:32px">Interactive · the arena, and what alignment costs you</h3>
+  <p class="sub" style="margin-bottom:12px">A pool needs one fixed size. An <em class="hi">arena</em>
+  (bump allocator) does not care about size at all — it keeps one offset, rounds it up to the requested
+  alignment, hands it back, and advances. There is no per-object <code>free</code>; there is only
+  <code>reset()</code>, which reclaims everything in one instruction. Perfect for per-tick scratch.
+  Notice the <b>padding wasted</b> counter as you raise the alignment.</p>
+
+  <div class="split-r">
+    <div class="stack">
+      <div class="panel">
+        <h3>Bump one allocation</h3>
+        <div class="ctl"><label for="arSz">Request size <b id="arSzV">96 B</b></label>
+          <input type="range" id="arSz" min="8" max="4096" step="8" value="96" aria-label="Allocation size in bytes"/></div>
+        <div class="ctl"><label for="arAl">Alignment <code>alignof(T)</code></label>
+          <select id="arAl" aria-label="Requested alignment in bytes">
+            <option value="1">1 B — char buffer</option>
+            <option value="8" selected>8 B — int64 / pointer</option>
+            <option value="16">16 B — SSE / long double</option>
+            <option value="64">64 B — one cache line</option>
+          </select></div>
+        <div class="row">
+          <button class="btn primary" type="button" id="arA">alloc(n, align)</button>
+          <button class="btn" type="button" id="arTick">Run one tick</button>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn" type="button" id="arReset">reset() — O(1)</button>
+          <button class="btn" type="button" id="arFill">Fill until nullptr</button>
+        </div>
+        <div class="note" id="arMsg" style="margin-top:12px"></div>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="sl">Offset</div><div class="sv acc" id="arOff">0</div></div>
+        <div class="stat"><div class="sl">Used</div><div class="sv" id="arUsed">0.0%</div></div>
+        <div class="stat"><div class="sl">Padding wasted</div><div class="sv warn" id="arPad">0 B</div></div>
+        <div class="stat"><div class="sl">Allocations</div><div class="sv" id="arN">0</div></div>
+        <div class="stat"><div class="sl">free() calls</div><div class="sv ok" id="arFree">0</div></div>
+      </div>
+    </div>
+    <div class="stack">
+      <div class="svgwrap">
+        <svg id="arSvg" viewBox="0 0 660 250" role="img" aria-label="A 32 kilobyte arena drawn as a bar, with each bump allocation and its alignment padding marked"></svg>
+      </div>
+      <pre class="code">
+<span class="k">class</span> <span class="b">Arena</span> {
+  <span class="k">unsigned char</span>* base_;
+  std::size_t    cap_, off_ = <span class="n">0</span>;
+ <span class="k">public</span>:
+  Arena(<span class="k">unsigned char</span>* base, std::size_t cap) : base_(base), cap_(cap) {}
+  <span class="k">void</span>* alloc(std::size_t n, std::size_t align) {
+    std::size_t p = (off_ + align - <span class="n">1</span>) &amp; ~(align - <span class="n">1</span>);   <span class="c">// round up</span>
+    <span class="k">if</span> (p + n &gt; cap_) <span class="k">return</span> <span class="k">nullptr</span>;
+    off_ = p + n;
+    <span class="k">return</span> base_ + p;                                    <span class="c">// one add: O(1)</span>
+  }
+  <span class="k">void</span> reset() { off_ = <span class="n">0</span>; }              <span class="c">// free EVERYTHING, O(1)</span>
+};</pre>
+    </div>
+  </div>
+
+  <h3 style="margin-top:32px">Interactive · four allocators, one hot path</h3>
+  <p class="sub" style="margin-bottom:12px">The same <code>on_book</code> written four ways. Read the
+  code, then read the contract underneath it — that table is what you are actually choosing between.</p>
+
+  <div class="row" role="group" aria-label="Choose an allocation strategy" style="margin-bottom:14px">
+    <div class="sw" id="acPick">
+      <button type="button" data-k="new" aria-pressed="true">operator new</button>
+      <button type="button" data-k="pool" aria-pressed="false">ObjectPool&lt;T,N&gt;</button>
+      <button type="button" data-k="arena" aria-pressed="false">Arena (bump)</button>
+      <button type="button" data-k="pmr" aria-pressed="false">std::pmr</button>
+    </div>
+  </div>
+  <div class="toggles">
+    <pre class="code" id="acCode"></pre>
+    <div class="stack">
+      <div class="panel">
+        <h4 id="acName">—</h4>
+        <span class="pill" id="acPill">—</span>
+        <p class="sub" id="acWhat" style="margin-top:11px"></p>
+        <div class="kv" id="acKv" style="margin-top:12px"></div>
+      </div>
+      <div class="note" id="acNote"></div>
+    </div>
+  </div>
+
+  <div class="grid2" style="margin-top:26px">
+    <div class="panel">
+      <h4>Per-thread pools, and the reason they exist</h4>
+      <p class="sub">A pool with a mutex is a heap with extra steps. The whole point was to remove the
+      lock, so give <em class="hi">each thread its own pool</em> — feed handler, strategy, order gateway —
+      and let objects be produced and consumed on the same thread. When they genuinely must cross a
+      thread boundary, hand the <strong>object</strong> across an SPSC queue and return the
+      <strong>slot</strong> to the pool that owns it, on its own thread. Never free into a pool you do
+      not own.</p>
+      <p class="sub">Then pad the pools apart. Two per-thread pool objects that land in the same
+      64-byte cache line will ping that line between cores on every allocation — false sharing that costs
+      you tens of nanoseconds per op for no reason at all. <code>alignas(64)</code> on the pool member
+      is the fix, and it is one word.</p>
+    </div>
+    <div class="panel">
+      <h4><code>std::pmr</code>: the standard already did this</h4>
+      <p class="sub">C++17 factored the idea out. A <code>std::pmr::memory_resource</code> is an abstract
+      source of bytes; a <code>std::pmr::polymorphic_allocator</code> lets one container
+      <em class="hi">type</em> use any resource. So <code>std::pmr::vector&lt;Level&gt;</code> is one type
+      whose memory can come from your stack buffer today and a pool tomorrow, with no template churn.</p>
+      <ul class="plain">
+        <li><b>monotonic_buffer_resource</b> — a bump allocator over a buffer you supply. <code>release()</code> reclaims all of it at once. This is your per-tick scratch.</li>
+        <li><b>unsynchronized_pool_resource</b> — pooled fixed-size blocks, <em class="hi">no locking</em>. The "unsynchronized" is the feature.</li>
+        <li><b>synchronized_pool_resource</b> — the same, with a mutex. Not for the hot path.</li>
+        <li><b>null_memory_resource</b> — throws on allocation. Wire it as the upstream of your monotonic resource and you get a <em class="hi">compile-your-mistake-into-a-crash</em> guarantee that you never silently spilled to the heap.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ WHY ══════════════ -->
+<section id="why">
+  <div class="kicker">Part 3</div>
+  <h2><span class="secnum">3</span>Why it matters: cache lines, and knowing when not to pool</h2>
+  <p class="lead">Owning the memory buys you a second thing beyond determinism: you get to decide
+  <em class="hi">where</em> objects sit. A cache line is 64 bytes on every x86-64 core you will run on,
+  and the hardware moves memory in exactly that unit. A struct that straddles a line boundary is not
+  slightly slower — it costs an extra line fetch and a split-load penalty on every access, forever.</p>
+
+  <h3 style="margin-top:24px">Interactive · aligned vs unaligned access</h3>
+  <p class="sub" style="margin-bottom:12px">Place a <code>Quote</code> at a byte offset inside the slab
+  and watch how many 64-byte lines the hardware has to touch. Then tick <code>alignas(64)</code> and
+  watch the split loads go to zero. The right-hand column is the same struct, cache-line aligned,
+  for comparison.</p>
+
+  <div class="split">
+    <div class="stack">
+      <div class="svgwrap">
+        <svg id="alSvg" viewBox="0 0 660 250" role="img" aria-label="Three 64-byte cache lines drawn as byte cells, with a struct placed at an offset and every load that straddles a line boundary marked"></svg>
+      </div>
+      <div class="dash">
+        <div class="stack">
+          <div class="sub"><b style="color:var(--ink)">As placed</b></div>
+          <div class="stats">
+            <div class="stat"><div class="sl">Lines touched</div><div class="sv" id="alLines">—</div></div>
+            <div class="stat"><div class="sl">Split loads</div><div class="sv bad" id="alSplit">—</div></div>
+            <div class="stat"><div class="sl">ns / access</div><div class="sv warn" id="alNs">—</div></div>
+          </div>
+        </div>
+        <div class="stack">
+          <div class="sub"><b style="color:var(--ink)">Same struct at offset 0 — <code>alignas(64)</code></b></div>
+          <div class="stats">
+            <div class="stat"><div class="sl">Lines touched</div><div class="sv ok" id="alLines2">—</div></div>
+            <div class="stat"><div class="sl">Split loads</div><div class="sv ok" id="alSplit2">0</div></div>
+            <div class="stat"><div class="sl">ns / access</div><div class="sv ok" id="alNs2">—</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="note" id="alMsg"></div>
+    </div>
+    <div class="stack">
+      <div class="panel">
+        <h3>Place the object</h3>
+        <div class="ctl"><label for="alSz">sizeof(Quote) <b id="alSzV">40 B</b></label>
+          <input type="range" id="alSz" min="8" max="128" step="8" value="40" aria-label="Size of the struct in bytes"/></div>
+        <div class="ctl"><label for="alOff">Byte offset in the slab <b id="alOffV">52</b></label>
+          <input type="range" id="alOff" min="0" max="63" value="52" aria-label="Byte offset of the struct inside the slab"/></div>
+        <div class="ctl"><label for="alRate">Message rate <b id="alRateV">2.0 M/s</b></label>
+          <input type="range" id="alRate" min="1" max="40" step="1" value="20" aria-label="Message rate in hundreds of thousands per second"/></div>
+        <div class="row">
+          <button class="btn" type="button" id="alWorst">Worst placement</button>
+          <button class="btn" type="button" id="alFix">Align it</button>
+        </div>
+        <div class="stats" style="margin-top:14px">
+          <div class="stat"><div class="sl">Cost of misalignment</div><div class="sv bad" id="alCost">—</div></div>
+          <div class="stat"><div class="sl">Per second, at this rate</div><div class="sv bad" id="alSec">—</div></div>
+        </div>
+      </div>
+      <pre class="code">
+<span class="k">struct</span> <span class="k">alignas</span>(<span class="n">64</span>) <span class="b">Quote</span> {            <span class="c">// one line, never straddles</span>
+  std::int64_t  bid_ticks;
+  std::int64_t  ask_ticks;
+  std::uint32_t bid_qty;
+  std::uint32_t ask_qty;
+  std::uint64_t seq;
+};
+<span class="k">static_assert</span>(<span class="k">sizeof</span>(Quote)  == <span class="n">64</span>, <span class="s">"Quote must be exactly one cache line"</span>);
+<span class="k">static_assert</span>(<span class="k">alignof</span>(Quote) == <span class="n">64</span>, <span class="s">"Quote must be cache-line aligned"</span>);</pre>
+      <div class="note"><b>Cost model, stated.</b> 0.5 cycle of load-port throughput per aligned
+      8-byte load (two load ports), <b>+3 cycles</b> for each load that straddles a line boundary, and
+      one L1 tag lookup per extra line touched. Measured penalties on recent x86 sit in that range;
+      the shape is what matters, not the constant. Clock: 4.0&#8239;GHz.</div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:32px">Interactive · should you pool this?</h3>
+  <p class="sub" style="margin-bottom:12px">The honest answer is often <em class="hi">no</em>. Describe
+  the allocation and get a recommendation — plus the one line of code that implements it.</p>
+
+  <div class="split-r">
+    <div class="panel">
+      <h3>Describe the allocation</h3>
+      <div class="ctl"><label for="wnLife">Lifetime</label>
+        <select id="wnLife" aria-label="Object lifetime">
+          <option value="tick">dies at the end of the tick</option>
+          <option value="order">lives until the order is filled or cancelled</option>
+          <option value="session">lives for the whole session</option>
+          <option value="unknown">nobody knows</option>
+        </select></div>
+      <div class="ctl"><label for="wnSize">Size</label>
+        <select id="wnSize" aria-label="Size variance">
+          <option value="one">one fixed size</option>
+          <option value="few">a handful of known sizes</option>
+          <option value="any">arbitrary, data-dependent</option>
+        </select></div>
+      <div class="ctl"><label for="wnBound">Worst-case count</label>
+        <select id="wnBound" aria-label="Whether the worst-case count is known">
+          <option value="known">known and bounded</option>
+          <option value="unbounded">unbounded / user-driven</option>
+        </select></div>
+      <div class="ctl"><label for="wnFreq">Called from</label>
+        <select id="wnFreq" aria-label="Where the allocation happens">
+          <option value="hot">the hot path, every tick</option>
+          <option value="warm">once per order, thousands per session</option>
+          <option value="cold">startup / configuration</option>
+        </select></div>
+      <div class="row"><button class="btn" type="button" id="wnGo">Recommend</button></div>
+    </div>
+    <div class="stack">
+      <div class="verdict">
+        <div class="nl" style="font-size:10px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--accent-2)">Recommendation</div>
+        <div class="vt" id="wnT">Fixed-size pool</div>
+        <p class="sub" id="wnWhy" style="margin-top:8px"></p>
+        <pre class="code" id="wnCode" style="margin-top:11px"></pre>
+      </div>
+      <div class="panel tight">
+        <h3>The three real "do not pool" cases</h3>
+        <ul class="plain">
+          <li><b>It is not on the hot path.</b> A pool you allocate from once at startup buys you nothing and costs a reviewer's afternoon.</li>
+          <li><b>The size is genuinely arbitrary.</b> A fixed-size pool sized for the worst case wastes most of its slab; an arena or plain <code>new</code> off the hot path is honest.</li>
+          <li><b>You cannot bound the count.</b> A pool must have an answer for exhaustion. If you have no defensible bound, you do not have a pool — you have a heap with a cliff.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ PITFALLS ══════════════ -->
+<section id="pitfalls">
+  <div class="kicker">Part 4</div>
+  <h2><span class="secnum">4</span>Five ways this goes wrong</h2>
+  <p class="lead">These are the five that cost marks on HW4, every time. Open them.</p>
+
+  <details class="pit"><summary>Falling back to <code>new</code> when the pool is empty</summary>
+    <div class="body">
+      <p>It looks like defensive programming and it is the opposite. You spent a week removing
+      <code>malloc</code> from the hot path, and then you put it back — on exactly the path that runs
+      when the market is busiest and the pool is fullest. The fallback fires precisely during the burst
+      you built the pool for, so your p99.9 is <em class="hi">worse</em> than if you had never pooled at
+      all, because now the slow path also carries a branch and a cold cache.</p>
+      <p>Worse, it hides the sizing bug. A pool that silently spills never tells you it was too small,
+      so you ship a capacity you never validated.</p>
+      <p class="fix">Fix: <code>alloc()</code> returns <code>nullptr</code>, loudly, and the caller
+      applies a policy you wrote down — drop the order and count it, reuse the oldest slot, or degrade to
+      a cheaper action. Export the exhaustion counter as a metric and treat a non-zero value as a sizing
+      defect, not a runtime event.</p>
+    </div></details>
+
+  <details class="pit"><summary>Forgetting <code>p-&gt;~T()</code> — or calling <code>delete</code> on a pool pointer</summary>
+    <div class="body">
+      <p>The pool hands you raw bytes; placement <code>new</code> makes them an object. Nothing in that
+      chain runs a destructor for you. Skip <code>p-&gt;~T()</code> and the slot is still reused
+      correctly — so your tests pass — while anything the object owned (a <code>string</code>'s
+      heap buffer, a file descriptor, a lock) leaks quietly for the rest of the session.</p>
+      <p>The inverse is a crash. <code>delete p</code> on a pointer into your slab tells the global
+      allocator to free memory it never owned. That is undefined behaviour and it usually corrupts the
+      heap somewhere else entirely, hours later, in a function that is innocent.</p>
+      <p class="fix">Fix: exactly one pattern — <code>new (pool.alloc()) T{...}</code> to construct,
+      <code>p-&gt;~T()</code> then <code>pool.release(p)</code> to reclaim. Better: put that pair inside
+      the pool's own <code>release()</code> (as above) or hand out a
+      <code>unique_ptr&lt;T, PoolDeleter&gt;</code> so RAII does it and the pattern cannot be forgotten.</p>
+    </div></details>
+
+  <details class="pit"><summary>A slot narrower than a pointer, or ignoring <code>alignof(T)</code></summary>
+    <div class="body">
+      <p>The intrusive free-list stores a <code>void*</code> <em class="hi">inside</em> a free slot. If
+      your slot size is <code>sizeof(T)</code> and <code>T</code> is a 4-byte struct, writing the next
+      pointer scribbles 4 bytes into the neighbouring slot. The starter's constructor is written
+      <code>slot_(obj_size &lt; sizeof(void*) ? sizeof(void*) : obj_size)</code> for exactly this reason.</p>
+      <p>Alignment is the same class of bug with a different symptom. <code>::operator new</code> gives
+      you memory aligned for <code>max_align_t</code>, but your <em class="hi">slot stride</em> is yours
+      to get wrong: a stride of 40 bytes for a type that needs 16-byte alignment leaves every other slot
+      misaligned. On x86 that is a silent slowdown; with SSE/AVX loads or on ARM it is a fault.</p>
+      <p class="fix">Fix: <code>slot = max(sizeof(T), sizeof(void*))</code>, then round the stride up to
+      <code>alignof(T)</code>. Assert it: <code>static_assert(sizeof(Slot) % alignof(T) == 0)</code>, and
+      declare the storage <code>alignas(T)</code>. The <code>union Slot</code> idiom gets both right for free.</p>
+    </div></details>
+
+  <details class="pit"><summary>One pool, several threads</summary>
+    <div class="body">
+      <p>A free-list pop is <code>read head; head = head-&gt;next</code> — two operations that are not
+      atomic together. Two threads allocating at once hand out the <em class="hi">same slot twice</em>,
+      and you now have two live objects at one address. This does not crash; it produces one order with
+      another order's price, which is the most expensive kind of bug in this course.</p>
+      <p>The reflex fix — wrap it in a <code>std::mutex</code> — reintroduces the unbounded wait you
+      removed. The other reflex fix, a lock-free CAS free-list, is a real technique but it also
+      reintroduces contention and the ABA problem, and you do not need it yet.</p>
+      <p class="fix">Fix: one pool per thread, <code>thread_local</code> or held by the thread's own
+      object. Objects are allocated and released on the same thread; when they must cross, pass them
+      over an SPSC queue and release the slot on the owning thread. Then <code>alignas(64)</code> the
+      pools so two threads' free-list heads do not share a cache line.</p>
+    </div></details>
+
+  <details class="pit"><summary>Pooling the wrapper and not the allocation</summary>
+    <div class="body">
+      <p><code>ObjectPool&lt;Message, 4096&gt;</code> where <code>Message</code> holds a
+      <code>std::string symbol</code> and a <code>std::vector&lt;Level&gt; levels</code> pools
+      <em class="hi">the outer 48 bytes</em> and nothing else. Every construction still calls
+      <code>malloc</code> twice, inside the members you did not look at. Your benchmark shows a lovely
+      3.7&#8239;ns because it constructs empty objects; your bot shows no improvement at all.</p>
+      <p>The same trap in a different coat: <code>std::pmr::vector&lt;std::string&gt;</code>. The vector's
+      buffer comes from your resource; every <code>string</code> in it still goes to the heap, because
+      <code>std::string</code> is not <code>pmr</code>-aware. You want
+      <code>std::pmr::vector&lt;std::pmr::string&gt;</code>, and the resource has to be propagated.</p>
+      <p class="fix">Fix: make hot-path structs flat and trivially destructible — fixed
+      <code>char sym[8]</code>, <code>std::array&lt;Level, N&gt;</code>, integer prices in ticks.
+      Then verify rather than assume: run under a <code>malloc</code> counter (or an upstream
+      <code>null_memory_resource</code>) and prove the hot path allocates zero times.</p>
+    </div></details>
+</section>
+
+<!-- ══════════════ CHECK ══════════════ -->
+<section id="check">
+  <div class="kicker">Part 5</div>
+  <h2><span class="secnum">5</span>Check yourself</h2>
+  <p class="lead">Three questions, instant feedback, nothing recorded.</p>
+
+  <div class="mcq" data-a="2" data-exp="<b>Return nullptr and take a policy you wrote down.</b> The pool exists to make the cost of allocation the same on every call. Falling back to <code>new</code> puts a syscall-capable path back into your busiest tick — the fallback fires exactly during the burst that filled the pool, so p99.9 gets worse, not better. Growing the slab is the same mistake with an extra copy. Blocking is the worst of the three: an unbounded wait is precisely what you removed. The right answer is boring — hand back <code>nullptr</code>, increment an exhaustion counter, and let the caller drop, reuse the oldest, or degrade. Then treat any non-zero counter as a sizing defect to fix before the next session.">
+    <p class="q"><span>Q1</span>Your <code>ObjectPool&lt;Order,4096&gt;</code> runs dry in the middle of a tick. Which response preserves the latency guarantee you built it for?</p>
+    <div class="opts">
+      <button class="opt" type="button">Fall back to <code>new</code> for this one allocation</button>
+      <button class="opt" type="button">Allocate a second, larger slab and migrate the free-list</button>
+      <button class="opt" type="button">Return <code>nullptr</code>, count it, and follow a documented degraded path</button>
+      <button class="opt" type="button">Spin until another thread releases a slot</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+
+  <div class="mcq" data-a="1" data-exp="<b>The slot is reused correctly and everything the object owned leaks.</b> This is why the bug survives code review: the pool's own bookkeeping is untouched, so all four HW4 tests pass and the ns/alloc metric is perfect. What never happens is the destructor — so a <code>std::string</code> member's heap buffer, an open file descriptor, a held lock, a registration in some other container all stay alive with nothing pointing at them. Note the asymmetry with <code>delete</code>: <code>delete p</code> on a pool pointer is undefined behaviour and corrupts the global heap, usually far away and much later. One rule covers both: placement <code>new</code> to construct, explicit <code>~T()</code> then <code>pool.release()</code> to reclaim — or wrap it in a <code>unique_ptr</code> with a pool deleter so RAII cannot forget.">
+    <p class="q"><span>Q2</span>You construct with <code>new (pool.alloc()) Order{...}</code> and later call <code>pool.release(p)</code> — but your <code>release</code> forgets <code>p-&gt;~Order()</code>. <code>Order</code> holds a <code>std::string</code>. What happens?</p>
+    <div class="opts">
+      <button class="opt" type="button">The slot leaks — the pool loses capacity every cycle</button>
+      <button class="opt" type="button">The slot is reused fine; the string's heap buffer leaks silently</button>
+      <button class="opt" type="button">Undefined behaviour on the next <code>alloc()</code> from that slot</button>
+      <button class="opt" type="button">Nothing — the pool's destructor cleans up at shutdown</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+
+  <div class="mcq" data-a="3" data-exp="<b>A monotonic buffer resource over a stack slab, released once per tick.</b> A fixed-size pool is the wrong shape here: the sizes differ, so you would need one pool per size and would still guess the split. An arena does not care about size at all — it rounds the offset up to the alignment, hands it back, and advances, which is one add. And because everything dies together, you never need per-object <code>free</code>: <code>release()</code> resets the offset to zero in O(1), reclaiming the whole tick's scratch at once. Fragmentation is impossible because memory is only ever handed out in address order. The trade-off you are accepting, and should say out loud: you cannot free one object early, and a tick that needs more than the slab gets <code>nullptr</code> — so size the slab for the worst tick and wire <code>null_memory_resource</code> upstream so a spill to the heap becomes a throw instead of a silent 18 µs.">
+    <p class="q"><span>Q3</span>Each tick your parser needs a dozen temporaries of <em>different</em> sizes — a level vector, a scratch buffer, a couple of small structs — all dead by the end of the tick. What do you allocate them from?</p>
+    <div class="opts">
+      <button class="opt" type="button">One <code>ObjectPool</code> per struct type, sized for the peak</button>
+      <button class="opt" type="button"><code>std::pmr::synchronized_pool_resource</code>, so it is safe from any thread</button>
+      <button class="opt" type="button">A <code>monotonic_buffer_resource</code> over a stack slab, <code>release()</code>d per tick</button>
+      <button class="opt" type="button">Plain <code>new</code> — the objects are small, so the heap fast path is enough</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+</section>
+
+<!-- ══════════════ NEXT ══════════════ -->
+<section id="next">
+  <div class="kicker">Part 6</div>
+  <h2><span class="secnum">6</span>Do the work</h2>
+  <div class="grid2" style="margin-top:14px">
+    <div class="panel"><h4>In the lab (~45–60 min)</h4><ul class="plain">
+      <li><code>make pool</code> — the stub compiles and every test fails, because <code>alloc()</code>
+      returns <code>nullptr</code>. That red output is the starting line.</li>
+      <li>Build it in four steps: one buffer owned in the constructor, the intrusive free-list threaded
+      back to front, <code>alloc()</code> as a pop, <code>free()</code> as a push.</li>
+      <li>Green on <code>pool_basic</code>, <code>pool_full</code>, <code>pool_reuse</code>,
+      <code>pool_pattern</code>, then read the <code>METRIC|pool_ns_per_op</code> line.</li>
+      <li>Sketch the per-tick arena in a scratch file and argue when it beats the free-list pool.</li>
+    </ul></div>
+    <div class="panel"><h4>HW4 &amp; Project Phase 1</h4><ul class="plain">
+      <li><b>HW4:</b> <code>include/pool.hpp</code> — O(1) alloc/free, correct slot size and alignment,
+      placement <code>new</code>, explicit destruction. Autograded.</li>
+      <li><b>HW4:</b> benchmark pool vs <code>new</code>/<code>delete</code> in a tight loop. Report
+      p50, p99, p99.9 and max for both — not the mean — and argue why yours is stable.</li>
+      <li><b>Phase 1:</b> every per-tick <code>new</code> in <code>on_book</code> comes from a pool or an
+      arena; scratch on a monotonic buffer, <code>release()</code> at tick end.</li>
+      <li><b>Prove it:</b> re-run the latency replay and show p99.9 down against your Week-2 baseline.</li>
+    </ul></div>
+  </div>
+  <div class="nextgrid" style="margin-top:18px">
+    <div class="nextcard"><div class="nl">Code</div>
+      <div class="nt">Get the code</div>
+      <div class="nd">Both tracks share one starter tree. <code>make pool</code> builds
+      <code>tests/pool_test.cpp</code> against your <code>include/pool.hpp</code> and prints the metric;
+      <code>make test</code> runs the whole grader.</div>
+      <div class="row" style="margin-top:11px">
+        <a class="btn" href="https://github.com/sdonadio/hft-cpp-starter-columbia">15-week track starter</a>
+        <a class="btn" href="https://github.com/sdonadio/hft-cpp-starter-uchicago">9-session track starter</a>
+      </div></div>
+    <a class="nextcard" href="week3.html"><div class="nl">Previous</div>
+      <div class="nt">← Week 3 · Memory Management &amp; Smart Pointers</div>
+      <div class="nd">RAII told you who frees what. This week decided where it came from.</div></a>
+    <a class="nextcard" href="week5.html"><div class="nl">Next</div>
+      <div class="nt">Week 5 · Templates &amp; Generic Programming →</div>
+      <div class="nd">You wrote one pool by hand. Now write it once and let the compiler stamp out a version for every type — at zero runtime cost.</div></a>
+  </div>
+</section>
+
+<footer>Low-Latency Trading Arena · an interactive companion for a course on low-latency trading systems in C++ · <a href="https://github.com/sdonadio/low-latency-trading-arena">Source</a></footer>
+
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════
+   Week 4 — Custom Allocators & Memory Pools
+   ════════════════════════════════════════════════════════════════ */
+var $ = function (id) { return document.getElementById(id); };
+/* SVG namespace taken from the document so no absolute URL appears in this file */
+var SVGNS = $("mdSvg").namespaceURI;
+function mk(tag, attrs) {
+  var e = document.createElementNS(SVGNS, tag);
+  for (var k in attrs) { if (attrs.hasOwnProperty(k)) e.setAttribute(k, attrs[k]); }
+  return e;
+}
+function txt(x, y, s, size, fill, anchor, weight) {
+  var t = mk("text", { x: x, y: y, "font-size": size || 10, "font-family": "monospace", fill: fill || "#9aa0a6" });
+  if (anchor) t.setAttribute("text-anchor", anchor);
+  if (weight) t.setAttribute("font-weight", weight);
+  t.textContent = s;
+  return t;
+}
+function clear(n) { while (n.firstChild) n.removeChild(n.firstChild); }
+function lcg(seed) { var s = seed >>> 0; return function () { s = (1664525 * s + 1013904223) >>> 0; return s / 4294967296; }; }
+var C = { acc: "#7c3aed", acc2: "#c4b5fd", ok: "#3fb950", warn: "#d29922", bad: "#f85149",
+          info: "#6cb6ff", dim: "#5f6673", mute: "#9aa0a6", line: "#272c36", p2: "#1e222b", ink: "#e8e6e3" };
+function ns(v) { return v < 1000 ? v.toFixed(v < 10 ? 2 : 1) + " ns" : (v / 1000).toFixed(v < 10000 ? 2 : 1) + " µs"; }
+function bytes(v) { return v < 1024 ? v + " B" : (v / 1024).toFixed(v % 1024 === 0 ? 0 : 1) + " KB"; }
+
+/* ════ 1. MALLOC LATENCY DISTRIBUTION ═════════════════════════ */
+var MD_N = 20000, POOL_NS = 3.7;
+var MD = { frag: 30, th: 2, mix: "mixed", data: null };
+
+function mdRun() {
+  var rnd = lcg(0x51ed270b);
+  var f = MD.frag / 100, th = MD.th;
+  var pSys = MD.mix === "same" ? 0.0004 : MD.mix === "mixed" ? 0.0026 : 0.013;
+  var binP = MD.mix === "same" ? 0.04 : MD.mix === "mixed" ? 0.09 : 0.16;
+  var a = new Float64Array(MD_N), i;
+  for (i = 0; i < MD_N; i++) {
+    var t = 19 + rnd() * 7;                                  /* tcache / fast bin hit */
+    if (rnd() < binP + 0.5 * f) t += 20 + 300 * f * rnd();   /* size-class + free-list walk */
+    if (th > 1 && rnd() < 0.014 * (th - 1)) t += 150 + 1200 * rnd() * (th - 1) / 7;  /* arena lock */
+    if (rnd() < 0.0006 + 0.005 * f) t += 600 + 2800 * rnd(); /* coalesce / trim */
+    if (rnd() < pSys * (1 + 2.5 * f)) t += 3400 + 15000 * rnd();  /* mmap / brk */
+    a[i] = t;
+  }
+  var s = Float64Array.from(a); s.sort();
+  var sum = 0; for (i = 0; i < MD_N; i++) sum += s[i];
+  MD.data = { s: s, mean: sum / MD_N };
+}
+function pct(s, q) { return s[Math.min(s.length - 1, Math.max(0, Math.round(q * (s.length - 1))))]; }
+
+function mdDraw() {
+  mdRun();
+  var s = MD.data.s, mean = MD.data.mean;
+  var p50 = pct(s, 0.5), p99 = pct(s, 0.99), p999 = pct(s, 0.999), mx = s[MD_N - 1];
+  $("mdMean").textContent = ns(mean);
+  $("mdP50").textContent = ns(p50);
+  $("mdP99").textContent = ns(p99);
+  $("mdP999").textContent = ns(p999);
+  $("mdMax").textContent = ns(mx);
+  $("mdRatio").textContent = (p999 / p50).toFixed(1) + "×";
+
+  var svg = $("mdSvg"); clear(svg);
+  var X0 = 46, X1 = 640, Y0 = 26, Y1 = 250, W = X1 - X0, H = Y1 - Y0;
+  var lo = Math.log(2) / Math.LN10, hi = Math.log(40000) / Math.LN10;
+  var xOf = function (v) { return X0 + (Math.log(Math.max(v, 2)) / Math.LN10 - lo) / (hi - lo) * W; };
+  var NB = 58, bins = new Array(NB), i;
+  for (i = 0; i < NB; i++) bins[i] = 0;
+  for (i = 0; i < MD_N; i++) {
+    var b = Math.floor((Math.log(s[i]) / Math.LN10 - lo) / (hi - lo) * NB);
+    if (b >= 0 && b < NB) bins[b]++;
+  }
+  var maxc = 1; for (i = 0; i < NB; i++) if (bins[i] > maxc) maxc = bins[i];
+
+  svg.appendChild(mk("rect", { x: X0, y: Y0, width: W, height: H, fill: C.p2, stroke: C.line, rx: 6 }));
+  var decades = [[2, "2 ns"], [10, "10 ns"], [100, "100 ns"], [1000, "1 µs"], [10000, "10 µs"]];
+  for (i = 0; i < decades.length; i++) {
+    var x = xOf(decades[i][0]);
+    svg.appendChild(mk("line", { x1: x, y1: Y0, x2: x, y2: Y1, stroke: C.line, "stroke-width": 1 }));
+    svg.appendChild(txt(x, Y1 + 15, decades[i][1], 9.5, C.dim, "middle"));
+  }
+  var bw = W / NB;
+  for (i = 0; i < NB; i++) {
+    if (!bins[i]) continue;
+    var h = Math.max(1.5, Math.sqrt(bins[i] / maxc) * H);
+    var mid = Math.pow(10, lo + (i + 0.5) / NB * (hi - lo));
+    svg.appendChild(mk("rect", { x: X0 + i * bw + 0.5, y: Y1 - h, width: Math.max(1, bw - 1), height: h,
+      fill: mid > p99 ? C.bad : mid > 60 ? C.warn : C.acc, opacity: mid > p99 ? 0.85 : 0.8 }));
+  }
+  var marks = [[POOL_NS, C.acc2, "pool " + POOL_NS + " ns", -1], [mean, C.info, "mean", 1],
+               [p99, C.warn, "p99", 1], [p999, C.bad, "p99.9", 1]];
+  for (i = 0; i < marks.length; i++) {
+    var mxx = xOf(marks[i][0]);
+    svg.appendChild(mk("line", { x1: mxx, y1: Y0 - 6, x2: mxx, y2: Y1, stroke: marks[i][1],
+      "stroke-width": 1.6, "stroke-dasharray": "4 3" }));
+    svg.appendChild(txt(mxx + marks[i][3] * 4, Y0 - 10, marks[i][2], 9.5, marks[i][1],
+      marks[i][3] < 0 ? "end" : "start", "700"));
+  }
+  svg.appendChild(txt(X0 + 8, Y0 + 14, "samples per bin", 9.5, C.dim));
+  svg.appendChild(txt(X0 + 8, Y0 + 26, "√ scale", 9.5, C.dim));
+  svg.appendChild(txt(X0, Y1 + 34, "latency of one malloc() call, log scale · " + MD_N.toLocaleString() + " samples · fragmentation " + MD.frag + "%, " + MD.th + " thread" + (MD.th === 1 ? "" : "s"), 10, C.mute));
+  svg.appendChild(txt(X0, Y1 + 52, "the mean sits in the empty gap between the two humps — it describes no call that ever happened", 10, C.acc2));
+
+  var kv = $("mdKv"); kv.innerHTML =
+    "<b>size class</b><span>lookup + free-list walk, ~20–320 ns, grows with fragmentation</span>" +
+    "<b>arena lock</b><span>0–" + Math.round(1350 * (MD.th - 1) / 7) + " ns of wait, " + (MD.th === 1 ? "off (single thread)" : MD.th + " threads contending") + "</span>" +
+    "<b>coalesce/trim</b><span>0.6–3.4 µs, fires when neighbours merge</span>" +
+    "<b>mmap / brk</b><span>3.4–18 µs — a syscall. This is the right-hand hump.</span>";
+  $("mdMsg").innerHTML = p999 > 3000
+    ? "<b>Unusable.</b> p99.9 is " + ns(p999) + " — " + (p999 / p50).toFixed(0) + "× the median. One tick in a thousand leaves user space entirely, and there is nothing you can do about it from inside <code>malloc</code>."
+    : (p999 > 250
+      ? "<b>Still not a guarantee.</b> p99.9 is " + ns(p999) + ". The syscall is rare here, but the free-list walk alone already puts an order of magnitude between your median and your tail."
+      : "<b>Best case, and it is a fiction.</b> A fresh single-threaded heap allocating one size is the friendliest possible input, and p99.9 is still " + (p999 / p50).toFixed(1) + "× p50. Six hours into a session it will not look like this.");
+}
+$("mdFrag").addEventListener("input", function () { MD.frag = +this.value; $("mdFragV").textContent = MD.frag + "%"; mdDraw(); });
+$("mdTh").addEventListener("input", function () { MD.th = +this.value; $("mdThV").textContent = MD.th; mdDraw(); });
+$("mdMix").addEventListener("change", function () { MD.mix = this.value; mdDraw(); });
+$("mdCalm").addEventListener("click", function () {
+  MD.frag = 0; MD.th = 1; MD.mix = "same";
+  $("mdFrag").value = 0; $("mdFragV").textContent = "0%";
+  $("mdTh").value = 1; $("mdThV").textContent = "1"; $("mdMix").value = "same"; mdDraw();
+});
+$("mdUgly").addEventListener("click", function () {
+  MD.frag = 75; MD.th = 4; MD.mix = "wide";
+  $("mdFrag").value = 75; $("mdFragV").textContent = "75%";
+  $("mdTh").value = 4; $("mdThV").textContent = "4"; $("mdMix").value = "wide"; mdDraw();
+});
+mdDraw();
+
+/* ════ 2. FIXED-SIZE POOL SIMULATOR ═══════════════════════════ */
+var PL = { cap: 32, peak: 10, slots: [], fl: [], live: [], hwm: 0, exh: 0, flash: -1, hist: null, seed: 7 };
+function plInit() {
+  PL.slots = []; PL.fl = []; PL.live = []; PL.hwm = 0; PL.exh = 0; PL.flash = -1; PL.hist = null;
+  var i;
+  for (i = 0; i < PL.cap; i++) PL.slots.push(0);
+  for (i = PL.cap; i-- > 0;) PL.fl.push(i);   /* built back to front: head is slot 0 */
+}
+function plLog(s, cls) {
+  var d = document.createElement("div");
+  d.innerHTML = s; if (cls) d.className = cls;
+  var box = $("plLog"); box.insertBefore(d, box.firstChild);
+  while (box.children.length > 9) box.removeChild(box.lastChild);
+}
+function plAlloc(quiet) {
+  if (!PL.fl.length) {
+    PL.exh++;
+    if (!quiet) plLog("<b>alloc() &rarr; nullptr</b> &middot; pool exhausted at " + PL.cap + " slots", "bad");
+    return -1;
+  }
+  var i = PL.fl.pop();
+  PL.slots[i] = 1; PL.live.push(i); PL.flash = i;
+  if (PL.live.length > PL.hwm) PL.hwm = PL.live.length;
+  if (!quiet) plLog("alloc() &rarr; slot <b>" + i + "</b> &middot; pop the head, 1 op", "hl");
+  return i;
+}
+function plFree(i, quiet) {
+  var k = PL.live.indexOf(i); if (k < 0) return;
+  PL.live.splice(k, 1); PL.slots[i] = 0; PL.fl.push(i); PL.flash = i;
+  if (!quiet) plLog("release(slot " + i + ") &middot; push it back, 1 op", "ok");
+}
+function plDraw() {
+  var svg = $("plSvg"); clear(svg);
+  var cols = 8, rows = Math.ceil(PL.cap / cols), cw = 66, ch = 34, gx = 5, gy = 12;
+  var X0 = 40, Y0 = 44;
+  svg.setAttribute("viewBox", "0 0 640 " + (Y0 + rows * (ch + gy) + 30));
+  svg.appendChild(txt(X0, 22, "slab · " + PL.cap + " slots × sizeof(Order) — one ::operator new, at construction", 10.5, C.mute, null, "700"));
+  var i, r, c;
+  /* free-list chain first, so slots draw over it */
+  var chain = PL.fl.slice().reverse();   /* head first */
+  var pos = function (idx) {
+    var rr = Math.floor(idx / cols), cc = idx % cols;
+    return { x: X0 + cc * (cw + gx), y: Y0 + rr * (ch + gy) };
+  };
+  for (i = 0; i + 1 < chain.length && i < 14; i++) {
+    var a = pos(chain[i]), b = pos(chain[i + 1]);
+    svg.appendChild(mk("path", {
+      d: "M" + (a.x + cw / 2) + "," + (a.y + ch) + " C" + (a.x + cw / 2) + "," + (a.y + ch + 9) +
+         " " + (b.x + cw / 2) + "," + (b.y + ch + 9) + " " + (b.x + cw / 2) + "," + (b.y + ch),
+      fill: "none", stroke: C.ok, "stroke-width": 1.1, opacity: 0.5
+    }));
+  }
+  for (i = 0; i < PL.cap; i++) {
+    var p = pos(i), liveS = PL.slots[i] === 1;
+    svg.appendChild(mk("rect", { x: p.x, y: p.y, width: cw, height: ch, rx: 5,
+      fill: liveS ? "rgba(124,58,237,.42)" : C.p2,
+      stroke: PL.flash === i ? C.acc2 : (liveS ? C.acc2 : C.line),
+      "stroke-width": PL.flash === i ? 2.2 : 1 }));
+    svg.appendChild(txt(p.x + 6, p.y + 14, "[" + i + "]", 9, liveS ? C.acc2 : C.dim));
+    svg.appendChild(txt(p.x + cw - 6, p.y + 25, liveS ? "Order" : "next→", 9,
+      liveS ? C.ink : C.ok, "end", liveS ? "700" : null));
+  }
+  var hy = Y0 + rows * (ch + gy) + 8;
+  if (PL.fl.length) {
+    var h = pos(PL.fl[PL.fl.length - 1]);
+    svg.appendChild(txt(X0, hy + 12, "free_ → slot " + PL.fl[PL.fl.length - 1] +
+      "  ·  chain length " + PL.fl.length + "  ·  each free slot stores the next one, inside itself", 10, C.ok));
+    svg.appendChild(mk("line", { x1: h.x + cw / 2, y1: h.y - 8, x2: h.x + cw / 2, y2: h.y - 1,
+      stroke: C.ok, "stroke-width": 2 }));
+    svg.appendChild(txt(h.x + cw / 2, h.y - 12, "free_", 9, C.ok, "middle", "700"));
+  } else {
+    svg.appendChild(txt(X0, hy + 12, "free_ = nullptr  ·  every slot is live  ·  the next alloc() returns nullptr", 10, C.bad, null, "700"));
+  }
+  $("plLive").textContent = PL.live.length;
+  $("plFree").textContent = PL.fl.length;
+  $("plHwm").textContent = PL.hwm + " / " + PL.cap;
+  $("plOps").textContent = "1";
+  $("plFrag").textContent = "0%";
+  $("plExh").textContent = PL.exh;
+  $("plExh").className = "sv " + (PL.exh ? "bad" : "ok");
+  $("plHwm").className = "sv " + (PL.hwm >= PL.cap ? "bad" : PL.hwm > PL.cap * 0.75 ? "warn" : "");
+  plHistDraw();
+  if (PL.flash >= 0) { var f = PL.flash; setTimeout(function () { if (PL.flash === f) { PL.flash = -1; plDraw(); } }, 380); }
+}
+function plHistDraw() {
+  var svg = $("plHist"); clear(svg);
+  var X0 = 34, X1 = 610, Y0 = 8, Y1 = 74, W = X1 - X0, H = Y1 - Y0;
+  svg.appendChild(mk("rect", { x: X0, y: Y0, width: W, height: H, fill: C.p2, stroke: C.line, rx: 5 }));
+  if (!PL.hist) {
+    svg.appendChild(txt(X0 + W / 2, Y0 + H / 2 + 4, "press “Replay 240 ticks”", 10.5, C.dim, "middle"));
+    $("plRepLab").textContent = "";
+    return;
+  }
+  var h = PL.hist, i, mx = PL.cap;
+  for (i = 0; i < h.live.length; i++) if (h.live[i] > mx) mx = h.live[i];
+  var yOf = function (v) { return Y1 - v / mx * H; };
+  var capY = yOf(PL.cap);
+  svg.appendChild(mk("line", { x1: X0, y1: capY, x2: X1, y2: capY, stroke: C.bad, "stroke-width": 1.3, "stroke-dasharray": "5 3" }));
+  svg.appendChild(txt(X1 - 3, capY - 4, "capacity " + PL.cap, 9, C.bad, "end", "700"));
+  var d = "";
+  for (i = 0; i < h.live.length; i++) {
+    var x = X0 + i / (h.live.length - 1) * W;
+    d += (i ? "L" : "M") + x.toFixed(1) + "," + yOf(h.live[i]).toFixed(1);
+  }
+  svg.appendChild(mk("path", { d: d, fill: "none", stroke: C.acc2, "stroke-width": 1.4 }));
+  for (i = 0; i < h.fails.length && i < 400; i++) {
+    var fx = X0 + h.fails[i] / (h.live.length - 1) * W;
+    svg.appendChild(mk("line", { x1: fx, y1: Y0, x2: fx, y2: Y1, stroke: C.bad, "stroke-width": 1, opacity: 0.35 }));
+  }
+  svg.appendChild(txt(X0 - 5, capY + 3, "" + PL.cap, 9, C.dim, "end"));
+  svg.appendChild(txt(X0 - 5, Y1, "0", 9, C.dim, "end"));
+  $("plRepLab").textContent = "· peak demand " + h.peak + "/tick · high-water " + h.hwm +
+    " · " + h.nullptrs + " nullptr returns across " + h.live.length + " ticks";
+}
+function plReplay() {
+  plInit();
+  var rnd = lcg(PL.seed = (PL.seed * 41 + 13) % 99991);
+  var T = 240, live = [], fails = [], nulls = 0, carry = [], t, i;
+  for (t = 0; t < T; t++) {
+    /* bursty demand: mostly quiet, occasionally the full peak */
+    var burst = rnd() < 0.08 ? 1 : rnd() < 0.3 ? 0.6 : 0.28;
+    var want = Math.max(1, Math.round(PL.peak * burst * (0.7 + 0.6 * rnd())));
+    for (i = 0; i < want; i++) { var s = plAlloc(true); if (s < 0) { nulls++; if (fails.length < 400) fails.push(t); } else carry.push(s); }
+    /* most orders are acked and released within the tick; a few carry over */
+    var keep = Math.min(carry.length, Math.round(carry.length * 0.18 * rnd()));
+    while (carry.length > keep) { plFree(carry.shift(), true); }
+    live.push(PL.live.length);
+  }
+  PL.hist = { live: live, fails: fails, nullptrs: nulls, peak: PL.peak, hwm: PL.hwm };
+  $("plMsg").innerHTML = nulls
+    ? "<b>" + nulls + " nullptr returns.</b> Capacity " + PL.cap + " was not enough for a peak of " +
+      PL.peak + " orders per tick with carry-over. High-water mark hit " + PL.hwm +
+      ". This is what “size it for the worst tick” means — and why the exhaustion counter is a metric, not a log line."
+    : "<b>No exhaustion in 240 ticks.</b> High-water mark " + PL.hwm + " of " + PL.cap +
+      " — headroom " + (100 - Math.round(PL.hwm / PL.cap * 100)) + "%. Now raise the peak until it breaks, and write down the capacity you would actually ship.";
+  plDraw();
+}
+$("plCap").addEventListener("input", function () {
+  PL.cap = +this.value; $("plCapV").textContent = PL.cap;
+  plInit(); $("plMsg").innerHTML = "Pool rebuilt with " + PL.cap + " slots. The constructor pushes every slot onto the free-list back to front, so <code>free_</code> starts at slot 0."; plDraw();
+});
+$("plPeak").addEventListener("input", function () { PL.peak = +this.value; $("plPeakV").textContent = PL.peak; });
+$("plA").addEventListener("click", function () {
+  var s = plAlloc();
+  $("plMsg").innerHTML = s < 0
+    ? "<b>nullptr.</b> Not a crash, not a fallback — a documented return value. The caller now applies its policy: drop and count, reuse the oldest, or degrade."
+    : "Popped slot <b>" + s + "</b>. One read, one write, no branch on size, no lock. Placement <code>new</code> then constructs the <code>Order</code> in those bytes.";
+  plDraw();
+});
+$("plF").addEventListener("click", function () {
+  if (!PL.live.length) { $("plMsg").innerHTML = "Nothing live to release."; return; }
+  var i = PL.live[PL.live.length - 1]; plFree(i);
+  $("plMsg").innerHTML = "Released slot <b>" + i + "</b>. It goes on the <em>front</em> of the free-list, so the very next alloc() reuses it — which is why pool memory stays hot in L1.";
+  plDraw();
+});
+$("plFr").addEventListener("click", function () {
+  if (!PL.live.length) { $("plMsg").innerHTML = "Nothing live to release."; return; }
+  var i = PL.live[Math.floor(Math.random() * PL.live.length)]; plFree(i);
+  $("plMsg").innerHTML = "Released slot <b>" + i + "</b> out of order. Note that the pool does not care: every slot is the same size, so any free slot fits any request. That is what <em>zero fragmentation</em> means.";
+  plDraw();
+});
+$("plBurst").addEventListener("click", function () {
+  var got = 0, miss = 0, i;
+  for (i = 0; i < 8; i++) { if (plAlloc(true) < 0) miss++; else got++; }
+  plLog("burst 8 &rarr; " + got + " slots, " + miss + " nullptr", miss ? "bad" : "hl");
+  $("plMsg").innerHTML = "Eight allocations: <b>" + got + "</b> served, <b>" + miss + "</b> nullptr. Every served one cost the same single pop — the 8th is not slower than the 1st. Compare that with the histogram in Part 1.";
+  plDraw();
+});
+$("plRep").addEventListener("click", plReplay);
+$("plReset").addEventListener("click", function () {
+  plInit(); $("plLog").innerHTML = "";
+  $("plMsg").innerHTML = "Pool reset. Capacity " + PL.cap + ", all slots free, free-list head at slot 0.";
+  plDraw();
+});
+plInit();
+$("plMsg").innerHTML = "Press <b>alloc()</b>. Watch the head of the free-list move and the slot flip to live — that is the entire allocator.";
+plDraw();
+
+/* ════ 3. ARENA / BUMP ALLOCATOR ══════════════════════════════ */
+var AR = { cap: 32768, off: 0, blocks: [], pad: 0, sz: 96, al: 8, resets: 0 };
+function arAlloc(size, align, label) {
+  var p = (AR.off + align - 1) & ~(align - 1);
+  if (p + size > AR.cap) return false;
+  AR.pad += p - AR.off;
+  AR.blocks.push({ s: p, e: p + size, pad: p - AR.off, label: label, al: align });
+  AR.off = p + size;
+  return true;
+}
+function arDraw() {
+  var svg = $("arSvg"); clear(svg);
+  var X0 = 24, X1 = 640, W = X1 - X0, Y = 56, H = 44;
+  svg.appendChild(txt(X0, 24, "one 32 KB slab · std::byte scratch_[32*1024], reserved at construction", 10.5, C.mute, null, "700"));
+  svg.appendChild(mk("rect", { x: X0, y: Y, width: W, height: H, rx: 6, fill: C.p2, stroke: C.line }));
+  var xOf = function (b) { return X0 + b / AR.cap * W; };
+  var i;
+  for (i = 0; i < AR.blocks.length; i++) {
+    var b = AR.blocks[i];
+    if (b.pad > 0) {
+      var pw = Math.max(1, (b.pad / AR.cap) * W);
+      svg.appendChild(mk("rect", { x: xOf(b.s - b.pad), y: Y, width: pw, height: H, fill: C.warn, opacity: 0.75 }));
+    }
+    var w = Math.max(1, (b.e - b.s) / AR.cap * W);
+    svg.appendChild(mk("rect", { x: xOf(b.s), y: Y, width: w, height: H,
+      fill: "rgba(124,58,237,.5)", stroke: C.acc2, "stroke-width": w > 3 ? 1 : 0 }));
+    if (w > 34) svg.appendChild(txt(xOf(b.s) + w / 2, Y + 27, b.label, 9, C.ink, "middle", "700"));
+  }
+  var ox = xOf(AR.off);
+  svg.appendChild(mk("line", { x1: ox, y1: Y - 12, x2: ox, y2: Y + H + 10, stroke: C.acc2, "stroke-width": 2 }));
+  svg.appendChild(txt(Math.min(ox + 5, X1 - 60), Y - 16, "off_ = " + AR.off, 10, C.acc2, null, "700"));
+  svg.appendChild(txt(X0, Y + H + 26, "0", 9.5, C.dim));
+  svg.appendChild(txt(X1, Y + H + 26, "32768", 9.5, C.dim, "end"));
+
+  /* preview of the next allocation's rounding */
+  var np = (AR.off + AR.al - 1) & ~(AR.al - 1);
+  svg.appendChild(txt(X0, 138, "next alloc(" + AR.sz + ", " + AR.al + "):", 10.5, C.mute, null, "700"));
+  svg.appendChild(txt(X0, 156, "p = (off_ + align - 1) & ~(align - 1)  =  (" + AR.off + " + " + (AR.al - 1) + ") & ~" + (AR.al - 1) + "  =  " + np, 10, C.acc2));
+  svg.appendChild(txt(X0, 174, np === AR.off
+    ? "already aligned — 0 bytes of padding; the offset just advances by " + AR.sz
+    : "rounds up by " + (np - AR.off) + " byte" + (np - AR.off === 1 ? "" : "s") + " of padding, gone until reset()",
+    10, np === AR.off ? C.ok : C.warn));
+  svg.appendChild(txt(X0, 200, "there is no free(p) — only reset(), which sets off_ = 0. One store, O(1), the whole tick.", 10));
+  svg.appendChild(txt(X0, 222, "resets: " + AR.resets + "   ·   individual frees: 0   ·   fragmentation: impossible (address order)", 10, C.dim));
+
+  $("arOff").textContent = AR.off;
+  $("arUsed").textContent = (AR.off / AR.cap * 100).toFixed(1) + "%";
+  $("arPad").textContent = AR.pad + " B";
+  $("arPad").className = "sv " + (AR.pad > 128 ? "bad" : AR.pad ? "warn" : "ok");
+  $("arN").textContent = AR.blocks.length;
+  $("arFree").textContent = "0";
+}
+$("arSz").addEventListener("input", function () { AR.sz = +this.value; $("arSzV").textContent = bytes(AR.sz); arDraw(); });
+$("arAl").addEventListener("change", function () { AR.al = +this.value; arDraw(); });
+$("arA").addEventListener("click", function () {
+  var before = AR.off;
+  if (arAlloc(AR.sz, AR.al, bytes(AR.sz))) {
+    var pd = AR.blocks[AR.blocks.length - 1].pad;
+    $("arMsg").innerHTML = "Allocated " + bytes(AR.sz) + " at offset <b>" + AR.blocks[AR.blocks.length - 1].s +
+      "</b>" + (pd ? " after <b>" + pd + " B</b> of alignment padding" : " with no padding") +
+      ". Cost: one add and one compare. Not a search, not a lock, not a syscall.";
+  } else {
+    $("arMsg").innerHTML = "<b>nullptr.</b> " + bytes(AR.cap - before) + " left and you asked for " + bytes(AR.sz) +
+      ". An arena has a hard ceiling by design — that is the guarantee. Size the slab for the worst tick, and wire <code>null_memory_resource</code> upstream so a spill throws instead of silently costing 18 µs.";
+  }
+  arDraw();
+});
+$("arTick").addEventListener("click", function () {
+  var ok = arAlloc(1024, 8, "levels[32]") && arAlloc(512, 8, "parse buf") &&
+           arAlloc(96, 8, "Order") && arAlloc(64, 64, "Quote");
+  $("arMsg").innerHTML = ok
+    ? "One tick's scratch: a 32-level ladder, a parse buffer, an order and a cache-line-aligned quote — <b>four bumps</b>, " +
+      AR.blocks[AR.blocks.length - 1].pad + " B of padding on the aligned one. Now press <b>reset()</b> and all four are gone at once."
+    : "Not enough room left for a whole tick. Press <b>reset()</b>.";
+  arDraw();
+});
+$("arReset").addEventListener("click", function () {
+  var was = AR.off; AR.off = 0; AR.blocks = []; AR.pad = 0; AR.resets++;
+  $("arMsg").innerHTML = "<b>off_ = 0.</b> " + bytes(was) + " reclaimed in one store. No destructors ran — which is exactly why arena objects must be trivially destructible, or you must call the destructors yourself before you reset.";
+  arDraw();
+});
+$("arFill").addEventListener("click", function () {
+  var n = 0; while (arAlloc(AR.sz, AR.al, "") && n < 400) n++;
+  $("arMsg").innerHTML = "<b>" + n + "</b> allocations of " + bytes(AR.sz) + " at alignment " + AR.al +
+    ", then nullptr. Padding wasted: <b>" + AR.pad + " B</b> (" + (AR.pad / AR.cap * 100).toFixed(1) +
+    "% of the slab). Raise the alignment to 64 and run it again — alignment is not free.";
+  arDraw();
+});
+arDraw();
+
+/* ════ 4. FOUR ALLOCATORS, ONE HOT PATH ═══════════════════════ */
+var AC = {
+  "new": {
+    name: "operator new / delete",
+    pill: "unbounded", pc: "bad",
+    what: "The general-purpose heap. Correct, thread-safe, serves any size, and the only one of the four that can enter the kernel while your order is waiting.",
+    kv: [["complexity", "amortised O(1), worst case unbounded"], ["locks", "yes — arena mutex on a cache miss"],
+         ["syscalls", "yes — mmap / brk when the arena grows"], ["frees one object", "yes"],
+         ["fragmentation", "yes, and it grows over a session"], ["sizes", "any"],
+         ["p99.9 (Part 1)", "3–18 µs"]],
+    note: "<b>Where it belongs:</b> startup, configuration, anything that runs before <code>SESSION_OPEN</code>. It is not a bad allocator; it is a bad hot-path allocator.",
+    code: [
+      '<span class="c">// the version you are replacing</span>',
+      '<span class="k">void</span> on_book(<span class="k">const</span> Book&amp; b) <span class="k">override</span> {',
+      '  <span class="k">auto</span> work = <span class="k">new</span> std::vector&lt;Level&gt;();   <span class="c">// malloc #1</span>',
+      '  work-&gt;reserve(<span class="n">32</span>);                        <span class="c">// malloc #2</span>',
+      '  Order* o = <span class="k">new</span> Order{b.sym, b.ask, <span class="n">1</span>};    <span class="c">// malloc #3</span>',
+      '  submit(o);',
+      '  <span class="k">delete</span> work;                              <span class="c">// free, maybe coalesce</span>',
+      '}',
+      '<span class="c">// three trips through a shared, lockable, syscall-capable</span>',
+      '<span class="c">// allocator on every single book update.</span>'
+    ]
+  },
+  pool: {
+    name: "ObjectPool&lt;T, N&gt;", pill: "O(1), bounded", pc: "ok",
+    what: "One slab, one size, an intrusive free-list. Allocate is a pop, free is a push. The cost of the 4096th allocation is identical to the cost of the first.",
+    kv: [["complexity", "O(1), always — one read, one write"], ["locks", "none, if the pool is per-thread"],
+         ["syscalls", "none after construction"], ["frees one object", "yes — any order"],
+         ["fragmentation", "impossible — every slot fits"], ["sizes", "one, fixed"],
+         ["p99.9 (measured)", "~3.7 ns"]],
+    note: "<b>Where it belongs:</b> objects with one size and an individual lifetime — orders, messages, book nodes. It needs a documented answer for <code>nullptr</code>.",
+    code: [
+      '<span class="c">// members — reserved ONCE, at construction</span>',
+      '<span class="k">alignas</span>(<span class="n">64</span>) ObjectPool&lt;Order, <span class="n">4096</span>&gt; order_pool_{};',
+      '',
+      '<span class="k">void</span> on_book(<span class="k">const</span> Book&amp; b) <span class="k">override</span> {',
+      '  Order* o = order_pool_.alloc(b.sym, b.ask, <span class="n">1</span>);  <span class="c">// O(1)</span>',
+      '  <span class="k">if</span> (!o) { ++dropped_; <span class="k">return</span>; }        <span class="c">// the POLICY</span>',
+      '  submit(o);                                <span class="c">// no new, no lock</span>',
+      '}',
+      '<span class="k">void</span> on_ack(Order* o) { order_pool_.release(o); }  <span class="c">// dtor + push</span>',
+      '<span class="c">// alignas(64) so two threads pools do not share a line.</span>'
+    ]
+  },
+  arena: {
+    name: "Arena / bump allocator", pill: "O(1), no per-object free", pc: "acc",
+    what: "One offset that only moves forward. Any size, any alignment, one add per allocation — and no way to free a single object. You reset the whole thing instead.",
+    kv: [["complexity", "O(1) — one add, one compare"], ["locks", "none"],
+         ["syscalls", "none after construction"], ["frees one object", "no — reset() only"],
+         ["fragmentation", "impossible — address order"], ["sizes", "any"],
+         ["p99.9", "~1–2 ns"]],
+    note: "<b>Where it belongs:</b> per-tick scratch, where everything dies together. Objects must be trivially destructible, or you run the destructors yourself before <code>reset()</code>.",
+    code: [
+      '<span class="k">alignas</span>(<span class="n">64</span>) <span class="k">unsigned char</span> slab_[<span class="n">32</span> * <span class="n">1024</span>];',
+      'Arena arena_{slab_, <span class="k">sizeof</span>(slab_)};',
+      '',
+      '<span class="k">void</span> on_book(<span class="k">const</span> Book&amp; b) <span class="k">override</span> {',
+      '  <span class="k">auto</span>* lv = <span class="k">static_cast</span>&lt;Level*&gt;(',
+      '      arena_.alloc(<span class="n">32</span> * <span class="k">sizeof</span>(Level), <span class="k">alignof</span>(Level)));',
+      '  <span class="k">if</span> (!lv) { ++overflow_; <span class="k">return</span>; }',
+      '  build_ladder(lv, <span class="n">32</span>, b);              <span class="c">// scratch, this tick only</span>',
+      '  decide(lv, <span class="n">32</span>);',
+      '  arena_.reset();                       <span class="c">// all of it, one store</span>',
+      '}'
+    ]
+  },
+  pmr: {
+    name: "std::pmr", pill: "standard containers, your memory", pc: "acc",
+    what: "C++17 splits “where the bytes come from” (a memory_resource) from “who uses them” (a polymorphic_allocator). One container type, any strategy underneath — including yours.",
+    kv: [["complexity", "O(1) for monotonic; O(1) for pool_resource"], ["locks", "none with the unsynchronized_ variants"],
+         ["syscalls", "none if the upstream is null_memory_resource"], ["frees one object", "pool_resource yes, monotonic no"],
+         ["fragmentation", "none for either"], ["sizes", "any"],
+         ["p99.9", "monotonic ~2 ns · pool_resource ~6 ns"]],
+    note: "<b>The trick worth stealing:</b> give the monotonic resource <code>null_memory_resource()</code> as its upstream. A tick that overflows your slab now <em>throws</em> instead of quietly spending 18 µs in the kernel.",
+    code: [
+      '<span class="k">#include</span> <span class="s">&lt;memory_resource&gt;</span>',
+      '',
+      '<span class="k">alignas</span>(<span class="n">64</span>) std::byte scratch_[<span class="n">32</span> * <span class="n">1024</span>];',
+      'std::pmr::monotonic_buffer_resource rsrc_{',
+      '    scratch_, <span class="k">sizeof</span>(scratch_),',
+      '    std::pmr::null_memory_resource()};   <span class="c">// never spill</span>',
+      '',
+      '<span class="k">void</span> on_book(<span class="k">const</span> Book&amp; b) <span class="k">override</span> {',
+      '  std::pmr::vector&lt;Level&gt; work{&amp;rsrc_};  <span class="c">// out of scratch_</span>',
+      '  work.reserve(<span class="n">32</span>);',
+      '  build_ladder(work, b);',
+      '  decide(work);',
+      '  rsrc_.release();                      <span class="c">// O(1), per tick</span>',
+      '}'
+    ]
+  }
+};
+function acShow(k) {
+  var d = AC[k];
+  $("acCode").innerHTML = d.code.join("\n");
+  $("acName").innerHTML = d.name;
+  $("acPill").textContent = d.pill;
+  $("acPill").className = "pill " + d.pc;
+  $("acWhat").innerHTML = d.what;
+  var h = "", i;
+  for (i = 0; i < d.kv.length; i++) h += "<b>" + d.kv[i][0] + "</b><span>" + d.kv[i][1] + "</span>";
+  $("acKv").innerHTML = h;
+  $("acNote").innerHTML = d.note;
+  var bs = $("acPick").querySelectorAll("button"), j;
+  for (j = 0; j < bs.length; j++) bs[j].setAttribute("aria-pressed", bs[j].getAttribute("data-k") === k ? "true" : "false");
+}
+Array.prototype.forEach.call($("acPick").querySelectorAll("button"), function (b) {
+  b.addEventListener("click", function () { acShow(b.getAttribute("data-k")); });
+});
+acShow("new");
+
+/* ════ 5. ALIGNMENT & CACHE LINES ═════════════════════════════ */
+var AL = { size: 40, off: 52, rate: 20 };
+var GHZ = 4.0;
+function alCost(size, off) {
+  var loads = Math.ceil(size / 8), splits = 0, k;
+  for (k = 0; k < loads; k++) {
+    var b = off + k * 8;
+    if (Math.floor(b / 64) !== Math.floor((b + 7) / 64)) splits++;
+  }
+  var lines = Math.floor((off + size - 1) / 64) - Math.floor(off / 64) + 1;
+  var cycles = loads * 0.5 + splits * 3 + (lines - 1) * 1;
+  return { loads: loads, splits: splits, lines: lines, cycles: cycles, ns: cycles / GHZ };
+}
+function alDraw() {
+  var size = AL.size, off = AL.off;
+  var a = alCost(size, off);
+  var b = alCost(size, 0);   /* the same object, cache-line aligned */
+  var svg = $("alSvg"); clear(svg);
+  var X0 = 46, cellW = 9, ROWH = 34, Y0 = 34, NL = 3, i, r;
+  svg.appendChild(txt(X0, 20, "3 cache lines · 64 bytes each · the hardware moves memory only in these units", 10.5, C.mute, null, "700"));
+  for (r = 0; r < NL; r++) {
+    var y = Y0 + r * ROWH;
+    svg.appendChild(txt(X0 - 6, y + 15, "line " + r, 9.5, C.dim, "end"));
+    for (i = 0; i < 64; i++) {
+      var byteIdx = r * 64 + i;
+      var inObj = byteIdx >= off && byteIdx < off + size;
+      svg.appendChild(mk("rect", { x: X0 + i * cellW, y: y, width: cellW - 0.8, height: 22,
+        fill: inObj ? "rgba(124,58,237,.62)" : C.p2, stroke: C.line, "stroke-width": 0.5 }));
+    }
+    svg.appendChild(mk("rect", { x: X0 - 1, y: y - 1, width: 64 * cellW + 1, height: 24, rx: 2,
+      fill: "none", stroke: "#333a47", "stroke-width": 1.4 }));
+  }
+  /* mark the split loads */
+  var loads = Math.ceil(size / 8);
+  for (i = 0; i < loads; i++) {
+    var bb = off + i * 8;
+    if (Math.floor(bb / 64) !== Math.floor((bb + 7) / 64)) {
+      var lr = Math.floor(bb / 64);
+      var yy = Y0 + lr * ROWH;
+      svg.appendChild(mk("line", { x1: X0 + 64 * cellW, y1: yy - 3, x2: X0 + 64 * cellW, y2: yy + 25,
+        stroke: C.bad, "stroke-width": 2.5 }));
+      svg.appendChild(txt(X0 + 64 * cellW + 4, yy + 15, "split", 9, C.bad, null, "700"));
+    }
+  }
+  svg.appendChild(txt(X0, Y0 + NL * ROWH + 12, "bytes " + off + "…" + (off + size - 1) +
+    "  ·  " + a.loads + " eight-byte loads  ·  " + a.lines + " line" + (a.lines === 1 ? "" : "s") +
+    " touched  ·  " + a.splits + " straddling", 10, a.splits ? C.bad : C.ok));
+  svg.appendChild(txt(X0, Y0 + NL * ROWH + 32, a.loads + "×0.5c load-port + " + a.splits +
+    "×3c split + " + (a.lines - 1) + "×1c tag  =  " + a.cycles.toFixed(1) +
+    " cycles  =  " + a.ns.toFixed(2) + " ns @ " + GHZ.toFixed(1) + " GHz", 10, C.mute));
+
+  $("alLines").textContent = a.lines;
+  $("alSplit").textContent = a.splits;
+  $("alSplit").className = "sv " + (a.splits ? "bad" : "ok");
+  $("alNs").textContent = a.ns.toFixed(2) + " ns";
+  $("alLines2").textContent = b.lines;
+  $("alNs2").textContent = b.ns.toFixed(2) + " ns";
+  var d = a.ns - b.ns, rate = AL.rate * 100000;
+  $("alCost").textContent = (d > 0 ? "+" : "") + d.toFixed(2) + " ns";
+  $("alCost").className = "sv " + (d > 0.05 ? "bad" : "ok");
+  var perSec = d * rate / 1e9;
+  $("alSec").textContent = (perSec >= 0.001 ? (perSec * 1000).toFixed(1) + " ms/s" : (perSec * 1e6).toFixed(0) + " µs/s");
+  $("alSec").className = "sv " + (perSec > 0.002 ? "bad" : perSec > 0 ? "warn" : "ok");
+  $("alMsg").innerHTML = a.splits
+    ? "<b>" + a.splits + " split load" + (a.splits === 1 ? "" : "s") + " per access.</b> Every read of this object pays for them, on every tick, for the whole session. At " +
+      (AL.rate / 10).toFixed(1) + " M messages/s that is " + $("alSec").textContent +
+      " of pure placement tax — recovered by one word, <code>alignas(64)</code>, which forces the object to start at offset 0 of a line."
+    : (a.lines > 1
+      ? "<b>No split loads, but " + a.lines + " lines.</b> A struct larger than a line always costs more than one line fetch. If only part of it is hot, split the struct: hot fields in one line, cold fields elsewhere."
+      : "<b>One line, no splits.</b> This is the shape you want on the hot path: the whole object arrives in a single 64-byte fetch, and two of them never share a line by accident.");
+}
+$("alSz").addEventListener("input", function () { AL.size = +this.value; $("alSzV").textContent = AL.size + " B"; alDraw(); });
+$("alOff").addEventListener("input", function () { AL.off = +this.value; $("alOffV").textContent = AL.off; alDraw(); });
+$("alRate").addEventListener("input", function () { AL.rate = +this.value; $("alRateV").textContent = (AL.rate / 10).toFixed(1) + " M/s"; alDraw(); });
+$("alWorst").addEventListener("click", function () {
+  AL.size = 40; AL.off = 60;
+  $("alSz").value = 40; $("alSzV").textContent = "40 B";
+  $("alOff").value = 60; $("alOffV").textContent = "60"; alDraw();
+});
+$("alFix").addEventListener("click", function () {
+  AL.off = 0;
+  $("alOff").value = 0; $("alOffV").textContent = "0"; alDraw();
+});
+alDraw();
+
+/* ════ 6. SHOULD YOU POOL THIS? ═══════════════════════════════ */
+function wnRecommend() {
+  var life = $("wnLife").value, size = $("wnSize").value, bound = $("wnBound").value, freq = $("wnFreq").value;
+  var t, why, code;
+  if (freq === "cold") {
+    t = "Just use new";
+    why = "Nothing here runs on the hot path. A pool would add a slab, a capacity you have to defend and an exhaustion path, and would buy you exactly nothing. Spend the complexity budget somewhere it shows up in the histogram.";
+    code = '<span class="k">auto</span> cfg = std::make_unique&lt;Config&gt;(load(path));  <span class="c">// startup: fine</span>';
+  } else if (life === "tick") {
+    t = "Arena — monotonic_buffer_resource";
+    why = "Everything dies together at the end of the tick, so you never need a per-object free. One offset forward per allocation, one store to reclaim the lot. Any size, any alignment, no fragmentation. Objects must be trivially destructible, or you destroy them yourself before release()." +
+      (size === "any" ? " Arbitrary sizes are exactly the case a fixed-size pool cannot serve." : "");
+    code = '<span class="k">alignas</span>(<span class="n">64</span>) std::byte scratch_[<span class="n">32</span>*<span class="n">1024</span>];\n' +
+      'std::pmr::monotonic_buffer_resource rsrc_{scratch_, <span class="k">sizeof</span>(scratch_),\n' +
+      '                                          std::pmr::null_memory_resource()};\n' +
+      '<span class="c">// ... per tick ...</span>  rsrc_.release();';
+  } else if (bound === "unbounded" || life === "unknown") {
+    t = "Do not pool this yet — bound it first";
+    why = "A pool must have an answer for exhaustion, and the answer has to be defensible. With no bound on the count (or no idea of the lifetime) you cannot size the slab, so you would be shipping a heap with a cliff in it. Find the bound first: cap open orders, cap in-flight messages, cap depth. The cap is a risk control you wanted anyway.";
+    code = '<span class="k">static constexpr</span> std::size_t kMaxOpenOrders = <span class="n">4096</span>;  <span class="c">// defend this number</span>\n' +
+      '<span class="k">static_assert</span>(kMaxOpenOrders &gt;= <span class="n">2</span> * kPeakOrdersPerTick);';
+  } else if (size === "one") {
+    t = "Fixed-size ObjectPool&lt;T, N&gt;";
+    why = "One size, an individual lifetime, a known worst case, and it is called from the hot path — this is the textbook fit. O(1) pop to allocate, O(1) push to free, zero fragmentation, and the slot comes back hot in L1 because the free-list is LIFO. Size N for the worst tick plus carry-over, keep the pool per-thread, and export the exhaustion counter." +
+      (freq === "warm" ? " Once per order is still thousands of times a session and still on the path that acks; pool it." : "");
+    code = '<span class="k">alignas</span>(<span class="n">64</span>) ObjectPool&lt;Order, <span class="n">4096</span>&gt; order_pool_{};\n' +
+      'Order* o = order_pool_.alloc(sym, px, qty);\n' +
+      '<span class="k">if</span> (!o) { ++dropped_; <span class="k">return</span>; }        <span class="c">// documented policy</span>\n' +
+      'order_pool_.release(o);                  <span class="c">// dtor + O(1) push</span>';
+  } else if (size === "few") {
+    t = "std::pmr::unsynchronized_pool_resource";
+    why = "A handful of known sizes with individual lifetimes is what the standard's pool resource is for: it keeps one pooled free-list per size class, with no locking — the “unsynchronized” is the feature, not a warning. You get O(1) allocate and free per class without hand-writing N pools. Give it a fixed upstream and set options so it never grows past what you sized.";
+    code = 'std::pmr::pool_options opt{ <span class="c">/*max_blocks_per_chunk*/</span> <span class="n">512</span>,\n' +
+      '                            <span class="c">/*largest_required_pool_block*/</span> <span class="n">256</span> };\n' +
+      'std::pmr::unsynchronized_pool_resource pool_{opt, &amp;upstream_};\n' +
+      'std::pmr::vector&lt;Level&gt; v{&amp;pool_};';
+  } else {
+    t = "Arena per tick, or keep it off the hot path";
+    why = "Arbitrary, data-dependent sizes with individual lifetimes is the one combination no cheap allocator handles well. Either collapse the lifetime — make everything die at the end of the tick, and use an arena — or move the allocation off the hot path entirely and pre-own the buffer. Reaching for a general-purpose allocator with a bounded worst case is a research project, not a homework.";
+    code = '<span class="c">// collapse the lifetime instead of chasing the allocator:</span>\n' +
+      '<span class="c">// build into a reused, pre-reserved buffer, then reset the offset.</span>\n' +
+      'buf_.clear();                 <span class="c">// capacity kept, no free, no malloc</span>';
+  }
+  $("wnT").innerHTML = t;
+  $("wnWhy").innerHTML = why;
+  $("wnCode").innerHTML = code;
+}
+Array.prototype.forEach.call(document.querySelectorAll("#wnLife,#wnSize,#wnBound,#wnFreq"), function (s) {
+  s.addEventListener("change", wnRecommend);
+});
+$("wnGo").addEventListener("click", wnRecommend);
+wnRecommend();
+
+/* ── MCQ engine (shared across week pages) ───────────────────── */
+Array.prototype.forEach.call(document.querySelectorAll(".mcq"), function (q) {
+  var answer = parseInt(q.getAttribute("data-a"), 10);
+  var opts = Array.prototype.slice.call(q.querySelectorAll(".opt"));
+  var fb = q.querySelector(".fb");
+  opts.forEach(function (o, i) {
+    o.addEventListener("click", function () {
+      if (q.dataset.done === "1") return;
+      q.dataset.done = "1";
+      var right = i === answer;
+      opts.forEach(function (b, j) {
+        b.disabled = true;
+        if (j === answer) b.classList.add("right");
+        else if (j === i) b.classList.add("wrong");
+        else b.classList.add("dim");
+      });
+      fb.innerHTML = (right ? "<b>Correct.</b> " : "<b>Not quite.</b> ") + q.getAttribute("data-exp");
+      fb.className = "fb show " + (right ? "good" : "poor");
+    });
+  });
+});
+</script>
+</body>
+</html>

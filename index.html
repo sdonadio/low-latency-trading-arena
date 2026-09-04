@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" href="data:," />
+<title>Low-Latency Trading Arena — fifteen topics, one system</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    /* ── Low-Latency Trading Arena · shared palette (identical on every page) ── */
+    --accent:       #7c3aed;
+    --accent-2:     #c4b5fd;
+    --accent-3:     #ede9fe;
+    --accent-rgb:   124,58,237;
+    --accent-2-rgb: 196,181,253;
+    --bg:           #0f1115;
+    --panel:        #181b22;
+    --panel2:       #1e222b;
+    --panel-2:      #13161b;
+    --ink:          #e8e6e3;
+    --ink-dim:      #c6c3bf;
+    --ink-mute:     #6f757f;
+    --muted:        #9aa0a6;
+    --dim:          #5f6673;
+    --line:         #272c36;
+    --line-2:       #333a47;
+    --border:       #272c36;
+    --ok:           #3fb950;
+    --warn:         #d29922;
+    --bad:          #f85149;
+    --info:         #6cb6ff;
+    --sky:          #58a6ff;
+    --violet:       #a78bfa;
+    --teal:         #2dd4bf;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.62;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent-2);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  /* ── nav / footer ─────────────────────────────────────────── */
+  nav.top{position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+    padding:11px 22px;background:rgba(15,17,21,.94);border-bottom:1px solid var(--line)}
+  nav.top>a:first-child{font-weight:800;letter-spacing:-.2px;color:var(--ink);font-size:14.5px;
+    border-left:3px solid var(--accent);padding-left:10px}
+  nav.top .crumbs{font-size:12px;color:var(--muted)}
+  nav.top .crumbs b{color:var(--ink);font-weight:700}
+  footer{border-top:1px solid var(--line);background:var(--panel);
+    padding:26px 22px 34px;text-align:center;font-size:11.5px;color:var(--dim);letter-spacing:.3px}
+
+  /* ── sections & typography ────────────────────────────────── */
+  section{max-width:1180px;margin:0 auto;padding:36px 22px 42px;border-top:1px solid var(--line)}
+  section#hero{border-top:none}
+  .kicker{font-size:10.5px;font-weight:800;letter-spacing:1.9px;text-transform:uppercase;color:var(--accent-2)}
+  h1{font-size:clamp(26px,4.2vw,40px);font-weight:800;letter-spacing:-.9px;line-height:1.13;margin:10px 0 6px}
+  h2{font-size:21px;font-weight:700;letter-spacing:-.3px;margin:4px 0 4px}
+  h3{font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);margin-bottom:11px}
+  h4{font-size:13.5px;font-weight:700;margin-bottom:5px}
+  p{margin:9px 0;max-width:82ch}
+  .lead{color:var(--muted);font-size:15px;max-width:84ch}
+  .sub{color:var(--muted);font-size:12.5px}
+  strong{color:#fff;font-weight:650}
+  em.hi{color:var(--accent-2);font-style:normal;font-weight:600}
+  code,.mono{font-family:var(--mono);font-size:12.5px}
+  code{background:rgba(var(--accent-2-rgb),.13);color:#ddd4fb;padding:1px 5px;border-radius:4px}
+  ul.you{list-style:none;margin:16px 0 0;display:grid;gap:8px}
+  ul.you li{position:relative;padding-left:26px;font-size:13.5px;color:var(--ink);max-width:78ch}
+  ul.you li::before{content:"";position:absolute;left:4px;top:8px;width:8px;height:8px;border-radius:2px;
+    background:var(--accent);box-shadow:0 0 0 3px rgba(var(--accent-rgb),.22)}
+  ul.plain{list-style:none;display:grid;gap:7px;font-size:13px;color:var(--muted)}
+  ul.plain li{padding-left:16px;position:relative}
+  ul.plain li::before{content:"\2022";position:absolute;left:2px;color:var(--accent-2)}
+
+  /* ── panels & layout ──────────────────────────────────────── */
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .panel.tight{padding:13px 14px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;align-items:start}
+  .split{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:18px;align-items:start}
+  .split-r{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:18px;align-items:start}
+  .stack{display:grid;gap:14px}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+
+  /* ── controls ─────────────────────────────────────────────── */
+  .btn{font-family:inherit;font-size:12px;font-weight:650;cursor:pointer;color:var(--ink);
+    background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:7px 14px;transition:.15s}
+  .btn:hover:not(:disabled){border-color:var(--accent-2);color:#fff}
+  .btn:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .btn:disabled{opacity:.35;cursor:not-allowed}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.primary:hover:not(:disabled){filter:brightness(1.25)}
+  .btn.on{background:rgba(var(--accent-rgb),.28);border-color:var(--accent-2);color:#fff}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+  .tab{font-family:inherit;font-size:12px;font-weight:650;cursor:pointer;color:var(--muted);
+    background:transparent;border:1px solid var(--line);border-radius:20px;padding:6px 14px;transition:.15s}
+  .tab:hover{color:var(--ink)}
+  .tab[aria-selected="true"]{background:rgba(var(--accent-rgb),.3);border-color:var(--accent-2);color:#fff}
+  .tab:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .ctl{display:grid;gap:4px;margin-bottom:12px}
+  .ctl label{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);
+    display:flex;justify-content:space-between;gap:10px}
+  .ctl label b{font-family:var(--mono);color:var(--accent-2);font-size:12px;text-transform:none;letter-spacing:0}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:3px;
+    background:#2b313d;outline:none;cursor:pointer}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;
+    background:var(--accent-2);border:2px solid var(--bg);cursor:pointer}
+  input[type=range]::-moz-range-thumb{width:15px;height:15px;border-radius:50%;background:var(--accent-2);
+    border:2px solid var(--bg);cursor:pointer}
+  input[type=range]:focus-visible{box-shadow:0 0 0 3px rgba(var(--accent-2-rgb),.4)}
+  select,textarea,input[type=text]{font-family:var(--mono);font-size:12.5px;color:var(--ink);
+    background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:7px 9px;width:100%}
+  select:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px solid var(--accent-2);outline-offset:1px}
+  textarea{line-height:1.55;resize:vertical}
+
+  /* ── stats / pills / code ─────────────────────────────────── */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:1px;
+    background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .stat{background:var(--panel);padding:10px 12px}
+  .stat .sl{font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--dim)}
+  .stat .sv{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--ink);margin-top:3px}
+  .stat .sv.ok{color:var(--ok)} .stat .sv.bad{color:var(--bad)} .stat .sv.warn{color:var(--warn)}
+  .stat .sv.acc{color:var(--accent-2)}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;letter-spacing:.5px;
+    padding:3px 9px;border-radius:20px;border:1px solid var(--line);color:var(--muted)}
+  .pill.ok{color:var(--ok);border-color:rgba(63,185,80,.5);background:rgba(63,185,80,.1)}
+  .pill.bad{color:var(--bad);border-color:rgba(248,81,73,.5);background:rgba(248,81,73,.1)}
+  .pill.warn{color:var(--warn);border-color:rgba(210,153,34,.5);background:rgba(210,153,34,.1)}
+  .pill.acc{color:var(--accent-2);border-color:rgba(var(--accent-2-rgb),.5);background:rgba(var(--accent-rgb),.18)}
+  pre.code{font-family:var(--mono);font-size:11.8px;line-height:1.62;background:#0b0e14;color:#dbe3ea;
+    border:1px solid var(--line);border-radius:10px;padding:13px 14px;overflow-x:auto;white-space:pre}
+  pre.code .k{color:#6cb6ff} pre.code .s{color:#8ddb8c} pre.code .c{color:#6b7484;font-style:italic}
+  pre.code .n{color:#e0b070} pre.code .b{color:#ddd4fb;font-weight:700}
+  .note{border-left:3px solid var(--accent);background:rgba(var(--accent-rgb),.12);border-radius:0 8px 8px 0;
+    padding:10px 13px;font-size:12.5px;color:var(--muted)}
+  .note b{color:var(--ink)}
+  .log{font-family:var(--mono);font-size:11.5px;max-height:230px;overflow-y:auto;display:grid;gap:5px}
+  .log div{background:var(--panel2);border-left:3px solid var(--line);border-radius:0 6px 6px 0;padding:6px 9px;color:var(--muted)}
+  .log div.hl{border-left-color:var(--accent-2);color:var(--ink);background:rgba(var(--accent-rgb),.15)}
+  .log div.ok{border-left-color:var(--ok)} .log div.bad{border-left-color:var(--bad)}
+  svg{display:block;max-width:100%;height:auto}
+  .svgwrap{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px;overflow-x:auto}
+  table.t{width:100%;border-collapse:collapse;font-size:12px}
+  table.t th{font-size:9.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--dim);
+    text-align:left;padding:0 8px 7px;border-bottom:1px solid var(--line)}
+  table.t td{padding:7px 8px;border-bottom:1px solid rgba(39,44,54,.6);color:var(--muted);font-family:var(--mono);font-size:11.8px}
+  table.t td.n{color:var(--ink);font-weight:600}
+
+  /* ── pitfalls ─────────────────────────────────────────────── */
+  details.pit{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:10px;overflow:hidden}
+  details.pit>summary{cursor:pointer;padding:12px 15px;font-size:13.5px;font-weight:650;color:var(--ink);
+    list-style:none;display:flex;gap:11px;align-items:flex-start}
+  details.pit>summary::-webkit-details-marker{display:none}
+  details.pit>summary::before{content:"\25B8";color:var(--accent-2);font-size:12px;line-height:1.5;transition:.2s}
+  details.pit[open]>summary::before{transform:rotate(90deg)}
+  details.pit>summary:focus-visible{outline:2px solid var(--accent-2);outline-offset:-2px}
+  details.pit .body{padding:0 15px 15px 39px;font-size:13px;color:var(--muted);display:grid;gap:9px}
+  details.pit .body .fix{color:var(--ok);font-weight:600}
+
+  /* ── MCQ ──────────────────────────────────────────────────── */
+  .mcq{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 17px;margin-bottom:13px}
+  .mcq .q{font-size:13.8px;font-weight:650;color:var(--ink);margin:0 0 11px;max-width:84ch}
+  .mcq .q span{color:var(--accent-2);font-family:var(--mono);margin-right:7px}
+  .opts{display:grid;gap:7px}
+  .opt{text-align:left;font-family:inherit;font-size:13px;cursor:pointer;color:var(--muted);
+    background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:9px 12px;transition:.15s}
+  .opt:hover:not(:disabled){border-color:var(--accent-2);color:var(--ink)}
+  .opt:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .opt.right{border-color:var(--ok);background:rgba(63,185,80,.13);color:#bce8c4}
+  .opt.wrong{border-color:var(--bad);background:rgba(248,81,73,.12);color:#f4b6b1}
+  .opt.dim{opacity:.5}
+  .fb{margin-top:11px;font-size:12.5px;line-height:1.6;color:var(--muted);display:none;
+    border-left:3px solid var(--line);padding-left:11px}
+  .fb.show{display:block}
+  .fb.show.good{border-left-color:var(--ok)} .fb.show.poor{border-left-color:var(--bad)}
+  .fb b{color:var(--ink)}
+
+  /* ── next ─────────────────────────────────────────────────── */
+  .nextgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+  .nextcard{display:block;background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:15px 17px;transition:.18s;color:inherit}
+  .nextcard:hover{border-color:var(--accent-2);transform:translateY(-2px);text-decoration:none}
+  .nextcard .nl{font-size:10px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--accent-2)}
+  .nextcard .nt{font-size:14.5px;font-weight:700;color:var(--ink);margin-top:5px}
+  .nextcard .nd{font-size:12px;color:var(--muted);margin-top:5px}
+
+  @media (max-width:720px){
+    .grid2,.grid3,.split,.split-r{grid-template-columns:1fr}
+    section{padding:26px 15px 32px}
+    nav.top{padding:10px 15px;gap:8px}
+    nav.top .crumbs{font-size:11px}
+    p,.lead{max-width:none}
+  }
+
+  /* ── index-only ───────────────────────────────────────────── */
+  #hero{padding:64px 22px 46px;text-align:center;
+    background:radial-gradient(ellipse 900px 380px at 50% -12%,rgba(var(--accent-rgb),.34),transparent 66%),
+               radial-gradient(ellipse 620px 260px at 12% 108%,rgba(var(--accent-2-rgb),.1),transparent 62%)}
+  #hero h1{margin-left:auto;margin-right:auto;max-width:20ch}
+  #hero h1 .g{background:linear-gradient(92deg,var(--accent-2),#ddd0fe,#7c3aed);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  #hero .lead{margin:16px auto 0;max-width:70ch}
+  #hero .cta{margin-top:28px;display:flex;gap:11px;justify-content:center;flex-wrap:wrap}
+  #hero .cta a{font-size:13px;font-weight:700;padding:11px 22px;border-radius:9px;border:1px solid var(--line);color:var(--muted)}
+  #hero .cta a.p{background:var(--accent);border-color:var(--accent);color:#fff}
+  #hero .cta a:hover{text-decoration:none;border-color:var(--accent-2);color:#fff}
+  #hero .cta a.p:hover{filter:brightness(1.25)}
+  .facts{display:flex;gap:0;justify-content:center;flex-wrap:wrap;margin:32px auto 0;max-width:820px;
+    border:1px solid var(--line);border-radius:12px;background:var(--panel);overflow:hidden}
+  .fact{flex:1;min-width:135px;padding:13px 16px;border-right:1px solid var(--line)}
+  .fact:last-child{border-right:none}
+  .fact .fv{font-family:var(--mono);font-size:19px;font-weight:700;color:var(--accent-2)}
+  .fact .fl{font-size:10px;font-weight:700;letter-spacing:1.1px;text-transform:uppercase;color:var(--dim);margin-top:3px}
+
+  .weeks{display:grid;grid-template-columns:repeat(auto-fill,minmax(298px,1fr));gap:16px;margin-top:20px}
+  .wk{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);
+    border-radius:13px;overflow:hidden;color:inherit;transition:.2s}
+  .wk:hover{transform:translateY(-4px);border-color:var(--accent-2);box-shadow:0 14px 34px -18px rgba(var(--accent-rgb),.9);text-decoration:none}
+  .wk .art{height:96px;background:linear-gradient(165deg,rgba(255,255,255,.03),transparent 60%),var(--panel2);
+    border-bottom:1px solid var(--line)}
+  .wk .art svg{width:100%;height:96px}
+  .wk .bd{padding:14px 16px 16px;display:flex;flex-direction:column;flex:1}
+  .wk .n{font-size:10px;font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:var(--accent-2)}
+  .wk h3{font-size:15.5px;font-weight:700;letter-spacing:-.2px;color:var(--ink);text-transform:none;
+    letter-spacing:-.2px;margin:6px 0 0}
+  .wk p{font-size:12.4px;color:var(--muted);margin:7px 0 0;flex:1;max-width:none}
+  .wk .go{margin-top:12px;font-size:11.5px;font-weight:700;color:var(--accent-2)}
+  .wk .go::after{content:" \2192"}
+  .wk .tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:10px}
+  .wk .tags span{font-size:9.5px;font-weight:650;padding:2px 8px;border-radius:11px;border:1px solid var(--line);color:var(--dim)}
+
+  .chk{display:grid;gap:9px}
+  .chk .item{display:flex;gap:11px;align-items:flex-start;background:var(--panel);border:1px solid var(--line);
+    border-radius:10px;padding:11px 14px;transition:.18s}
+  .chk .item.done{border-color:rgba(63,185,80,.45);background:rgba(63,185,80,.07)}
+  .chk input{margin-top:3px;width:16px;height:16px;accent-color:var(--accent);flex-shrink:0;cursor:pointer}
+  .chk .txt{flex:1;min-width:0}
+  .chk .txt .t{font-size:13px;font-weight:650;color:var(--ink)}
+  .chk .item.done .txt .t{color:var(--ok)}
+  .chk .txt .c{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:4px;
+    word-break:break-word;background:#0b0e14;border:1px solid var(--line);border-radius:6px;padding:5px 8px}
+  .bar{height:6px;border-radius:4px;background:#2b313d;overflow:hidden;margin:12px 0 6px}
+  .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--accent-2));transition:width .3s}
+  .smoke{display:flex;align-items:center;gap:11px;font-size:13px;font-weight:700}
+  .smoke .lamp{width:14px;height:14px;border-radius:50%;background:var(--bad);box-shadow:0 0 12px -1px var(--bad)}
+  .smoke.green .lamp{background:var(--ok);box-shadow:0 0 12px -1px var(--ok)}
+
+  .role .rp{display:none} .role .rp.on{display:grid;gap:11px}
+  @media (max-width:720px){ .weeks{grid-template-columns:1fr} #hero{padding:44px 15px 34px} }
+
+
+  /* ── index-only · arcs + real-time-loop widget ─────────────── */
+  .arcband{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin:26px 0 4px;
+    padding-bottom:7px;border-bottom:1px solid var(--line)}
+  .arcband .an{font-size:11px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent-2)}
+  .arcband .ad{font-size:12px;color:var(--muted)}
+  .arcblock.off{display:none}
+  .loopgrid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:18px;align-items:start}
+  .budget{display:grid;gap:9px;margin-top:6px}
+  .brow{display:grid;grid-template-columns:96px minmax(0,1fr);gap:10px;align-items:center}
+  .brow .bl{font-size:10.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--dim)}
+  .btrack{position:relative;height:22px;border-radius:6px;background:#0b0e14;border:1px solid var(--line);overflow:hidden}
+  .btrack i{display:block;height:100%;width:0;transition:width .25s ease}
+  .btrack .lbl{position:absolute;top:0;right:7px;line-height:22px;font-family:var(--mono);font-size:10.5px;color:var(--ink-dim)}
+  .btrack .dl{position:absolute;top:-1px;bottom:-1px;width:2px;background:var(--bad);box-shadow:0 0 7px var(--bad)}
+  .brow.total .bl{color:var(--ink)}
+  .verdict{margin-top:14px;font-family:var(--mono);font-size:13px;font-weight:700;letter-spacing:.6px}
+  .verdict.met{color:var(--ok)} .verdict.miss{color:var(--bad)}
+
+
+  /* ── index-only · two-track map + tick-to-trade waterfall ──── */
+  .trackbar{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin:26px 0 4px;
+    padding-bottom:7px;border-bottom:1px solid var(--line)}
+  .trackbar .an{font-size:11px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent-2)}
+  .trackbar .ad{font-size:12px;color:var(--muted)}
+  .ttgrid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:18px;align-items:start}
+  .stagerow{display:grid;grid-template-columns:118px minmax(0,1fr) 74px;gap:10px;align-items:center;
+    padding:4px 6px;border-radius:7px;border:1px solid transparent;cursor:pointer;text-align:left;
+    background:transparent;font-family:inherit;width:100%}
+  .stagerow:hover{border-color:var(--line-2)}
+  .stagerow[aria-pressed="true"]{border-color:var(--accent-2);background:rgba(var(--accent-rgb),.13)}
+  .stagerow:focus-visible{outline:2px solid var(--accent-2);outline-offset:1px}
+  .stagerow .sn{font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--dim)}
+  .stagerow[aria-pressed="true"] .sn{color:var(--ink)}
+  .stagerow .sw2{font-family:var(--mono);font-size:10.5px;color:var(--accent-2);text-align:right}
+  .wtrack{position:relative;height:20px;border-radius:6px;background:#0b0e14;border:1px solid var(--line);overflow:hidden}
+  .wtrack i{display:block;height:100%;width:0;transition:width .2s ease}
+  .wtrack .lbl{position:absolute;top:0;right:6px;line-height:20px;font-family:var(--mono);font-size:10px;color:var(--ink-dim)}
+  .totrow{display:grid;grid-template-columns:118px minmax(0,1fr) 74px;gap:10px;align-items:center;
+    margin-top:9px;padding-top:9px;border-top:1px solid var(--line)}
+  .totrow .sn{font-size:10.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--ink)}
+  .totrow .wtrack{height:26px}
+  .totrow .wtrack .lbl{line-height:26px;font-size:11px}
+  .dlmark{position:absolute;top:-1px;bottom:-1px;width:2px;background:var(--bad);box-shadow:0 0 7px var(--bad)}
+  .verdict{margin-top:14px;font-family:var(--mono);font-size:13px;font-weight:700;letter-spacing:.6px}
+  .verdict.met{color:var(--ok)} .verdict.miss{color:var(--bad)}
+  .scale{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:14px}
+  .scale button{font-family:inherit;text-align:left;cursor:pointer;background:var(--panel);
+    border:1px solid var(--line);border-radius:11px;padding:12px 14px;transition:.15s;color:inherit}
+  .scale button:hover{border-color:var(--accent-2)}
+  .scale button[aria-pressed="true"]{border-color:var(--accent-2);background:rgba(var(--accent-rgb),.16)}
+  .scale button:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .scale .u{font-family:var(--mono);font-size:17px;font-weight:700;color:var(--accent-2)}
+  .scale .un{font-size:10px;font-weight:700;letter-spacing:1.1px;text-transform:uppercase;color:var(--dim);margin-top:3px}
+  .startlist{display:grid;gap:11px;margin-top:16px}
+  .startlist a{display:flex;gap:13px;align-items:flex-start;background:var(--panel);border:1px solid var(--line);
+    border-radius:11px;padding:13px 15px;transition:.18s;color:inherit}
+  .startlist a:hover{border-color:var(--accent-2);text-decoration:none;transform:translateY(-2px)}
+  .startlist .num{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--accent-2);
+    background:rgba(var(--accent-rgb),.2);border:1px solid var(--accent-2);border-radius:6px;
+    width:24px;height:24px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .startlist .t{font-size:13.5px;font-weight:700;color:var(--ink)}
+  .startlist .d{font-size:12px;color:var(--muted);margin-top:3px}
+  @media (max-width:720px){ .ttgrid{grid-template-columns:minmax(0,1fr)}
+    .stagerow,.totrow{grid-template-columns:84px minmax(0,1fr) 62px}
+    .stagerow .sn{font-size:9.5px} .stagerow .sw2{font-size:9.5px} }
+
+  /* ── mobile guard (identical on every page): single column under 720px,
+        no horizontal overflow. Must stay last in the sheet. ───────────── */
+  @media (max-width:720px){
+    .grid2,.grid3,.grid2.narrow-right,.split,.split-r,.codepair,
+    .nextgrid,.dash,.toggles,.lanes,.weeknav,.weeks,.roles,.stack{
+      grid-template-columns:minmax(0,1fr)}
+    [class*="grid"]>*,.stack>*,.wrap>*,.panel,.panel.tight,.nextcard,.wk,.row>*{min-width:0}
+    pre,pre.code,.svgwrap,svg,canvas,table,select,input,textarea,.mono{max-width:100%}
+    pre,pre.code,.svgwrap,.tablewrap{overflow-x:auto}
+    code,.mono{overflow-wrap:anywhere}
+    .ctl,.ctl>*,.controls>*,.row,.legend>*{min-width:0}
+    .ctl{flex-wrap:wrap} .ctl select,.ctl input[type=range]{flex:1 1 100%;width:100%}
+    p,.lead,.sub,.promise{max-width:none}
+  }
+</style>
+</head>
+<body>
+
+<nav class="top"><a href="index.html">Low-Latency Trading Arena</a><span class="crumbs"><b>Course home</b> · <a href="week1.html">Week 1 →</a></span></nav>
+
+
+<!-- ══════════════ HERO ══════════════ -->
+<section id="hero">
+  <div class="kicker">15 topics · 2 tracks · one tick-to-trade path</div>
+  <h1>Low-Latency<br/><span class="g">Trading Systems</span></h1>
+  <p class="lead">From a <strong>market-data packet</strong> to an <strong>order in microseconds</strong> —
+  fifteen topics, one system. This is a graduate C++ course in which the deliverable is a trading bot that
+  reacts to a live order book faster than the bot sitting next to it, and the grade is a
+  <em class="hi">percentile</em>: p50, p99 and p99.9 of tick-to-trade. Every topic below is one stage of
+  that path, or one C++ tool you need to make that stage cheap.</p>
+  <div class="cta">
+    <a class="p" href="week1.html">Start with Week 1</a>
+    <a href="#map">See the two-track map</a>
+    <a href="#tt">Spend the latency budget</a>
+    <a href="#start">Get set up</a>
+  </div>
+  <div class="facts">
+    <div class="fact"><div class="fv">15</div><div class="fl">Topics, one system</div></div>
+    <div class="fact"><div class="fv">2</div><div class="fl">Tracks · same content</div></div>
+    <div class="fact"><div class="fv">p99.9</div><div class="fl">The grade · never the mean</div></div>
+    <div class="fact"><div class="fv">64 B</div><div class="fl">The cache line, all term</div></div>
+  </div>
+</section>
+
+<!-- ══════════════ TWO-TRACK MAP ══════════════ -->
+<section id="map">
+  <div class="kicker">The learning path</div>
+  <h2>Fifteen topics, two tracks, identical content</h2>
+  <p class="lead">The material is taught in two formats. A <strong>15-week track</strong> gives each topic
+  its own session; a condensed <strong>9-session track</strong> pairs adjacent topics into one longer
+  meeting. Nothing is dropped and nothing is reordered — the pairs are exactly the ones that share a lab.
+  Flip the switch and watch the fifteen cards regroup.</p>
+
+  <div class="row" style="margin-top:16px" role="group" aria-label="Choose which track to view the map in">
+    <div class="sw" id="trackSw">
+      <button type="button" data-t="w15" aria-pressed="true">15-week track</button>
+      <button type="button" data-t="s9" aria-pressed="false">9-session track</button>
+    </div>
+    <span class="pill acc" id="trackCount">15 sessions · one topic each</span>
+  </div>
+
+  <div id="mapHost"></div>
+
+  <div class="note" style="margin-top:18px"><b>Reading the pairs.</b> Weeks 2+3 are one cost-model story
+  (what an operation costs, then who owns the memory); 4+5 are the two halves of “stop calling the
+  allocator”; 6+7 turn compile-time machinery into a real order book; 8+9 are the O(1) data structures and
+  the memory model they need; 11+12 are the wire and the I/O that carries it; 13+14 are the last
+  microseconds and the tail they hide in. Weeks 1, 10 and 15 stand alone in both tracks.</div>
+</section>
+
+<!-- ══════════════ TIME SCALES ══════════════ -->
+<section id="scale">
+  <div class="kicker">Calibration</div>
+  <h2>What a nanosecond is, and why you can feel one</h2>
+  <p class="lead">Before any of this is useful you need a physical sense of the units. Pick one and see
+  what fits inside it — the numbers are the reason this course exists.</p>
+  <div class="scale" id="scaleSw" role="group" aria-label="Pick a time scale to see what fits inside it">
+    <button type="button" data-s="ns1" aria-pressed="true"><div class="u">1 ns</div><div class="un">one nanosecond</div></button>
+    <button type="button" data-s="ns100" aria-pressed="false"><div class="u">100 ns</div><div class="un">a DRAM miss</div></button>
+    <button type="button" data-s="us1" aria-pressed="false"><div class="u">1 µs</div><div class="un">one microsecond</div></button>
+    <button type="button" data-s="us10" aria-pressed="false"><div class="u">10 µs</div><div class="un">a colocated round trip</div></button>
+    <button type="button" data-s="ms1" aria-pressed="false"><div class="u">1 ms</div><div class="un">one millisecond</div></button>
+  </div>
+  <div class="split" style="margin-top:16px">
+    <div class="panel"><h3>What fits inside it</h3><ul class="plain" id="scaleList"></ul></div>
+    <div class="stack">
+      <div class="stats">
+        <div class="stat"><div class="sl">Light in vacuum</div><div class="sv acc" id="scL">—</div></div>
+        <div class="stat"><div class="sl">Light in fibre</div><div class="sv" id="scF">—</div></div>
+        <div class="stat"><div class="sl">Cycles at 3 GHz</div><div class="sv" id="scC">—</div></div>
+        <div class="stat"><div class="sl">L1 hits</div><div class="sv" id="scH">—</div></div>
+      </div>
+      <div class="note" id="scNote"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ TICK-TO-TRADE WATERFALL ══════════════ -->
+<section id="tt">
+  <div class="kicker">The one path</div>
+  <h2>Tick to trade — spend the budget, stage by stage</h2>
+  <p class="lead">This is the whole course in one diagram. A packet lands on the NIC; some number of
+  nanoseconds later an order leaves it. Every stage below is owned by a topic on the map, and every stage
+  is a slider. Move them, switch the kernel off, and watch the total cross the budget line — because
+  <em class="hi">the budget is not the mean, it is the tail</em>, and the tail is what you are graded on.</p>
+
+  <div class="ttgrid" style="margin-top:18px">
+    <div class="stack">
+      <div class="panel">
+        <h3>The waterfall</h3>
+        <div id="ttRows" role="group" aria-label="Tick-to-trade stages; select a stage to read what it is"></div>
+        <div class="totrow">
+          <div class="sn">Tick to trade</div>
+          <div class="wtrack" id="ttTotTrack"><i id="ttTotBar"></i><span class="dlmark" id="ttDlMark"></span><span class="lbl" id="ttTotLbl"></span></div>
+          <div class="sw2" id="ttTotPct"></div>
+        </div>
+        <div class="verdict" id="ttVerdict">—</div>
+      </div>
+      <div class="svgwrap">
+        <svg id="ttSvg" viewBox="0 0 660 210" role="img" aria-label="A left-to-right pipeline of tick-to-trade stages, each box sized by its share of the total latency, with a budget marker"></svg>
+      </div>
+    </div>
+
+    <div class="stack">
+      <div class="panel">
+        <h3>Controls</h3>
+        <div class="ctl"><label for="ttSel">Stage <b id="ttSelName">NIC → host</b></label>
+          <select id="ttSel" aria-label="Choose which stage the slider edits"></select></div>
+        <div class="ctl"><label for="ttVal">Stage cost <b id="ttValV">—</b></label>
+          <input type="range" id="ttVal" min="0" max="100" value="50" aria-label="Cost of the selected stage, in nanoseconds"/></div>
+        <div class="ctl"><label for="ttBud">Budget <b id="ttBudV">10.0 µs</b></label>
+          <input type="range" id="ttBud" min="10" max="600" value="100" aria-label="Tick-to-trade budget, in tenths of a microsecond"/></div>
+        <div class="ctl"><label for="ttJit">Jitter <b id="ttJitV">18%</b></label>
+          <input type="range" id="ttJit" min="0" max="150" value="18" aria-label="Jitter as a percentage of the total, used for the p99 and p99.9 estimate"/></div>
+        <div class="row" role="group" aria-label="Choose whether packets go through the kernel or bypass it">
+          <div class="sw" id="ttKsw">
+            <button type="button" data-k="kernel" aria-pressed="true">Kernel stack</button>
+            <button type="button" data-k="bypass" aria-pressed="false">Kernel bypass</button>
+          </div>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn" type="button" id="ttReset">Reset to nominal</button>
+          <button class="btn" type="button" id="ttBreak">Allocate on the hot path</button>
+        </div>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="sl">p50</div><div class="sv acc" id="ttP50">—</div></div>
+        <div class="stat"><div class="sl">p99</div><div class="sv" id="ttP99">—</div></div>
+        <div class="stat"><div class="sl">p99.9</div><div class="sv" id="ttP999">—</div></div>
+        <div class="stat"><div class="sl">Over budget</div><div class="sv" id="ttMiss">—</div></div>
+      </div>
+      <div class="panel tight">
+        <h3>This stage</h3>
+        <h4 id="ttWhat">NIC → host</h4>
+        <p class="sub" id="ttDesc"></p>
+        <div class="row" style="margin-top:9px"><span class="pill acc" id="ttWeek"></span><span class="pill" id="ttRange"></span></div>
+      </div>
+      <div class="note"><b>Why p99.9, never the mean.</b> A bot with a 4 µs median and a 900 µs p99.9 loses
+      exactly the races that pay: the volatile ticks when every participant fires at once. A single heap
+      allocation, one page fault, one cache miss on a cold branch — none of them move the median and all of
+      them live in the tail. Week 14 is entirely about that sentence.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ START HERE ══════════════ -->
+<section id="start">
+  <div class="kicker">Before week 1</div>
+  <h2>Start here — four things, in this order</h2>
+  <div class="split" style="margin-top:4px">
+    <div>
+      <div class="startlist">
+        <a href="week1.html"><span class="num">1</span><span><span class="t">Read Week 1 · HFT Landscape &amp; Market Microstructure</span>
+          <span class="d">The market you are about to trade in: the order book, price-time priority, and why 10 µs beats 100 µs. No C++ required yet.</span></span></a>
+        <a href="https://github.com/sdonadio/hft-cpp-starter-columbia"><span class="num">2</span><span><span class="t">Clone a starter repo and run its test suite</span>
+          <span class="d">Two public starters, one per track. Almost every test is red on day one — each red test is a challenge you implement over the term.</span></span></a>
+        <a href="https://sdonadio.github.io/computer-architecture-arena/"><span class="num">3</span><span><span class="t">Prequel · Computer Architecture Arena</span>
+          <span class="d">The machine your code actually runs on — caches, pipelines, the layer stack, and a tick-to-trade page that is this whole course in miniature.</span></span></a>
+        <a href="https://sdonadio.github.io/financial-markets-arena/"><span class="num">4</span><span><span class="t">Finance intro · Financial Markets Arena</span>
+          <span class="d">If “bid”, “spread”, “maker rebate” and “adverse selection” are new words, spend an hour here first. Week 1 assumes them.</span></span></a>
+      </div>
+      <div class="panel tight" style="margin-top:16px"><h3>Toolchain check</h3>
+        <div class="chk" id="chkList">
+          <label class="item"><input type="checkbox" data-i="0" aria-label="Step 1: a C++20 compiler"/>
+            <span class="txt"><span class="t">1 · A C++20 compiler</span>
+            <span class="c">clang++ --version   # or g++ --version — C++20</span></span></label>
+          <label class="item"><input type="checkbox" data-i="1" aria-label="Step 2: CMake 3.16 or newer"/>
+            <span class="txt"><span class="t">2 · CMake ≥ 3.16</span>
+            <span class="c">cmake --version</span></span></label>
+          <label class="item"><input type="checkbox" data-i="2" aria-label="Step 3: build the client"/>
+            <span class="txt"><span class="t">3 · The client builds</span>
+            <span class="c">cmake -B build &amp;&amp; cmake --build build</span></span></label>
+          <label class="item"><input type="checkbox" data-i="3" aria-label="Step 4: the grader runs"/>
+            <span class="txt"><span class="t">4 · The grader runs (mostly red — expected)</span>
+            <span class="c">make test        # writes report.json</span></span></label>
+          <label class="item"><input type="checkbox" data-i="4" aria-label="Step 5: a profiler and a sanitizer"/>
+            <span class="txt"><span class="t">5 · A profiler and the sanitizers</span>
+            <span class="c">perf --version ; clang++ -fsanitize=address,undefined</span></span></label>
+        </div>
+        <div class="bar"><i id="chkBar"></i></div>
+        <div class="smoke" id="smokeBadge"><span class="lamp"></span><span id="smokeTxt">Toolchain: RED · 0 of 5</span></div>
+        <p class="sub" style="margin-top:11px">Ticks are kept only in this browser tab and nothing is sent
+        anywhere. No GPU and no cloud account is needed for any topic in this course; a laptop and a
+        release build are the whole lab.</p>
+      </div>
+    </div>
+    <div class="stack">
+      <div class="panel tight"><h3>If something is red</h3>
+        <details class="pit"><summary><code>-std=c++20</code> is rejected</summary>
+          <div class="body"><p>The course uses designated initialisers, <code>constexpr</code> containers,
+          concepts in a couple of places, and <code>std::span</code>. A 2019-vintage compiler will not do.</p>
+          <p class="fix">Fix: GCC 11+ or Clang 13+. On macOS, Apple Clang from a current Xcode is fine;
+          <code>clang++ -std=c++20 -E -x c++ - &lt; /dev/null</code> is a one-line smoke test.</p></div></details>
+        <details class="pit"><summary>Your benchmark reports 0 ns per operation</summary>
+          <div class="body"><p>You measured nothing. At <code>-O2</code> the optimiser deletes work whose
+          result is never read, and your timing loop is exactly that.</p>
+          <p class="fix">Fix: sink every result through a <code>doNotOptimize</code> helper, and never
+          benchmark a debug build. Week 2 does this properly.</p></div></details>
+        <details class="pit"><summary><code>perf</code> is not available</summary>
+          <div class="body"><p><code>perf</code> is Linux-only, and even there it needs
+          <code>perf_event_paranoid</code> relaxed. On macOS the equivalents are
+          <code>xctrace</code>, <code>sample</code> and Instruments.</p>
+          <p class="fix">Fix: do the sampling work on Linux (a container or a small VM is enough), or use
+          the platform profiler — but keep the <code>steady_clock</code> harness as the number of record,
+          because it is the one that matches the grader.</p></div></details>
+        <details class="pit"><summary>The threaded version is slower than the single-threaded one</summary>
+          <div class="body"><p>Almost always false sharing: two hot variables landing on one 64-byte
+          cache line, so two cores invalidate each other on every write.</p>
+          <p class="fix">Fix: <code>alignas(64)</code> on each hot counter. Week 2 reproduces the
+          regression and Week 9 explains the coherency traffic underneath it.</p></div></details>
+      </div>
+      <div class="panel tight"><h3>What you will have built by the end</h3><ul class="plain">
+        <li>An order book in flat arrays with O(1) top-of-book and price-time priority.</li>
+        <li>A pool allocator and a lock-free SPSC ring, both with published ns/op numbers.</li>
+        <li>A hand-written binary parser for a market-data feed, with gap detection.</li>
+        <li>A bot whose tick-to-trade p99.9 you can defend from a flame graph.</li>
+      </ul></div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ NEXT ══════════════ -->
+<section id="next">
+  <div class="kicker">Where to go next</div>
+  <h2>Begin, get the code, or see the sibling arenas</h2>
+  <div class="nextgrid" style="margin-top:16px">
+    <a class="nextcard" href="week1.html"><div class="nl">Begin</div>
+      <div class="nt">Week 1 · HFT Landscape</div>
+      <div class="nd">The order book, price-time priority, queue position, and the latency budget that makes them matter.</div></a>
+    <a class="nextcard" href="https://github.com/sdonadio/hft-cpp-starter-columbia"><div class="nl">Code</div>
+      <div class="nt">Get the code · 15-week track starter</div>
+      <div class="nd">Header stubs, the autograder, and the C++ arena client. Use it as a template, then <code>cmake -B build</code>.</div></a>
+    <a class="nextcard" href="https://github.com/sdonadio/hft-cpp-starter-uchicago"><div class="nl">Code</div>
+      <div class="nt">Get the code · 9-session track starter</div>
+      <div class="nd">The same stubs and the same grader, packaged for the condensed nine-session schedule.</div></a>
+    <a class="nextcard" href="https://sdonadio.github.io/computer-architecture-arena/"><div class="nl">Prequel</div>
+      <div class="nt">Computer Architecture Arena</div>
+      <div class="nd">Nine interactive dashboards on the machine underneath — from the Turing machine to tick-to-trade.</div></a>
+    <a class="nextcard" href="https://sdonadio.github.io/financial-markets-arena/"><div class="nl">Finance intro</div>
+      <div class="nt">Financial Markets Arena</div>
+      <div class="nd">What a market is, who trades in it, and what a spread pays for — the vocabulary Week 1 assumes.</div></a>
+  </div>
+</section>
+
+
+<footer>Low-Latency Trading Arena · an interactive companion for a course on low-latency trading systems in C++ · <a href="https://github.com/sdonadio/low-latency-trading-arena">Source</a></footer>
+
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════
+   Low-Latency Trading Arena — course map
+   ════════════════════════════════════════════════════════════════ */
+var $ = function (id) { return document.getElementById(id); };
+/* SVG namespace taken from the document so no absolute URL appears in this file */
+var SVGNS = $("ttSvg").namespaceURI;
+function mk(tag, attrs) {
+  var e = document.createElementNS(SVGNS, tag);
+  for (var k in attrs) { if (attrs.hasOwnProperty(k)) e.setAttribute(k, attrs[k]); }
+  return e;
+}
+function txt(x, y, s, size, fill, anchor, weight) {
+  var t = mk("text", { x: x, y: y, "font-size": size || 10, "font-family": "monospace", fill: fill || "#9aa0a6" });
+  if (anchor) t.setAttribute("text-anchor", anchor);
+  if (weight) t.setAttribute("font-weight", weight);
+  t.textContent = s;
+  return t;
+}
+function clear(n) { while (n.firstChild) n.removeChild(n.firstChild); }
+function lcg(seed) { var s = seed >>> 0; return function () { s = (1664525 * s + 1013904223) >>> 0; return s / 4294967296; }; }
+var AC = "#c4b5fd", AC1 = "#7c3aed";
+
+/* ── 1. THE TWO-TRACK MAP ────────────────────────────────────── */
+var WEEKS = [
+  { n: 1, t: "HFT Landscape & Market Microstructure", art: "ladder",
+    p: "The order book, price-time priority, queue position — and why 10 µs beats 100 µs.",
+    g: ["CLOB", "queue position", "p99.9", "no C++ yet"] },
+  { n: 2, t: "C++ Performance Foundations", art: "hier",
+    p: "What an operation costs: register to L1 to DRAM to syscall. Measure, never guess.",
+    g: ["cache lines", "steady_clock", "SoA vs AoS", "false sharing"] },
+  { n: 3, t: "Memory Management & Smart Pointers", art: "own",
+    p: "Who owns this object, and when does it die? RAII makes the answer a compile-time contract.",
+    g: ["RAII", "unique_ptr", "move", "no new in on_book"] },
+  { n: 4, t: "Custom Allocators & Memory Pools", art: "pool",
+    p: "Stop calling the allocator. Pre-allocate once, hand out O(1) slots, never fault mid-tick.",
+    g: ["free list", "arena", "placement new", "O(1)"] },
+  { n: 5, t: "Templates & Generic Programming", art: "own",
+    p: "One implementation, many types, zero runtime dispatch — the abstraction you do not pay for.",
+    g: ["templates", "type traits", "CRTP", "inline"] },
+  { n: 6, t: "Compile-Time & Policy-Based Design", art: "pool",
+    p: "Move work from run time to compile time: constexpr tables, policies, no virtual on the hot path.",
+    g: ["constexpr", "policies", "devirtualise", "consteval"] },
+  { n: 7, t: "Data Structures for HFT — The Order Book", art: "ladder",
+    p: "A price ladder in flat arrays: O(1) top-of-book, price-time FIFO, cache-resident by design.",
+    g: ["flat arrays", "price ladder", "FIFO", "intrusive"] },
+  { n: 8, t: "Algorithmic Complexity & Time-Series", art: "hier",
+    p: "Rolling statistics in O(1) per tick — ring buffers, incremental moments, monotonic deques.",
+    g: ["O(1) rolling", "ring buffer", "EWMA", "amortised"] },
+  { n: 9, t: "Concurrency I — Atomics & Memory Models", art: "ring",
+    p: "What a core promises another core. Acquire, release, sequential consistency and the cost of each.",
+    g: ["std::atomic", "acquire/release", "coherency", "fences"] },
+  { n: 10, t: "Concurrency II — Lock-Free Pipelines", art: "ring",
+    p: "An SPSC ring with padded indices, a seqlock for snapshots, and a feed handler that never blocks.",
+    g: ["SPSC", "seqlock", "wait-free", "backpressure"] },
+  { n: 11, t: "Network Protocols & Market Data", art: "wire",
+    p: "UDP multicast, binary feeds, sequence numbers and gap recovery — the bytes before the book.",
+    g: ["multicast", "binary feed", "gaps", "FIX"] },
+  { n: 12, t: "Async I/O & Serialization", art: "wire",
+    p: "epoll, busy-polling, io_uring — and encoding an order without a single allocation.",
+    g: ["epoll", "io_uring", "zero-copy", "u64toa"] },
+  { n: 13, t: "Low-Latency Design — SIMD & Kernel Bypass", art: "wire",
+    p: "The last microseconds: vectorised parsing, kernel bypass, pinned cores, no page faults.",
+    g: ["AVX2", "bypass", "core pinning", "huge pages"] },
+  { n: 14, t: "Profiling, the Tail & Production", art: "tail",
+    p: "Find the tail and explain it: perf, flame graphs, HdrHistogram, and a jitter budget.",
+    g: ["perf", "flame graph", "p99.9", "jitter"] },
+  { n: 15, t: "Latency Arbitrage, Multi-Venue & the Tournament", art: "venue",
+    p: "The edge is a race across venues, someone is racing you, and your message budget is a resource.",
+    g: ["cross-venue", "stale quotes", "message budget", "tournament"] }
+];
+var SESSIONS = [
+  { s: 1, w: [1],     n: "The market and the race",          d: "What you are trading in, and what “fast” buys you." },
+  { s: 2, w: [2, 3],  n: "Cost model and ownership",         d: "What an operation costs, then who owns the memory it touches." },
+  { s: 3, w: [4, 5],  n: "Allocators and generic code",      d: "Stop calling the allocator; then write it once for every type." },
+  { s: 4, w: [6, 7],  n: "Compile-time design and the book", d: "Push work to compile time, then build the order book with it." },
+  { s: 5, w: [8, 9],  n: "Complexity and the memory model",  d: "O(1) per tick, and what one core promises another." },
+  { s: 6, w: [10],    n: "Lock-free pipelines",              d: "The SPSC ring that carries every tick in your system." },
+  { s: 7, w: [11, 12],n: "The wire and the I/O",             d: "Market data on the network, and orders back out of it." },
+  { s: 8, w: [13, 14],n: "Bypass, SIMD and the tail",        d: "The last microseconds, and how to prove you found them." },
+  { s: 9, w: [15],    n: "Multi-venue and the tournament",   d: "Races across venues, under exchange constraints." }
+];
+
+function artSvg(kind) {
+  var s = mk("svg", { viewBox: "0 0 300 96", role: "img" });
+  var lab = { ladder: "An order-book ladder with bids and asks either side of a mid price",
+    hier: "A staircase of memory levels, each step wider and slower than the last",
+    own: "One owner box with an arrow to an owned object box",
+    pool: "A grid of pre-allocated slots, some in use and some free",
+    ring: "A circular ring buffer with a head and a tail index",
+    wire: "A packet travelling from a network card through a handler and back out to the wire",
+    tail: "A latency histogram with a long right tail and a marked percentile",
+    venue: "Two venues with a race arrow between them" }[kind];
+  s.setAttribute("aria-label", lab);
+  function r(x, y, w, h, f, st, rx) {
+    s.appendChild(mk("rect", { x: x, y: y, width: w, height: h, rx: rx === undefined ? 3 : rx,
+      fill: f || "none", stroke: st || "none", "stroke-width": 1.3 }));
+  }
+  function p(d, st, dash) {
+    var a = { d: d, stroke: st || "#3a4150", "stroke-width": 1.3, fill: "none" };
+    if (dash) a["stroke-dasharray"] = dash;
+    s.appendChild(mk("path", a));
+  }
+  function t(x, y, v, sz, f, an) { s.appendChild(txt(x, y, v, sz || 8, f || "#6f757f", an || "middle")); }
+  if (kind === "ladder") {
+    r(18, 14, 120, 10, "rgba(63,185,80,.5)"); r(48, 28, 90, 10, "rgba(63,185,80,.36)");
+    r(86, 42, 52, 10, "rgba(63,185,80,.22)"); r(162, 42, 60, 10, "rgba(248,81,73,.24)");
+    r(162, 56, 96, 10, "rgba(248,81,73,.38)"); r(162, 70, 124, 10, "rgba(248,81,73,.5)");
+    p("M150 8 L150 88", AC, "4 3"); t(150, 94, "mid", 8, AC);
+  } else if (kind === "hier") {
+    var lv = [["reg", 26, 12], ["L1", 52, 22], ["L2", 82, 34], ["L3", 122, 48], ["DRAM", 186, 66]];
+    for (var i = 0; i < lv.length; i++) {
+      r(14, 10 + i * 16, lv[i][1], 12, i < 2 ? "rgba(var(--accent-rgb),.4)" : "rgba(var(--accent-2-rgb),.12)", "#3a4150");
+      t(18 + lv[i][1] + 12, 20 + i * 16, lv[i][0], 8, "#9aa0a6", "start");
+    }
+    t(250, 90, "slower →", 8);
+  } else if (kind === "own") {
+    r(26, 34, 92, 30, "rgba(var(--accent-rgb),.2)", AC, 5);
+    t(72, 53, "unique_ptr", 9, AC);
+    p("M118 49 L176 49", AC); p("M180 49 l-7 -4 v8 z", AC); s.appendChild(mk("path", { d: "M180 49 l-7 -4 v8 z", fill: AC }));
+    r(180, 34, 92, 30, "none", "#3a4150", 5); t(226, 53, "Order", 9, "#9aa0a6");
+    t(150, 84, "one owner, one lifetime", 8);
+  } else if (kind === "pool") {
+    for (var k = 0; k < 24; k++) {
+      var cx = 26 + (k % 8) * 32, cy = 20 + Math.floor(k / 8) * 22;
+      var used = (k * 7) % 5 < 2;
+      r(cx, cy, 26, 16, used ? "rgba(var(--accent-rgb),.42)" : "none", used ? AC : "#3a4150", 3);
+    }
+    t(150, 90, "one buffer · O(1) slots", 8);
+  } else if (kind === "ring") {
+    s.appendChild(mk("circle", { cx: 150, cy: 48, r: 30, fill: "none", stroke: AC, "stroke-width": 1.5, "stroke-dasharray": "6 4" }));
+    s.appendChild(mk("circle", { cx: 150, cy: 18, r: 5, fill: AC1 }));
+    s.appendChild(mk("circle", { cx: 175, cy: 63, r: 5, fill: AC }));
+    t(150, 8, "head", 8, AC1); t(200, 74, "tail", 8, AC, "start");
+    t(150, 52, "SPSC", 9, AC);
+  } else if (kind === "wire") {
+    r(12, 36, 46, 24, "none", "#3a4150", 4); t(35, 52, "NIC", 8, "#9aa0a6");
+    r(112, 30, 76, 36, "rgba(var(--accent-rgb),.2)", AC, 5); t(150, 52, "handler", 9, AC);
+    r(242, 36, 46, 24, "none", "#3a4150", 4); t(265, 52, "wire", 8, "#9aa0a6");
+    p("M58 48 L108 48", AC); p("M188 48 L238 48", AC);
+    s.appendChild(mk("path", { d: "M112 48 l-7 -4 v8 z", fill: AC }));
+    s.appendChild(mk("path", { d: "M242 48 l-7 -4 v8 z", fill: AC }));
+    t(150, 84, "tick → trade", 8);
+  } else if (kind === "tail") {
+    var hs = [6, 22, 40, 58, 46, 30, 20, 13, 9, 6, 5, 4, 3, 3, 2, 2, 2, 2];
+    for (var j = 0; j < hs.length; j++) r(18 + j * 15, 76 - hs[j], 12, hs[j], j < 4 ? "rgba(var(--accent-rgb),.5)" : "rgba(var(--accent-2-rgb),.28)");
+    p("M232 8 L232 80", "#f85149"); t(230, 90, "p99.9", 8, "#f85149");
+  } else {
+    r(18, 30, 78, 34, "rgba(var(--accent-rgb),.2)", AC, 5); t(57, 51, "venue A", 9, AC);
+    r(204, 30, 78, 34, "none", "#3a4150", 5); t(243, 51, "venue B", 9, "#9aa0a6");
+    p("M96 40 L200 40", AC); s.appendChild(mk("path", { d: "M204 40 l-7 -4 v8 z", fill: AC }));
+    p("M200 56 L100 56", "#f85149"); s.appendChild(mk("path", { d: "M96 56 l7 -4 v8 z", fill: "#f85149" }));
+    t(150, 84, "someone is racing you", 8);
+  }
+  return s;
+}
+
+function card(w) {
+  var a = document.createElement("a");
+  a.className = "wk"; a.href = "week" + w.n + ".html";
+  var art = document.createElement("div"); art.className = "art"; art.appendChild(artSvg(w.art));
+  var bd = document.createElement("div"); bd.className = "bd";
+  var n = document.createElement("div"); n.className = "n"; n.textContent = "Week " + w.n;
+  var h = document.createElement("h3"); h.textContent = w.t;
+  var p = document.createElement("p"); p.textContent = w.p;
+  var tg = document.createElement("div"); tg.className = "tags";
+  w.g.forEach(function (g) { var sp = document.createElement("span"); sp.textContent = g; tg.appendChild(sp); });
+  var go = document.createElement("div"); go.className = "go"; go.textContent = "Open week " + w.n;
+  bd.appendChild(n); bd.appendChild(h); bd.appendChild(p); bd.appendChild(tg); bd.appendChild(go);
+  a.appendChild(art); a.appendChild(bd);
+  return a;
+}
+
+function mapDraw(track) {
+  var host = $("mapHost"); clear(host);
+  if (track === "w15") {
+    var band = document.createElement("div"); band.className = "trackbar";
+    var an = document.createElement("span"); an.className = "an"; an.textContent = "15-week track";
+    var ad = document.createElement("span"); ad.className = "ad";
+    ad.textContent = "One topic per session, fifteen sessions. Each card is a page on this site.";
+    band.appendChild(an); band.appendChild(ad); host.appendChild(band);
+    var grid = document.createElement("div"); grid.className = "weeks";
+    WEEKS.forEach(function (w) { grid.appendChild(card(w)); });
+    host.appendChild(grid);
+    $("trackCount").textContent = "15 sessions · one topic each";
+  } else {
+    SESSIONS.forEach(function (S) {
+      var band = document.createElement("div"); band.className = "trackbar";
+      var an = document.createElement("span"); an.className = "an";
+      an.textContent = "Session " + S.s + " · " + S.n;
+      var ad = document.createElement("span"); ad.className = "ad";
+      ad.textContent = S.d + "  (covers week" + (S.w.length > 1 ? "s " : " ") + S.w.join(" + ") + ")";
+      band.appendChild(an); band.appendChild(ad); host.appendChild(band);
+      var grid = document.createElement("div"); grid.className = "weeks";
+      S.w.forEach(function (n) { grid.appendChild(card(WEEKS[n - 1])); });
+      host.appendChild(grid);
+    });
+    $("trackCount").textContent = "9 sessions · 6 of them cover two topics";
+  }
+}
+Array.prototype.forEach.call($("trackSw").querySelectorAll("button"), function (b) {
+  b.addEventListener("click", function () {
+    var t = b.getAttribute("data-t");
+    Array.prototype.forEach.call($("trackSw").querySelectorAll("button"), function (o) {
+      o.setAttribute("aria-pressed", o.getAttribute("data-t") === t ? "true" : "false");
+    });
+    mapDraw(t);
+  });
+});
+mapDraw("w15");
+
+/* ── 2. TIME SCALES ──────────────────────────────────────────── */
+var SCALES = {
+  ns1:   { ns: 1, note: "<b>One nanosecond.</b> Light crosses about 30&#8239;cm of vacuum and 20&#8239;cm of fibre. A 3&#8239;GHz core retires roughly three instructions. This is the resolution at which Week 2's cost model is written, and the unit the autograder reports as ns/op.",
+    l: ["Roughly <strong>3 clock cycles</strong> on a 3&#8239;GHz core.", "About <strong>one L1 cache hit</strong> (~4 cycles, ~1&#8239;ns).", "<strong>30&#8239;cm</strong> of light in vacuum; ~20&#8239;cm down a fibre.", "Nothing involving the kernel. Not one system call."] },
+  ns100: { ns: 100, note: "<b>One hundred nanoseconds.</b> This is a main-memory access — one cache miss. It is also about a hundred L1 hits, which is why data layout, not arithmetic, is where Week 2 spends its time.",
+    l: ["<strong>One DRAM access</strong> — a single cache miss.", "About <strong>100 L1 hits</strong> you could have had instead.", "An <strong>uncontended atomic</strong> RMW is ~20–50&#8239;ns of this.", "<strong>20&#8239;m</strong> of fibre — the length of a datacentre aisle."] },
+  us1:   { ns: 1000, note: "<b>One microsecond.</b> A kernel-bypass path can take a packet off the wire, parse it, update a book and put an order back on the wire inside a few of these. Through the kernel network stack, one syscall pair can eat most of one.",
+    l: ["A <strong>lean parse + book update + encode</strong>, end to end.", "Roughly <strong>3,000 cycles</strong> — plenty, if none of them stall.", "<strong>200&#8239;m</strong> of fibre.", "One <strong>syscall round trip</strong>, on a good day."] },
+  us10:  { ns: 10000, note: "<b>Ten microseconds.</b> A realistic colocated tick-to-trade budget for a software stack: NIC in, decide, NIC out, with the exchange in the same building. This is the default budget in the waterfall below.",
+    l: ["A whole <strong>colocated tick-to-trade path</strong>, NIC to NIC.", "<strong>2&#8239;km</strong> of fibre — or one trip across a campus.", "About <strong>100 DRAM misses</strong>. Spend them carefully.", "Enough for <strong>one</strong> unlucky page fault to ruin the tick."] },
+  ms1:   { ns: 1000000, note: "<b>One millisecond.</b> A thousand microseconds — an eternity. If your p99.9 is here and your median is 4&#8239;µs, you have a tail problem, and Week 14 exists to find it.",
+    l: ["<strong>200&#8239;km</strong> of fibre — Chicago to roughly Indianapolis.", "A <strong>minor page fault</strong> plus scheduling noise.", "<strong>1/100th</strong> of a human blink.", "<strong>100×</strong> a healthy tick-to-trade budget."] }
+};
+var SC_ORDER = ["ns1", "ns100", "us1", "us10", "ms1"];
+function fmtM(m) { return m >= 1000 ? (m / 1000).toFixed(m >= 10000 ? 0 : 1) + " km" : (m >= 1 ? m.toFixed(m >= 10 ? 0 : 2) + " m" : (m * 100).toFixed(0) + " cm"); }
+function scaleDraw(key) {
+  var S = SCALES[key];
+  SC_ORDER.forEach(function (k) {
+    $("scaleSw").querySelector('[data-s="' + k + '"]').setAttribute("aria-pressed", k === key ? "true" : "false");
+  });
+  var U = $("scaleList"); clear(U);
+  S.l.forEach(function (s) { var li = document.createElement("li"); li.innerHTML = s; U.appendChild(li); });
+  $("scL").textContent = fmtM(S.ns * 0.299792458);
+  $("scF").textContent = fmtM(S.ns * 0.2);
+  $("scC").textContent = Math.round(S.ns * 3).toLocaleString();
+  $("scH").textContent = Math.round(S.ns / 1).toLocaleString();
+  $("scNote").innerHTML = S.note;
+}
+SC_ORDER.forEach(function (k) {
+  $("scaleSw").querySelector('[data-s="' + k + '"]').addEventListener("click", function () { scaleDraw(k); });
+});
+scaleDraw("ns1");
+
+/* ── 3. TICK-TO-TRADE WATERFALL ──────────────────────────────── */
+var STAGES = [
+  { id: "nic", n: "NIC → host", nom: 800, min: 200, max: 4000, wk: "Weeks 11 · 13",
+    d: "The packet is on the wire, then in a host buffer. You do not write this code, you buy it and configure it: a kernel-bypass NIC with a user-space driver, interrupt coalescing off, the receive queue pinned to the core that will read it." },
+  { id: "krn", n: "Kernel / bypass", nom: 3500, min: 100, max: 20000, wk: "Week 13",
+    d: "Through the kernel network stack this is copies, softirqs and a wake-up — thousands of nanoseconds, and jittery. With kernel bypass the packet is DMA'd straight into your process and you poll for it: hundreds of nanoseconds, and boring. This one switch is often the single largest win available." },
+  { id: "prs", n: "Parse feed", nom: 250, min: 40, max: 3000, wk: "Weeks 11 · 12 · 13",
+    d: "Turn bytes into fields. A binary exchange feed is fixed-offset structs you can read in place; ASCII FIX is a delimiter scan. Do it without allocating, without std::stringstream, and — Week 13 — with SIMD when the field layout allows it." },
+  { id: "bok", n: "Book update", nom: 180, min: 20, max: 2500, wk: "Weeks 7 · 8",
+    d: "Apply the message to your order book: add, cancel, execute, and recompute the touch. In flat arrays indexed by price this is a handful of loads inside one or two cache lines. In a std::map of nodes it is a pointer chase per level." },
+  { id: "sig", n: "Signal", nom: 120, min: 0, max: 5000, wk: "Weeks 8 · 15",
+    d: "The decision: microprice, order-book imbalance, a rolling trade-flow statistic. Every nanosecond here is a nanosecond of queue position you did not buy, which is the whole tension of the course — a clever signal that makes you slow can lose money a dumb fast one makes." },
+  { id: "rsk", n: "Risk check", nom: 60, min: 10, max: 1200, wk: "Weeks 6 · 15",
+    d: "Position limits, notional limits, message budget, self-trade prevention. Non-negotiable and pre-trade, so it has to be branch-light and table-driven — Week 6's constexpr tables exist partly for this." },
+  { id: "enc", n: "Order encode", nom: 90, min: 15, max: 2000, wk: "Week 12",
+    d: "Serialise the order into the venue's format, into a buffer you already own. No allocation, no sprintf; a hand-written integer-to-ASCII routine if the protocol is text." },
+  { id: "out", n: "Host → wire", nom: 900, min: 200, max: 4000, wk: "Weeks 12 · 13",
+    d: "The write out: doorbell the NIC, DMA, serialise onto the wire. Batching helps throughput and hurts latency, so on this path you send one message and you send it now." }
+];
+var tt = { v: {}, sel: "nic", mode: "kernel" };
+function ttReset() {
+  STAGES.forEach(function (s) { tt.v[s.id] = s.nom; });
+  tt.mode = "kernel";
+  Array.prototype.forEach.call($("ttKsw").querySelectorAll("button"), function (b) {
+    b.setAttribute("aria-pressed", b.getAttribute("data-k") === "kernel" ? "true" : "false");
+  });
+  $("ttBud").value = 100; $("ttJit").value = 18;
+}
+function stage(id) { for (var i = 0; i < STAGES.length; i++) if (STAGES[i].id === id) return STAGES[i]; return STAGES[0]; }
+function fmtNs(v) {
+  if (v >= 1000000) return (v / 1000000).toFixed(2) + " ms";
+  if (v >= 1000) return (v / 1000).toFixed(v >= 10000 ? 1 : 2) + " µs";
+  return Math.round(v) + " ns";
+}
+function ttTotal() { var t = 0; STAGES.forEach(function (s) { t += tt.v[s.id]; }); return t; }
+
+function ttDraw() {
+  var tot = ttTotal();
+  var bud = (+$("ttBud").value) * 100;              /* tenths of a µs → ns */
+  var jit = (+$("ttJit").value) / 100;
+  $("ttBudV").textContent = fmtNs(bud);
+  $("ttJitV").textContent = Math.round(jit * 100) + "%";
+
+  /* rows */
+  var host = $("ttRows"); clear(host);
+  var scale = Math.max(tot, bud) * 1.1;
+  STAGES.forEach(function (s) {
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "stagerow";
+    b.setAttribute("aria-pressed", s.id === tt.sel ? "true" : "false");
+    b.setAttribute("data-id", s.id);
+    var nm = document.createElement("div"); nm.className = "sn"; nm.textContent = s.n;
+    var tr = document.createElement("div"); tr.className = "wtrack";
+    var i = document.createElement("i");
+    i.style.width = (100 * tt.v[s.id] / scale) + "%";
+    i.style.background = s.id === tt.sel ? AC : "rgba(var(--accent-rgb),.62)";
+    var lb = document.createElement("span"); lb.className = "lbl"; lb.textContent = fmtNs(tt.v[s.id]);
+    tr.appendChild(i); tr.appendChild(lb);
+    var wk = document.createElement("div"); wk.className = "sw2"; wk.textContent = Math.round(100 * tt.v[s.id] / tot) + "%";
+    b.appendChild(nm); b.appendChild(tr); b.appendChild(wk);
+    b.addEventListener("click", function () { ttSelect(s.id); });
+    host.appendChild(b);
+  });
+  var over = tot > bud;
+  $("ttTotBar").style.width = (100 * Math.min(tot, scale) / scale) + "%";
+  $("ttTotBar").style.background = over ? "rgba(248,81,73,.72)" : "rgba(63,185,80,.6)";
+  $("ttDlMark").style.left = (100 * bud / scale) + "%";
+  $("ttTotLbl").textContent = fmtNs(tot) + "  /  " + fmtNs(bud);
+  $("ttTotPct").textContent = Math.round(100 * tot / bud) + "%";
+
+  /* percentiles from a seeded, right-skewed jitter model */
+  var rnd = lcg(20260904), samples = [], miss = 0;
+  for (var k = 0; k < 2000; k++) {
+    var u = rnd(), v = rnd();
+    var noise = jit * tot * (0.3 * (u - 0.5) + 1.4 * Math.pow(v, 6));
+    var x = Math.max(1, tot + noise);
+    samples.push(x); if (x > bud) miss++;
+  }
+  samples.sort(function (a, b) { return a - b; });
+  var p50 = samples[1000], p99 = samples[1979], p999 = samples[1997];
+  $("ttP50").textContent = fmtNs(p50);
+  $("ttP99").textContent = fmtNs(p99);
+  $("ttP99").className = "sv " + (p99 > bud ? "bad" : "ok");
+  $("ttP999").textContent = fmtNs(p999);
+  $("ttP999").className = "sv " + (p999 > bud ? "bad" : "ok");
+  var pm = 100 * miss / 2000;
+  $("ttMiss").textContent = pm.toFixed(1) + "%";
+  $("ttMiss").className = "sv " + (pm > 1 ? "bad" : (pm > 0 ? "warn" : "ok"));
+
+  var V = $("ttVerdict");
+  if (over) {
+    V.className = "verdict miss";
+    V.textContent = "OVER BUDGET by " + fmtNs(tot - bud) + " — on every single tick";
+  } else if (p999 > bud) {
+    V.className = "verdict miss";
+    V.textContent = "MEDIAN FITS, TAIL DOES NOT — " + pm.toFixed(1) + "% of ticks blow the budget";
+  } else {
+    V.className = "verdict met";
+    V.textContent = "INSIDE BUDGET — " + fmtNs(bud - tot) + " of headroom, p99.9 clean";
+  }
+
+  /* pipeline diagram */
+  var C = $("ttSvg"); clear(C);
+  C.appendChild(mk("rect", { x: 0, y: 0, width: 660, height: 210, fill: "transparent" }));
+  var x0 = 18, w = 624;
+  C.appendChild(mk("rect", { x: x0, y: 34, width: w, height: 30, rx: 5, fill: "#0b0e14", stroke: "#272c36" }));
+  var acc = 0;
+  STAGES.forEach(function (s, i) {
+    var sw = w * tt.v[s.id] / scale;
+    if (sw > 0.5) {
+      C.appendChild(mk("rect", { x: x0 + acc, y: 35, width: Math.max(1, sw), height: 28,
+        fill: s.id === tt.sel ? AC : (i % 2 ? "rgba(var(--accent-rgb),.75)" : "rgba(var(--accent-2-rgb),.42)") }));
+    }
+    if (sw > 46) C.appendChild(txt(x0 + acc + sw / 2, 53, s.n.split(" ")[0], 9, "#0f1115", "middle", 700));
+    acc += sw;
+  });
+  var dx = x0 + w * bud / scale;
+  C.appendChild(mk("path", { d: "M" + dx.toFixed(1) + " 24 L" + dx.toFixed(1) + " 74", stroke: "#f85149", "stroke-width": 2 }));
+  C.appendChild(txt(Math.min(dx + 6, 560), 20, "budget " + fmtNs(bud), 9.5, "#f85149"));
+  C.appendChild(txt(x0, 84, "tick to trade  " + fmtNs(tot) + "  ·  " + STAGES.length + " stages  ·  " + (tt.mode === "bypass" ? "kernel bypass" : "kernel stack"), 10, "#9aa0a6"));
+
+  /* per-stage columns underneath */
+  var cw = w / STAGES.length;
+  STAGES.forEach(function (s, i) {
+    var share = tt.v[s.id] / tot;
+    var h = 8 + 68 * share;
+    var cx = x0 + i * cw;
+    C.appendChild(mk("rect", { x: cx + 3, y: 178 - h, width: cw - 6, height: h, rx: 3,
+      fill: s.id === tt.sel ? "rgba(var(--accent-2-rgb),.55)" : "rgba(var(--accent-rgb),.42)",
+      stroke: s.id === tt.sel ? AC : "#3a4150", "stroke-width": 1 }));
+    C.appendChild(txt(cx + cw / 2, 190, s.n.length > 11 ? s.n.slice(0, 10) + "…" : s.n, 8, s.id === tt.sel ? AC : "#6f757f", "middle"));
+    C.appendChild(txt(cx + cw / 2, 201, Math.round(100 * share) + "%", 8, "#5f6673", "middle"));
+  });
+  C.appendChild(mk("path", { d: "M" + x0 + " 178 L" + (x0 + w) + " 178", stroke: "#272c36", "stroke-width": 1 }));
+}
+
+function ttSelect(id) {
+  tt.sel = id;
+  var s = stage(id);
+  $("ttSel").value = id;
+  $("ttSelName").textContent = s.n;
+  $("ttVal").min = s.min; $("ttVal").max = s.max; $("ttVal").value = tt.v[id];
+  $("ttValV").textContent = fmtNs(tt.v[id]);
+  $("ttWhat").textContent = s.n;
+  $("ttDesc").textContent = s.d;
+  $("ttWeek").textContent = "Taught in " + s.wk;
+  $("ttRange").textContent = "plausible " + fmtNs(s.min) + " – " + fmtNs(s.max);
+  ttDraw();
+}
+(function () {
+  var sel = $("ttSel");
+  STAGES.forEach(function (s) {
+    var o = document.createElement("option"); o.value = s.id; o.textContent = s.n; sel.appendChild(o);
+  });
+})();
+$("ttSel").addEventListener("change", function () { ttSelect($("ttSel").value); });
+$("ttVal").addEventListener("input", function () {
+  tt.v[tt.sel] = +$("ttVal").value;
+  $("ttValV").textContent = fmtNs(tt.v[tt.sel]);
+  ttDraw();
+});
+["ttBud", "ttJit"].forEach(function (id) { $(id).addEventListener("input", ttDraw); });
+Array.prototype.forEach.call($("ttKsw").querySelectorAll("button"), function (b) {
+  b.addEventListener("click", function () {
+    tt.mode = b.getAttribute("data-k");
+    Array.prototype.forEach.call($("ttKsw").querySelectorAll("button"), function (o) {
+      o.setAttribute("aria-pressed", o.getAttribute("data-k") === tt.mode ? "true" : "false");
+    });
+    tt.v.krn = tt.mode === "bypass" ? 350 : 3500;
+    tt.v.nic = tt.mode === "bypass" ? 500 : 800;
+    tt.v.out = tt.mode === "bypass" ? 550 : 900;
+    ttSelect("krn");
+  });
+});
+$("ttReset").addEventListener("click", function () { ttReset(); ttSelect("nic"); });
+$("ttBreak").addEventListener("click", function () {
+  tt.v.sig = 4200; tt.v.bok = 1800; $("ttJit").value = 120; ttSelect("sig");
+});
+ttReset();
+ttSelect("nic");
+
+/* ── 4. TOOLCHAIN CHECKLIST ──────────────────────────────────── */
+var boxesEl = Array.prototype.slice.call($("chkList").querySelectorAll("input"));
+function chkDraw() {
+  var n = 0;
+  boxesEl.forEach(function (b) {
+    var item = b.parentNode;
+    if (b.checked) { n++; item.className = "item done"; } else { item.className = "item"; }
+  });
+  $("chkBar").style.width = (100 * n / boxesEl.length) + "%";
+  var badge = $("smokeBadge");
+  var green = n === boxesEl.length;
+  badge.className = "smoke" + (green ? " green" : "");
+  $("smokeTxt").textContent = green
+    ? "Toolchain: GREEN · 5 of 5 — you are ready for week 1"
+    : "Toolchain: RED · " + n + " of 5";
+}
+boxesEl.forEach(function (b) { b.addEventListener("change", chkDraw); });
+chkDraw();
+</script>
+</body>
+</html>

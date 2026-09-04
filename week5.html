@@ -1,0 +1,1419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" href="data:," />
+<title>Week 5 · Templates &amp; Generic Programming — Low-Latency Trading Arena</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    /* ── Low-Latency Trading Arena · shared palette (identical on every page) ── */
+    --accent:       #7c3aed;
+    --accent-2:     #c4b5fd;
+    --accent-3:     #ede9fe;
+    --accent-rgb:   124,58,237;
+    --accent-2-rgb: 196,181,253;
+    --bg:           #0f1115;
+    --panel:        #181b22;
+    --panel2:       #1e222b;
+    --panel-2:      #13161b;
+    --ink:          #e8e6e3;
+    --ink-dim:      #c6c3bf;
+    --ink-mute:     #6f757f;
+    --muted:        #9aa0a6;
+    --dim:          #5f6673;
+    --line:         #272c36;
+    --line-2:       #333a47;
+    --border:       #272c36;
+    --ok:           #3fb950;
+    --warn:         #d29922;
+    --bad:          #f85149;
+    --info:         #6cb6ff;
+    --sky:          #58a6ff;
+    --violet:       #a78bfa;
+    --teal:         #2dd4bf;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.62;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent-2);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  /* ── nav / footer ─────────────────────────────────────────── */
+  nav.top{position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+    padding:11px 22px;background:rgba(15,17,21,.94);border-bottom:1px solid var(--line)}
+  nav.top>a:first-child{font-weight:800;letter-spacing:-.2px;color:var(--ink);font-size:14.5px;
+    border-left:3px solid var(--accent);padding-left:10px}
+  nav.top .crumbs{font-size:12px;color:var(--muted)}
+  nav.top .crumbs b{color:var(--ink);font-weight:700}
+  footer{border-top:1px solid var(--line);background:var(--panel);
+    padding:26px 22px 34px;text-align:center;font-size:11.5px;color:var(--dim);letter-spacing:.3px}
+
+  /* ── sections & typography ────────────────────────────────── */
+  section{max-width:1180px;margin:0 auto;padding:36px 22px 42px;border-top:1px solid var(--line)}
+  section#hero{border-top:none}
+  .kicker{font-size:10.5px;font-weight:800;letter-spacing:1.9px;text-transform:uppercase;color:var(--accent-2)}
+  h1{font-size:clamp(26px,4.2vw,40px);font-weight:800;letter-spacing:-.9px;line-height:1.13;margin:10px 0 6px}
+  h2{font-size:21px;font-weight:700;letter-spacing:-.3px;margin:4px 0 4px}
+  h3{font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);margin-bottom:11px}
+  h4{font-size:13.5px;font-weight:700;margin-bottom:5px}
+  p{margin:9px 0;max-width:82ch}
+  .lead{color:var(--muted);font-size:15px;max-width:84ch}
+  .sub{color:var(--muted);font-size:12.5px}
+  strong{color:#fff;font-weight:650}
+  em.hi{color:var(--accent-2);font-style:normal;font-weight:600}
+  code,.mono{font-family:var(--mono);font-size:12.5px}
+  code{background:rgba(var(--accent-2-rgb),.13);color:#ddd6fe;padding:1px 5px;border-radius:4px}
+  ul.you{list-style:none;margin:16px 0 0;display:grid;gap:8px}
+  ul.you li{position:relative;padding-left:26px;font-size:13.5px;color:var(--ink);max-width:78ch}
+  ul.you li::before{content:"";position:absolute;left:4px;top:8px;width:8px;height:8px;border-radius:2px;
+    background:var(--accent);box-shadow:0 0 0 3px rgba(var(--accent-rgb),.22)}
+  ul.plain{list-style:none;display:grid;gap:7px;font-size:13px;color:var(--muted)}
+  ul.plain li{padding-left:16px;position:relative}
+  ul.plain li::before{content:"\2022";position:absolute;left:2px;color:var(--accent-2)}
+
+  /* ── panels & layout ──────────────────────────────────────── */
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .panel.tight{padding:13px 14px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;align-items:start}
+  .split{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:18px;align-items:start}
+  .split-r{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:18px;align-items:start}
+  .stack{display:grid;gap:14px}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+
+  /* ── controls ─────────────────────────────────────────────── */
+  .btn{font-family:inherit;font-size:12px;font-weight:650;cursor:pointer;color:var(--ink);
+    background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:7px 14px;transition:.15s}
+  .btn:hover:not(:disabled){border-color:var(--accent-2);color:#fff}
+  .btn:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .btn:disabled{opacity:.35;cursor:not-allowed}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.primary:hover:not(:disabled){filter:brightness(1.25)}
+  .btn.on{background:rgba(var(--accent-rgb),.28);border-color:var(--accent-2);color:#fff}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+  .tab{font-family:inherit;font-size:12px;font-weight:650;cursor:pointer;color:var(--muted);
+    background:transparent;border:1px solid var(--line);border-radius:20px;padding:6px 14px;transition:.15s}
+  .tab:hover{color:var(--ink)}
+  .tab[aria-selected="true"]{background:rgba(var(--accent-rgb),.3);border-color:var(--accent-2);color:#fff}
+  .tab:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .ctl{display:grid;gap:4px;margin-bottom:12px}
+  .ctl label{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);
+    display:flex;justify-content:space-between;gap:10px}
+  .ctl label b{font-family:var(--mono);color:var(--accent-2);font-size:12px;text-transform:none;letter-spacing:0}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:3px;
+    background:#2b313d;outline:none;cursor:pointer}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;
+    background:var(--accent-2);border:2px solid var(--bg);cursor:pointer}
+  input[type=range]::-moz-range-thumb{width:15px;height:15px;border-radius:50%;background:var(--accent-2);
+    border:2px solid var(--bg);cursor:pointer}
+  input[type=range]:focus-visible{box-shadow:0 0 0 3px rgba(var(--accent-2-rgb),.4)}
+  select,textarea,input[type=text]{font-family:var(--mono);font-size:12.5px;color:var(--ink);
+    background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:7px 9px;width:100%}
+  select:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px solid var(--accent-2);outline-offset:1px}
+  textarea{line-height:1.55;resize:vertical}
+
+  /* ── stats / pills / code ─────────────────────────────────── */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:1px;
+    background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .stat{background:var(--panel);padding:10px 12px}
+  .stat .sl{font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--dim)}
+  .stat .sv{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--ink);margin-top:3px}
+  .stat .sv.ok{color:var(--ok)} .stat .sv.bad{color:var(--bad)} .stat .sv.warn{color:var(--warn)}
+  .stat .sv.acc{color:var(--accent-2)}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;letter-spacing:.5px;
+    padding:3px 9px;border-radius:20px;border:1px solid var(--line);color:var(--muted)}
+  .pill.ok{color:var(--ok);border-color:rgba(63,185,80,.5);background:rgba(63,185,80,.1)}
+  .pill.bad{color:var(--bad);border-color:rgba(248,81,73,.5);background:rgba(248,81,73,.1)}
+  .pill.warn{color:var(--warn);border-color:rgba(210,153,34,.5);background:rgba(210,153,34,.1)}
+  .pill.acc{color:var(--accent-2);border-color:rgba(var(--accent-2-rgb),.5);background:rgba(var(--accent-rgb),.18)}
+  pre.code{font-family:var(--mono);font-size:11.8px;line-height:1.62;background:#0b0e14;color:#dbe3ea;
+    border:1px solid var(--line);border-radius:10px;padding:13px 14px;overflow-x:auto;white-space:pre}
+  pre.code .k{color:#6cb6ff} pre.code .s{color:#8ddb8c} pre.code .c{color:#6b7484;font-style:italic}
+  pre.code .n{color:#e0b070} pre.code .b{color:#ddd6fe;font-weight:700}
+  .note{border-left:3px solid var(--accent);background:rgba(var(--accent-rgb),.12);border-radius:0 8px 8px 0;
+    padding:10px 13px;font-size:12.5px;color:var(--muted)}
+  .note b{color:var(--ink)}
+  .log{font-family:var(--mono);font-size:11.5px;max-height:230px;overflow-y:auto;display:grid;gap:5px}
+  .log div{background:var(--panel2);border-left:3px solid var(--line);border-radius:0 6px 6px 0;padding:6px 9px;color:var(--muted)}
+  .log div.hl{border-left-color:var(--accent-2);color:var(--ink);background:rgba(var(--accent-rgb),.15)}
+  .log div.ok{border-left-color:var(--ok)} .log div.bad{border-left-color:var(--bad)}
+  svg{display:block;max-width:100%;height:auto}
+  .svgwrap{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px;overflow-x:auto}
+  table.t{width:100%;border-collapse:collapse;font-size:12px}
+  table.t th{font-size:9.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--dim);
+    text-align:left;padding:0 8px 7px;border-bottom:1px solid var(--line)}
+  table.t td{padding:7px 8px;border-bottom:1px solid rgba(39,44,54,.6);color:var(--muted);font-family:var(--mono);font-size:11.8px}
+  table.t td.n{color:var(--ink);font-weight:600}
+
+  /* ── pitfalls ─────────────────────────────────────────────── */
+  details.pit{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:10px;overflow:hidden}
+  details.pit>summary{cursor:pointer;padding:12px 15px;font-size:13.5px;font-weight:650;color:var(--ink);
+    list-style:none;display:flex;gap:11px;align-items:flex-start}
+  details.pit>summary::-webkit-details-marker{display:none}
+  details.pit>summary::before{content:"\25B8";color:var(--accent-2);font-size:12px;line-height:1.5;transition:.2s}
+  details.pit[open]>summary::before{transform:rotate(90deg)}
+  details.pit>summary:focus-visible{outline:2px solid var(--accent-2);outline-offset:-2px}
+  details.pit .body{padding:0 15px 15px 39px;font-size:13px;color:var(--muted);display:grid;gap:9px}
+  details.pit .body .fix{color:var(--ok);font-weight:600}
+
+  /* ── MCQ ──────────────────────────────────────────────────── */
+  .mcq{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 17px;margin-bottom:13px}
+  .mcq .q{font-size:13.8px;font-weight:650;color:var(--ink);margin:0 0 11px;max-width:84ch}
+  .mcq .q span{color:var(--accent-2);font-family:var(--mono);margin-right:7px}
+  .opts{display:grid;gap:7px}
+  .opt{text-align:left;font-family:inherit;font-size:13px;cursor:pointer;color:var(--muted);
+    background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:9px 12px;transition:.15s}
+  .opt:hover:not(:disabled){border-color:var(--accent-2);color:var(--ink)}
+  .opt:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .opt.right{border-color:var(--ok);background:rgba(63,185,80,.13);color:#bce8c4}
+  .opt.wrong{border-color:var(--bad);background:rgba(248,81,73,.12);color:#f4b6b1}
+  .opt.dim{opacity:.5}
+  .fb{margin-top:11px;font-size:12.5px;line-height:1.6;color:var(--muted);display:none;
+    border-left:3px solid var(--line);padding-left:11px}
+  .fb.show{display:block}
+  .fb.show.good{border-left-color:var(--ok)} .fb.show.poor{border-left-color:var(--bad)}
+  .fb b{color:var(--ink)}
+
+  /* ── next ─────────────────────────────────────────────────── */
+  .nextgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+  .nextcard{display:block;background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:15px 17px;transition:.18s;color:inherit}
+  .nextcard:hover{border-color:var(--accent-2);transform:translateY(-2px);text-decoration:none}
+  .nextcard .nl{font-size:10px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--accent-2)}
+  .nextcard .nt{font-size:14.5px;font-weight:700;color:var(--ink);margin-top:5px}
+  .nextcard .nd{font-size:12px;color:var(--muted);margin-top:5px}
+
+  @media (max-width:720px){
+    .grid2,.grid3,.split,.split-r{grid-template-columns:1fr}
+    section{padding:26px 15px 32px}
+    nav.top{padding:10px 15px;gap:8px}
+    nav.top .crumbs{font-size:11px}
+    p,.lead{max-width:none}
+  }
+
+  /* ── week-page shared ─────────────────────────────────────── */
+  #hero{padding:52px 22px 40px;
+    background:radial-gradient(ellipse 820px 340px at 22% -14%,rgba(var(--accent-rgb),.3),transparent 66%)}
+  #hero .wk{font-family:var(--mono);font-size:12px;letter-spacing:2px;color:var(--accent-2);font-weight:700}
+  #hero h1{max-width:24ch}
+  #hero .promise{font-size:16.5px;color:var(--ink);max-width:74ch;margin-top:10px;line-height:1.55}
+  .secnum{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;
+    background:rgba(var(--accent-rgb),.35);border:1px solid var(--accent-2);color:#fff;font-family:var(--mono);
+    font-size:11px;font-weight:700;margin-right:9px;vertical-align:2px}
+  .sw{display:inline-flex;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex-wrap:wrap}
+  .sw button{font-family:inherit;font-size:11.5px;font-weight:650;cursor:pointer;color:var(--muted);
+    background:var(--panel2);border:none;padding:7px 13px;transition:.15s}
+  .sw button[aria-pressed="true"]{background:rgba(var(--accent-rgb),.32);color:#fff}
+  .sw button:focus-visible{outline:2px solid var(--accent-2);outline-offset:-2px}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-top:10px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
+
+  /* ── week-5 specific ──────────────────────────────────────── */
+  .tablewrap{overflow-x:auto}
+  .codepair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+  .lanes{display:grid;gap:12px}
+  .toggles{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:16px;align-items:start}
+  .dash{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}
+  a.btn{display:inline-flex;align-items:center;text-decoration:none}
+  a.btn:hover{text-decoration:none}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:5px 12px;font-size:12px;color:var(--muted)}
+  .kv b{font-family:var(--mono);font-size:11.5px;color:var(--ink-dim);font-weight:600;white-space:nowrap}
+  .checks{display:flex;flex-wrap:wrap;gap:7px}
+  .chk{font-family:var(--mono);font-size:11.5px;font-weight:650;cursor:pointer;color:var(--muted);
+    background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:6px 11px;transition:.15s}
+  .chk:hover{color:var(--ink);border-color:var(--accent-2)}
+  .chk[aria-pressed="true"]{background:rgba(var(--accent-rgb),.3);border-color:var(--accent-2);color:#fff}
+  .chk:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  pre.code .dead{opacity:.3}
+  pre.code .keep{background:rgba(var(--accent-rgb),.24);border-radius:3px}
+  pre.code .err{background:rgba(248,81,73,.2);border-radius:3px}
+  .verdict{border:1px solid var(--accent-2);border-radius:12px;padding:14px 16px;
+    background:rgba(var(--accent-rgb),.14)}
+  .verdict .vt{font-size:15px;font-weight:750;color:#fff}
+
+  /* ── mobile guard (identical on every page): single column under 720px,
+        no horizontal overflow. Must stay last in the sheet. ───────────── */
+  @media (max-width:720px){
+    .grid2,.grid3,.grid2.narrow-right,.split,.split-r,.codepair,
+    .nextgrid,.dash,.toggles,.lanes,.weeknav,.weeks,.roles,.stack{
+      grid-template-columns:minmax(0,1fr)}
+    [class*="grid"]>*,.stack>*,.wrap>*,.panel,.panel.tight,.nextcard,.wk,.row>*{min-width:0}
+    pre,pre.code,.svgwrap,svg,canvas,table,select,input,textarea,.mono{max-width:100%}
+    pre,pre.code,.svgwrap,.tablewrap{overflow-x:auto}
+    code,.mono{overflow-wrap:anywhere}
+    .ctl,.ctl>*,.controls>*,.row,.legend>*{min-width:0}
+    .ctl{flex-wrap:wrap} .ctl select,.ctl input[type=range]{flex:1 1 100%;width:100%}
+    p,.lead,.sub,.promise{max-width:none}
+  }
+</style>
+</head>
+<body>
+
+<nav class="top"><a href="index.html">Low-Latency Trading Arena</a><span class="crumbs"><a href="week4.html">← Week 4</a> · <b>Week 5 · Templates &amp; Generic Programming</b> · <a href="week6.html">Week 6 →</a></span></nav>
+
+<!-- ══════════════ HERO ══════════════ -->
+<section id="hero">
+  <div class="wk">WEEK 5 · 15-WEEK TRACK  ·  SESSION 3 · 9-SESSION TRACK</div>
+  <h1>Templates &amp; Generic Programming</h1>
+  <p class="promise">You wrote one pool by hand last week. Write it once instead, and let the compiler
+  stamp out a version for every type you need. A template is not a runtime abstraction that happens to
+  be fast — it is <em class="hi">code generation</em>, finished before <code>main</code> starts, and the
+  machine code it emits is the code you would have written by hand.</p>
+  <ul class="you">
+    <li>State the actual cost of a virtual call — <strong>vtable load, indirect branch, and the inlining barrier</strong> — and say which of the three dominates.</li>
+    <li>Write function and class templates, and predict <em class="hi">exactly which instantiations</em> your code generates and what they cost in bytes.</li>
+    <li>Constrain a template with a C++20 <code>concept</code> instead of an <code>enable_if</code>, and read the error message it produces.</li>
+    <li>Branch at compile time with <code>if constexpr</code> so the dead arm is never instantiated — and know when a plain <code>if</code> would not have compiled at all.</li>
+    <li>Defend the trade-off you just made: binary size, instruction cache and build time.</li>
+  </ul>
+  <div class="row" style="margin-top:22px">
+    <span class="pill acc">Lab: a generic container, a fold expression, an <code>if constexpr</code> codec</span>
+    <span class="pill">HW5: class template + variadic utility, with tests</span>
+    <span class="pill warn">Project Phase 1: one templated codec, no per-type copy-paste</span>
+  </div>
+</section>
+
+<!-- ══════════════ WHAT ══════════════ -->
+<section id="what">
+  <div class="kicker">Part 1</div>
+  <h2><span class="secnum">1</span>What is it? Polymorphism that finishes before the program starts</h2>
+  <p class="lead">There are two ways to write one algorithm that works for many types. A
+  <strong>virtual function</strong> decides which code to run <em class="hi">while the program is
+  running</em>, from a pointer it has to load. A <strong>template</strong> decides
+  <em class="hi">while the program is being compiled</em>, and then there is nothing left to decide.
+  Both are polymorphism. Only one of them is free.</p>
+
+  <div class="grid2" style="margin-top:16px">
+    <div class="panel">
+      <h4>What a virtual call actually costs</h4>
+      <ul class="plain">
+        <li><b>The vtable load.</b> Read the hidden pointer at the front of the object, then read the slot. Two dependent loads before you know where you are going.</li>
+        <li><b>The indirect branch.</b> The CPU guesses the target from the branch-target buffer. One concrete type in the mix: it guesses right. Several: it does not.</li>
+        <li><b>The inlining barrier.</b> This is the expensive one. The compiler cannot see through the call, so no inlining, no constant folding, no cross-call scheduling, and arguments go through the ABI instead of staying in registers.</li>
+      </ul>
+      <div class="note" style="margin-top:11px"><b>Read that order again.</b> Students quote the vtable
+      load; the real bill is the optimisations the compiler was not allowed to perform.</div>
+    </div>
+    <div class="panel">
+      <h4>What a template does instead</h4>
+      <p class="sub">A template is a <em class="hi">recipe</em>, not code. Nothing is emitted until you
+      use it with a concrete type; at that point the compiler <strong>instantiates</strong> it —
+      generates one real function or class for that type — and from then on the call is an ordinary
+      direct call to an ordinary function whose body it can see, inline and fold.</p>
+      <p class="sub">The price is that the type set has to be known at compile time, and every distinct
+      instantiation is separate machine code. That is the whole trade, and Part 3 makes you put a number
+      on it.</p>
+      <div class="note" style="margin-top:11px"><b>Stroustrup's promise.</b> “You don't pay for what you
+      don't use, and what you do use, you couldn't hand-code better.” Templates are how the second half
+      is delivered.</div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:30px">Interactive · virtual vs template dispatch, per tick</h3>
+  <p class="sub" style="margin-bottom:12px">The same <code>enc()</code> called <span class="mono"
+  id="dpCallsInline">12</span> times per tick, two ways. Move the call-count slider to see the cost
+  scale linearly, and the type-mix slider to watch the branch predictor stop helping. Press
+  <b>Race</b> to run it.</p>
+
+  <div class="split">
+    <div class="stack">
+      <div class="svgwrap">
+        <svg id="dpSvg" viewBox="0 0 660 250" role="img" aria-label="A bar chart racing the cost of virtual dispatch against template dispatch for one tick, broken down into work, vtable load, indirect call, lost inlining and branch mispredictions"></svg>
+      </div>
+      <div class="dash">
+        <div class="stack">
+          <div class="sub"><b style="color:var(--ink)">Virtual — <code>ICodec&amp;</code></b></div>
+          <div class="stats">
+            <div class="stat"><div class="sl">ns / call</div><div class="sv bad" id="dpVc">—</div></div>
+            <div class="stat"><div class="sl">ns / tick</div><div class="sv bad" id="dpVt">—</div></div>
+          </div>
+        </div>
+        <div class="stack">
+          <div class="sub"><b style="color:var(--ink)">Template — <code>hot_template&lt;C&gt;</code></b></div>
+          <div class="stats">
+            <div class="stat"><div class="sl">ns / call</div><div class="sv ok" id="dpTc">—</div></div>
+            <div class="stat"><div class="sl">ns / tick</div><div class="sv ok" id="dpTt">—</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="sl">Speed-up</div><div class="sv acc" id="dpX">—</div></div>
+        <div class="stat"><div class="sl">Saved per tick</div><div class="sv acc" id="dpSave">—</div></div>
+        <div class="stat"><div class="sl">Mispredict rate</div><div class="sv warn" id="dpMp">—</div></div>
+        <div class="stat"><div class="sl">At 2 M ticks/s</div><div class="sv acc" id="dpSec">—</div></div>
+      </div>
+      <div class="note" id="dpMsg"></div>
+    </div>
+    <div class="stack">
+      <div class="panel">
+        <h3>The workload</h3>
+        <div class="ctl"><label for="dpCalls">Calls per tick <b id="dpCallsV">12</b></label>
+          <input type="range" id="dpCalls" min="1" max="64" value="12" aria-label="Number of dispatched calls per tick"/></div>
+        <div class="ctl"><label for="dpTypes">Distinct concrete types in the mix <b id="dpTypesV">1</b></label>
+          <input type="range" id="dpTypes" min="1" max="8" value="1" aria-label="Number of distinct concrete types seen at this call site"/></div>
+        <div class="row">
+          <button class="btn primary" type="button" id="dpRace">Race</button>
+          <button class="btn" type="button" id="dpMono">Monomorphic site</button>
+          <button class="btn" type="button" id="dpPoly">Megamorphic site</button>
+        </div>
+        <div class="note" style="margin-top:12px"><b>Cost model, stated.</b> The work itself is
+        <b>1.20&#8239;ns</b>. Virtual adds 0.90&#8239;ns (two dependent loads for the vtable slot),
+        0.80&#8239;ns (indirect call and return), 1.10&#8239;ns (arguments through the ABI, no constant
+        folding), plus a 15-cycle mispredict at 4.0&#8239;GHz on the fraction of calls the BTB gets
+        wrong. Inlining lets the template constant-fold <code>sizeof</code> and drop to
+        <b>0.75&#8239;ns</b>. Directional, not a benchmark — measure your own.</div>
+      </div>
+      <pre class="code">
+<span class="c">// runtime polymorphism: one vtable, one indirect call</span>
+<span class="k">struct</span> <span class="b">ICodec</span> {
+  <span class="k">virtual</span> std::size_t enc(Buf&amp;, std::int64_t) <span class="k">const</span> = <span class="n">0</span>;
+  <span class="k">virtual</span> ~ICodec() = <span class="k">default</span>;
+};
+std::size_t hot_virtual(<span class="k">const</span> ICodec&amp; c, Buf&amp; b, std::int64_t v) {
+  <span class="k">return</span> c.enc(b, v);                 <span class="c">// load vtable, load slot, jump</span>
+}
+
+<span class="c">// compile-time polymorphism: no base class, no vtable</span>
+<span class="k">struct</span> <span class="b">FastTickCodec</span> {
+  std::size_t enc(Buf&amp; b, std::int64_t v) <span class="k">const</span> {
+    std::memcpy(b.p, &amp;v, <span class="k">sizeof</span> v); <span class="k">return</span> <span class="k">sizeof</span> v;
+  }
+};
+<span class="k">template</span> &lt;<span class="k">class</span> <span class="b">C</span>&gt;
+std::size_t hot_template(<span class="k">const</span> C&amp; c, Buf&amp; b, std::int64_t v) {
+  <span class="k">return</span> c.enc(b, v);                 <span class="c">// direct, inlined, folded</span>
+}</pre>
+    </div>
+  </div>
+
+  <h3 style="margin-top:32px">Interactive · the instantiation explorer</h3>
+  <p class="sub" style="margin-bottom:12px">Templates are code generation, so you should be able to
+  answer “how many functions did I just create, and how big are they?” Pick the types your codec is
+  used with and read the answer.</p>
+
+  <div class="split-r">
+    <div class="stack">
+      <div class="panel">
+        <h3>Instantiate <code>put&lt;T&gt;</code> with</h3>
+        <div class="checks" id="inPick" role="group" aria-label="Choose the types to instantiate the template with"></div>
+        <div class="row" style="margin-top:12px">
+          <button class="btn" type="button" id="inAll">Select all</button>
+          <button class="btn" type="button" id="inNone">Clear</button>
+        </div>
+        <div class="stats" style="margin-top:14px">
+          <div class="stat"><div class="sl">Instantiations</div><div class="sv acc" id="inN">0</div></div>
+          <div class="stat"><div class="sl">Distinct bodies</div><div class="sv" id="inBodies">0</div></div>
+          <div class="stat"><div class="sl">.text added</div><div class="sv warn" id="inBytes">0 B</div></div>
+        </div>
+        <div class="note" id="inMsg" style="margin-top:12px"></div>
+      </div>
+      <div class="svgwrap">
+        <svg id="inSvg" viewBox="0 0 620 160" role="img" aria-label="A bar chart of the machine code emitted for each template instantiation, compared with the 32 kilobyte level-one instruction cache"></svg>
+      </div>
+    </div>
+    <div class="stack">
+      <pre class="code" id="inCode"></pre>
+      <div class="panel tight">
+        <h3>Generated symbols</h3>
+        <div class="kv" id="inKv"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ HOW ══════════════ -->
+<section id="how">
+  <div class="kicker">Part 2</div>
+  <h2><span class="secnum">2</span>How does it work? Deduce, constrain, branch — all at compile time</h2>
+  <p class="lead">Three mechanisms carry almost every generic thing you will write this term.
+  <strong>Deduction</strong> means you rarely spell out the type. <strong>Concepts</strong> say which
+  types are allowed, in one word, with an error message a human can read. <strong><code>if
+  constexpr</code></strong> lets one function body contain several mutually incompatible
+  implementations, because the compiler throws away the ones it did not pick.</p>
+
+  <div class="grid3" style="margin-top:16px">
+    <div class="panel">
+      <h4>Deduction &amp; specialization</h4>
+      <p class="sub"><code>max_of(3, 4)</code> deduces <code>T = int</code>; you never write
+      <code>&lt;int&gt;</code>. When one type deserves bespoke treatment you specialise:
+      a full specialization for exactly that type, or a partial one for a family
+      (<code>Ptr&lt;T*&gt;</code>). Overload the hot type when the generic body is a cycle too slow —
+      but measure first.</p>
+    </div>
+    <div class="panel">
+      <h4>Traits: asking about a type</h4>
+      <p class="sub"><code>std::is_integral_v&lt;T&gt;</code>,
+      <code>std::is_trivially_copyable_v&lt;T&gt;</code>, <code>std::is_same_v&lt;A,B&gt;</code> resolve
+      to <code>true</code>/<code>false</code> before the program runs.
+      <code>std::remove_reference_t</code>, <code>std::decay_t</code>,
+      <code>std::conditional_t</code> compute new <em class="hi">types</em>. Write your own: a trait is
+      just a template with a <code>static constexpr bool value</code>.</p>
+    </div>
+    <div class="panel">
+      <h4>Packs and folds</h4>
+      <p class="sub"><code>template &lt;class... Ts&gt;</code> binds a whole list;
+      <code>sizeof...(Ts)</code> is its length at compile time. A C++17 fold collapses the pack over an
+      operator in one line — <code>(xs + ...)</code>, or <code>(encode(b, fs), ...)</code> to write a
+      whole message. No recursion, no base case, and it unrolls completely.</p>
+    </div>
+  </div>
+
+  <h3 style="margin-top:30px">Interactive · does this type satisfy the concept?</h3>
+  <p class="sub" style="margin-bottom:12px">Concepts are the C++20 replacement for
+  <code>enable_if</code>: a named, readable constraint that fails <em class="hi">at the constraint</em>
+  instead of two hundred lines deep inside your codec. Click a cell to see the requirement and the
+  verdict.</p>
+
+  <div class="split">
+    <div class="stack">
+      <div class="svgwrap">
+        <svg id="cnSvg" viewBox="0 0 660 260" role="img" aria-label="A grid of concepts against candidate types showing which combinations satisfy the constraint"></svg>
+      </div>
+      <div class="legend">
+        <span><i style="background:#3fb950"></i>satisfies — this overload is viable</span>
+        <span><i style="background:#f85149"></i>does not — removed from the overload set</span>
+        <span><i style="background:var(--accent-2)"></i>selected</span>
+      </div>
+      <div class="row" role="group" aria-label="Select a concept and a type" style="margin-top:4px">
+        <div class="sw" id="cnConcepts"></div>
+      </div>
+      <div class="row" role="group" aria-label="Select a candidate type">
+        <div class="sw" id="cnTypes"></div>
+      </div>
+    </div>
+    <div class="stack">
+      <div class="panel">
+        <h4 id="cnTitle">—</h4>
+        <span class="pill" id="cnPill">—</span>
+        <p class="sub" id="cnWhy" style="margin-top:11px"></p>
+        <h3 style="margin-top:14px">The constraint</h3>
+        <pre class="code" id="cnCode"></pre>
+        <h3 style="margin-top:14px">The candidate</h3>
+        <pre class="code" id="cnType"></pre>
+      </div>
+      <div class="note" id="cnMsg"></div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:32px">Interactive · <code>if constexpr</code> — which arm survives?</h3>
+  <p class="sub" style="margin-bottom:12px">One body, three implementations, and only one of them is
+  ever compiled for a given <code>T</code>. The greyed lines are not dead code the optimiser removes
+  later — they are <em class="hi">never instantiated</em>, which is why they are allowed to be
+  nonsense for this type. Compare with the plain-<code>if</code> column.</p>
+
+  <div class="row" role="group" aria-label="Choose the instantiating type" style="margin-bottom:14px">
+    <div class="sw" id="icPick"></div>
+  </div>
+  <div class="codepair">
+    <div class="stack">
+      <div class="sub"><b style="color:var(--ink)">With <code>if constexpr</code> — compiles</b></div>
+      <pre class="code" id="icGood"></pre>
+      <div class="note" id="icGoodMsg"></div>
+    </div>
+    <div class="stack">
+      <div class="sub"><b style="color:var(--ink)">With a plain <code>if</code> — <span id="icVerdict">?</span></b></div>
+      <pre class="code" id="icBad"></pre>
+      <div class="note" id="icBadMsg"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ WHY ══════════════ -->
+<section id="why">
+  <div class="kicker">Part 3</div>
+  <h2><span class="secnum">3</span>Why it matters: one order book, every instrument — and the bill</h2>
+  <p class="lead">Here is the payoff, and here is the price. One <code>Ladder</code> template gives you a
+  fixed-depth book side for equities in integer ticks, for futures in a different tick size, and for
+  anything else, with <em class="hi">inline storage and no heap traffic</em> — and each instantiation is
+  a separate copy of the machine code. Both of those are true at once, and you are expected to say so.</p>
+
+  <h3 style="margin-top:24px">Interactive · the generic order-book ladder</h3>
+  <p class="sub" style="margin-bottom:12px">Parameterise on the price type, the depth and the side, then
+  read what the compiler produced: the layout, the <code>sizeof</code>, the cache lines it occupies and
+  which arm of the comparator survived.</p>
+
+  <div class="split">
+    <div class="stack">
+      <div class="svgwrap">
+        <svg id="ldSvg" viewBox="0 0 660 230" role="img" aria-label="The memory layout of one Ladder instantiation, showing the price array, the quantity array and the 64-byte cache line boundaries"></svg>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="sl">sizeof(Ladder)</div><div class="sv acc" id="ldSize">—</div></div>
+        <div class="stat"><div class="sl">Cache lines</div><div class="sv" id="ldLines">—</div></div>
+        <div class="stat"><div class="sl">Heap allocations</div><div class="sv ok" id="ldHeap">0</div></div>
+        <div class="stat"><div class="sl">Comparator</div><div class="sv" id="ldCmp">—</div></div>
+        <div class="stat"><div class="sl">Instantiations so far</div><div class="sv warn" id="ldInst">1</div></div>
+      </div>
+      <div class="note" id="ldMsg"></div>
+    </div>
+    <div class="stack">
+      <div class="panel">
+        <h3>Template arguments</h3>
+        <div class="ctl"><label for="ldPx">Price type <code>Px</code></label>
+          <select id="ldPx" aria-label="Price type template argument">
+            <option value="i64" selected>std::int64_t — ticks, 8 B</option>
+            <option value="i32">std::int32_t — ticks, 4 B</option>
+            <option value="dbl">double — 8 B, and a mistake</option>
+          </select></div>
+        <div class="ctl"><label for="ldDepth">Depth <code>N</code> <b id="ldDepthV">8</b></label>
+          <input type="range" id="ldDepth" min="4" max="32" step="4" value="8" aria-label="Ladder depth template argument"/></div>
+        <div class="ctl"><label for="ldSide">Side <code>S</code></label>
+          <select id="ldSide" aria-label="Side template argument">
+            <option value="bid" selected>Side::Bid — better means higher</option>
+            <option value="ask">Side::Ask — better means lower</option>
+          </select></div>
+      </div>
+      <pre class="code" id="ldCode"></pre>
+    </div>
+  </div>
+
+  <h3 style="margin-top:32px">Interactive · what the bloat actually costs</h3>
+  <p class="sub" style="margin-bottom:12px">Every instantiation is its own machine code. Usually
+  irrelevant; occasionally it is your p99, because the hot path stops fitting in the 32&#8239;KB
+  level-one instruction cache and every tick starts with a fetch miss.</p>
+
+  <div class="split-r">
+    <div class="panel">
+      <h3>Your hot path</h3>
+      <div class="ctl"><label for="blT">Distinct types instantiated <b id="blTV">6</b></label>
+        <input type="range" id="blT" min="1" max="24" value="6" aria-label="Number of distinct types instantiated"/></div>
+      <div class="ctl"><label for="blK">Templates on the hot path <b id="blKV">3</b></label>
+        <input type="range" id="blK" min="1" max="10" value="3" aria-label="Number of distinct templates on the hot path"/></div>
+      <div class="ctl"><label for="blB">Inlined body size <b id="blBV">380 B</b></label>
+        <input type="range" id="blB" min="40" max="1600" step="20" value="380" aria-label="Machine code size of one instantiated body in bytes"/></div>
+      <div class="ctl"><label for="blH">Rest of the hot path <b id="blHV">14 KB</b></label>
+        <input type="range" id="blH" min="2" max="30" value="14" aria-label="Size of the rest of the hot path in kilobytes"/></div>
+      <div class="row">
+        <button class="btn" type="button" id="blOk">Sane</button>
+        <button class="btn" type="button" id="blBad">Pathological</button>
+      </div>
+    </div>
+    <div class="stack">
+      <div class="svgwrap">
+        <svg id="blSvg" viewBox="0 0 620 150" role="img" aria-label="A bar showing the instruction footprint of the hot path against the 32 kilobyte level-one instruction cache"></svg>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="sl">Generated code</div><div class="sv warn" id="blGen">—</div></div>
+        <div class="stat"><div class="sl">L1i footprint</div><div class="sv" id="blFoot">—</div></div>
+        <div class="stat"><div class="sl">of 32 KB L1i</div><div class="sv" id="blPct">—</div></div>
+        <div class="stat"><div class="sl">Compile time</div><div class="sv" id="blCt">—</div></div>
+      </div>
+      <div class="verdict">
+        <div class="nl" style="font-size:10px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--accent-2)">Verdict</div>
+        <div class="vt" id="blT2">—</div>
+        <p class="sub" id="blWhy" style="margin-top:8px"></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid2" style="margin-top:26px">
+    <div class="panel">
+      <h4>Three ways to keep the generality and lose the bloat</h4>
+      <ul class="plain">
+        <li><b>Hoist the non-dependent part.</b> Anything in the body that does not mention <code>T</code> belongs in an ordinary non-template function the instantiations call. One copy instead of twenty.</li>
+        <li><b>Normalise the type before you instantiate.</b> <code>std::string</code>, <code>const char*</code> and <code>char[8]</code> are three different <code>T</code>s and three copies of the same algorithm. Take a <code>std::string_view</code> and you have one.</li>
+        <li><b>Type-erase the cold path only.</b> Configuration, reporting and the shutdown sequence can be virtual. Keeping the hot path monomorphic is the point; making <em class="hi">everything</em> a template is not.</li>
+      </ul>
+    </div>
+    <div class="panel">
+      <h4>Where this lands in your bot</h4>
+      <p class="sub">Your C++ bot speaks a JSON tagged union to the Python exchange — <code>Handshake</code>,
+      <code>PlaceOrder</code>, <code>OrderAck</code>, <code>BookSnapshot</code>, <code>CancelOrder</code>,
+      each selected by a <code>type</code> field. This week that becomes one templated
+      <code>put&lt;T&gt;</code> / <code>encode&lt;T&gt;</code> path with an <code>if constexpr</code>
+      per field kind and a fold to write a whole message, instead of one hand-written serialiser per
+      message and a runtime <code>switch</code> on the tag.</p>
+      <p class="sub">Next week that same union becomes a <code>std::variant</code> with a compile-time
+      visitor, and the <code>switch</code> disappears from the receive path too. Everything in Week 6 —
+      traits, tag dispatch, CRTP, policies — is built on what you write today.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ PITFALLS ══════════════ -->
+<section id="pitfalls">
+  <div class="kicker">Part 4</div>
+  <h2><span class="secnum">4</span>Five ways this goes wrong</h2>
+  <p class="lead">These are the five that cost marks on HW5, every time. Open them.</p>
+
+  <details class="pit"><summary>Putting the template's body in a <code>.cpp</code></summary>
+    <div class="body">
+      <p>You declare <code>template &lt;class T&gt; std::size_t put(Buf&amp;, const T&amp;);</code> in the
+      header and define it in <code>codec.cpp</code>. It compiles. Then the link fails with
+      <em class="hi">undefined reference to <code>put&lt;long&gt;(...)</code></em> and the message looks
+      like a build-system problem, which it is not.</p>
+      <p>A template is not code — the compiler can only emit <code>put&lt;long&gt;</code> at the point
+      where it can see both the use and the <strong>definition</strong>. Your translation unit saw the
+      declaration, so it emitted a call; the one that had the definition never saw a use, so it emitted
+      nothing.</p>
+      <p class="fix">Fix: define templates in the header (that is why the STL is header-only), or, if you
+      genuinely want to hide the body and you know the complete type set, use
+      <em class="hi">explicit instantiation</em>: <code>template std::size_t
+      put&lt;std::int64_t&gt;(Buf&amp;, const std::int64_t&amp;);</code> in the <code>.cpp</code>, one line
+      per type. That also caps the bloat — at the cost of the type set no longer being open.</p>
+    </div></details>
+
+  <details class="pit"><summary>Using a plain <code>if</code> where you needed <code>if constexpr</code></summary>
+    <div class="body">
+      <p><code>if (std::is_integral_v&lt;T&gt;) memcpy(out, &amp;v, sizeof v); else return
+      encode(v.data(), v.size());</code> reads fine and fails to build for <code>T = int</code>, because
+      <strong>both</strong> arms of a runtime <code>if</code> must compile for every instantiation —
+      and <code>int</code> has no <code>.data()</code>. The condition being a compile-time constant does
+      not save you; it is still an <code>if</code>.</p>
+      <p>The same mistake in reverse is subtler: with <code>if constexpr</code> the discarded arm is not
+      instantiated, so a genuine bug living in a branch no type ever selects will sit there silently for
+      the rest of the term until someone adds the type that reaches it.</p>
+      <p class="fix">Fix: <code>if constexpr</code> whenever the condition is a property of
+      <code>T</code>. Terminate the chain with <code>else static_assert(always_false&lt;T&gt;,
+      "unhandled type")</code> — a dependent-false helper, because a bare
+      <code>static_assert(false)</code> fires even in a discarded arm — so a type you forgot is a
+      readable build error instead of a silent fall-through.</p>
+    </div></details>
+
+  <details class="pit"><summary><code>T&amp;&amp;</code> is not always an rvalue reference</summary>
+    <div class="body">
+      <p>In <code>template &lt;class T&gt; void submit(T&amp;&amp; o)</code>, <code>T&amp;&amp;</code> is a
+      <em class="hi">forwarding reference</em>: it binds to lvalues and rvalues alike, and <code>T</code>
+      is deduced as <code>Order&amp;</code> in the first case. So <code>std::move(o)</code> inside that
+      function will happily gut a caller's live object — you moved from something the caller still owns
+      and still uses.</p>
+      <p>The tell is that it works in every test, because your tests pass temporaries. It breaks the
+      first time the call site passes a named variable, which is the first time it matters.</p>
+      <p class="fix">Fix: in a pass-through, always <code>std::forward&lt;T&gt;(o)</code>, never
+      <code>std::move</code>. <code>std::move</code> is for when you own the object and are done with
+      it. And remember the asymmetry: in <code>template &lt;class T&gt; class Pool { void
+      push(T&amp;&amp;); }</code>, <code>T</code> is already fixed by the class, so that
+      <code>T&amp;&amp;</code> really is an rvalue reference.</p>
+    </div></details>
+
+  <details class="pit"><summary>Instantiating the same algorithm three times by accident</summary>
+    <div class="body">
+      <p><code>send("AAPL")</code>, <code>send(sym_string)</code> and <code>send(sym_view)</code> look
+      like one function used three ways. They are <code>send&lt;char[5]&gt;</code>,
+      <code>send&lt;std::string&gt;</code> and <code>send&lt;std::string_view&gt;</code> — three
+      complete copies of your serialiser in <code>.text</code>, doing identical work. Multiply by the
+      number of call sites and templates and you can add tens of kilobytes to a hot path that has
+      32&#8239;KB of L1i to live in.</p>
+      <p>The cost does not show up as a slower call. It shows up as instruction-fetch misses at the
+      <em class="hi">start</em> of a tick, which is a p99 problem with no line of code to blame.</p>
+      <p class="fix">Fix: normalise at the boundary — take <code>std::string_view</code> and
+      <code>std::span&lt;const std::byte&gt;</code> so there is one <code>T</code>. Hoist every line that
+      does not mention <code>T</code> into a non-template helper. Then check: <code>nm -C --size-sort
+      your_bot | tail -40</code> lists your largest symbols, and duplicated instantiations are obvious
+      in that list.</p>
+    </div></details>
+
+  <details class="pit"><summary>Forgetting <code>typename</code>, and shipping the error wall</summary>
+    <div class="body">
+      <p><code>typename Container::value_type x;</code> needs the <code>typename</code> keyword because
+      at definition time the compiler cannot know whether <code>Container::value_type</code> names a
+      type or a member — the name is <em class="hi">dependent</em> on <code>T</code>, and the default
+      assumption is “not a type”. The sibling case is <code>obj.template get&lt;0&gt;()</code>, where
+      without <code>template</code> the <code>&lt;</code> parses as less-than.</p>
+      <p>The larger version of this pitfall is what you hand to whoever reads your error: an unconstrained
+      template that a wrong type reaches will fail deep inside your codec and print the whole
+      instantiation stack. The bug is one line at the call site; the message is two screens from
+      somewhere else.</p>
+      <p class="fix">Fix: <code>typename</code> for dependent types, <code>.template</code> for dependent
+      member templates. Then constrain the entry point — <code>template &lt;Encodable T&gt;</code>, or
+      <code>void send(Encodable auto&amp; m)</code> — so a wrong type fails at
+      <em class="hi">your</em> constraint with your name on it. That is the real reason concepts beat
+      <code>enable_if</code>: not brevity, error quality.</p>
+    </div></details>
+</section>
+
+<!-- ══════════════ CHECK ══════════════ -->
+<section id="check">
+  <div class="kicker">Part 5</div>
+  <h2><span class="secnum">5</span>Check yourself</h2>
+  <p class="lead">Three questions, instant feedback, nothing recorded.</p>
+
+  <div class="mcq" data-a="2" data-exp="<b>The inlining barrier.</b> The vtable load is two dependent loads and they are usually L1 hits; the indirect branch is nearly free at a monomorphic site because the branch-target buffer predicts it correctly every time. What you cannot get back is everything the optimiser was not allowed to do: it cannot see the callee, so no inlining, no constant folding of <code>sizeof</code> or of a field it now knows, no keeping the arguments in registers, no scheduling across the call. In the model in Part 1 that term alone is larger than the load and the branch together — and at a megamorphic site you then add a 15-cycle mispredict on top. The practical consequence: virtual is not banned, it is banned <em>per tick</em>. Configuration, reporting and shutdown can be as virtual as you like.">
+    <p class="q"><span>Q1</span>At a call site that only ever sees <em>one</em> concrete type, which part of a virtual call costs the most?</p>
+    <div class="opts">
+      <button class="opt" type="button">The vtable load — two dependent memory accesses</button>
+      <button class="opt" type="button">The indirect branch, because it mispredicts</button>
+      <button class="opt" type="button">The lost inlining, and everything the optimiser could not then do</button>
+      <button class="opt" type="button">The extra 8 bytes the vtable pointer adds to the object</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+
+  <div class="mcq" data-a="0" data-exp="<b>It fails to compile for T = int.</b> A runtime <code>if</code> requires both arms to be well-formed for every instantiation, whatever the condition evaluates to — and <code>int</code> has no <code>.data()</code>, so the else-arm is ill-formed and the whole instantiation is rejected. That the condition is a compile-time constant is irrelevant; it is still an <code>if</code>, and the compiler still has to type-check both branches before any optimiser sees them. <code>if constexpr</code> changes the language rule, not the optimisation: the discarded arm is <em>not instantiated</em>, so it is allowed to be nonsense for this <code>T</code>. That is precisely why one function body can serve genuinely unrelated types. Note the tax you accept in exchange: a bug in an arm that no current type selects is never compiled, so it never fails — until someone adds the type that reaches it.">
+    <p class="q"><span>Q2</span>You write <code>if (std::is_integral_v&lt;T&gt;) memcpy(out, &amp;v, sizeof v); else write(v.data(), v.size());</code> — a plain <code>if</code>, not <code>if constexpr</code> — and instantiate it with <code>T = int</code>. What happens?</p>
+    <div class="opts">
+      <button class="opt" type="button">It fails to compile: the else-arm is still type-checked for <code>int</code></button>
+      <button class="opt" type="button">It compiles and takes the integer branch; the condition is constant so the optimiser deletes the rest</button>
+      <button class="opt" type="button">It compiles but leaves a runtime branch, costing a mispredict per call</button>
+      <button class="opt" type="button">It compiles, and the else-arm is undefined behaviour if it ever runs</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+
+  <div class="mcq" data-a="3" data-exp="<b>Instruction-cache pressure — a p99 problem with no slow line of code.</b> Each instantiation is a separate copy of the machine code, so 20 of them at 700 bytes is about 14 KB of extra <code>.text</code> competing for a 32 KB L1i. Every individual call is still as fast as hand-written code — that part of the template promise holds exactly. What degrades is the front end: the first tick after a quiet moment now starts with instruction-fetch misses, so your median barely moves and your tail does. There is no profiler line to blame, which is why this one survives review. The fixes are mechanical: normalise the type at the boundary (<code>std::string_view</code>, <code>std::span</code>) so twenty <code>T</code>s become two; hoist every line that does not mention <code>T</code> into an ordinary non-template helper so there is one copy of it; and check your work with <code>nm -C --size-sort</code>, where duplicated instantiations are obvious.">
+    <p class="q"><span>Q3</span>You templatise the hot path and end up with 20 instantiations of a 700-byte inlined body. Every individual call gets faster. What is the risk you now have to check?</p>
+    <div class="opts">
+      <button class="opt" type="button">Each call gets slower again as the compiler runs out of registers</button>
+      <button class="opt" type="button">The dynamic linker has to resolve 20 symbols at startup</button>
+      <button class="opt" type="button">Nothing measurable — instantiations are shared if the code is identical</button>
+      <button class="opt" type="button">L1 instruction-cache pressure: p50 holds, p99 gets worse</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+</section>
+
+<!-- ══════════════ NEXT ══════════════ -->
+<section id="next">
+  <div class="kicker">Part 6</div>
+  <h2><span class="secnum">6</span>Do the work</h2>
+  <div class="grid2" style="margin-top:14px">
+    <div class="panel"><h4>In the lab (~45–60 min)</h4><ul class="plain">
+      <li>A function template as a code stamp: <code>max_of&lt;T&gt;</code>, then check with
+      <code>-O2 -S</code> that the call vanishes into a <code>cmov</code>.</li>
+      <li>A small generic container leaning on the STL — <code>std::vector</code>,
+      <code>std::sort</code>, <code>std::accumulate</code>, and <code>T{}</code> for the right zero.</li>
+      <li>A variadic <code>sum(...)</code> with a fold, then <code>avg(...)</code> on top of it using
+      <code>sizeof...(xs)</code>.</li>
+      <li>An <code>if constexpr</code> codec with an integer path and a quantised floating path, plus an
+      <code>enable_if</code> version of the same constraint so you have seen both.</li>
+    </ul></div>
+    <div class="panel"><h4>HW5 &amp; Project Phase 1</h4><ul class="plain">
+      <li><b>HW5:</b> a class template that works for two or more element types with inline storage, and
+      a variadic utility built on a fold expression — both with tests.</li>
+      <li><b>HW5:</b> an overload set constrained by <code>if constexpr</code> or SFINAE that selects a
+      different path per type, and evidence it inlines (diff <code>-O2 -S</code> for two
+      instantiations).</li>
+      <li><b>Phase 1:</b> replace the hand-written per-message serialisers with one templated
+      <code>encode&lt;T&gt;</code> / <code>decode&lt;T&gt;</code> — no per-type copy-paste on the send path.</li>
+      <li><b>Check the bill:</b> <code>nm -C --size-sort</code> on your binary. If one algorithm appears
+      three times, normalise the type.</li>
+    </ul></div>
+  </div>
+  <div class="nextgrid" style="margin-top:18px">
+    <div class="nextcard"><div class="nl">Code</div>
+      <div class="nt">Get the code</div>
+      <div class="nd">Both tracks share one starter tree. Week 5 has no stub — you work in a scratch
+      file and <code>make test</code> confirms nothing else regressed.</div>
+      <div class="row" style="margin-top:11px">
+        <a class="btn" href="https://github.com/sdonadio/hft-cpp-starter-columbia">15-week track starter</a>
+        <a class="btn" href="https://github.com/sdonadio/hft-cpp-starter-uchicago">9-session track starter</a>
+      </div></div>
+    <a class="nextcard" href="week4.html"><div class="nl">Previous</div>
+      <div class="nt">← Week 4 · Custom Allocators &amp; Memory Pools</div>
+      <div class="nd">You hand-wrote one pool. Now it is <code>Pool&lt;T,N&gt;</code>, once, for everything.</div></a>
+    <a class="nextcard" href="week6.html"><div class="nl">Next</div>
+      <div class="nt">Week 6 · Compile-Time &amp; Policy-Based Design →</div>
+      <div class="nd">Templates gave the compiler the types. Now give it the tables, the dispatch and the configuration too.</div></a>
+  </div>
+</section>
+
+<footer>Low-Latency Trading Arena · an interactive companion for a course on low-latency trading systems in C++ · <a href="https://github.com/sdonadio/low-latency-trading-arena">Source</a></footer>
+
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════
+   Week 5 — Templates & Generic Programming
+   ════════════════════════════════════════════════════════════════ */
+var $ = function (id) { return document.getElementById(id); };
+/* SVG namespace taken from the document so no absolute URL appears in this file */
+var SVGNS = $("dpSvg").namespaceURI;
+function mk(tag, attrs) {
+  var e = document.createElementNS(SVGNS, tag);
+  for (var k in attrs) { if (attrs.hasOwnProperty(k)) e.setAttribute(k, attrs[k]); }
+  return e;
+}
+function txt(x, y, s, size, fill, anchor, weight) {
+  var t = mk("text", { x: x, y: y, "font-size": size || 10, "font-family": "monospace", fill: fill || "#9aa0a6" });
+  if (anchor) t.setAttribute("text-anchor", anchor);
+  if (weight) t.setAttribute("font-weight", weight);
+  t.textContent = s;
+  return t;
+}
+function clear(n) { while (n.firstChild) n.removeChild(n.firstChild); }
+var C = { acc: "#7c3aed", acc2: "#c4b5fd", ok: "#3fb950", warn: "#d29922", bad: "#f85149",
+          info: "#6cb6ff", dim: "#5f6673", mute: "#9aa0a6", line: "#272c36", line2: "#333a47",
+          p2: "#1e222b", ink: "#e8e6e3" };
+function kb(v) { return v < 1024 ? v + " B" : (v / 1024).toFixed(1) + " KB"; }
+
+/* ════ 1. VIRTUAL vs TEMPLATE DISPATCH ════════════════════════ */
+var GHZ = 4.0, MISPREDICT_NS = 15 / GHZ;
+var DP = { calls: 12, types: 1, anim: 1, timer: null };
+var W_WORK = 1.20, W_INLINED = 0.75, V_VTABLE = 0.90, V_INDIRECT = 0.80, V_NOINLINE = 1.10;
+function dpModel() {
+  var rate = DP.types === 1 ? 0.0 : (DP.types - 1) / DP.types * 0.65;
+  var vc = W_WORK + V_VTABLE + V_INDIRECT + V_NOINLINE + rate * MISPREDICT_NS;
+  return { rate: rate, vc: vc, tc: W_INLINED, vt: vc * DP.calls, tt: W_INLINED * DP.calls };
+}
+function dpDraw() {
+  var m = dpModel(), a = DP.anim;
+  var svg = $("dpSvg"); clear(svg);
+  var X0 = 130, X1 = 636, W = X1 - X0;
+  var maxNs = Math.max(m.vt, 1) * 1.04;
+  var xw = function (v) { return v / maxNs * W; };
+  var parts = [
+    ["work", W_WORK, C.acc],
+    ["vtable load", V_VTABLE, C.info],
+    ["indirect call", V_INDIRECT, C.warn],
+    ["lost inlining", V_NOINLINE, C.bad],
+    ["mispredicts", m.rate * MISPREDICT_NS, "#a78bfa"]
+  ];
+  svg.appendChild(txt(X0, 22, "ns per tick — " + DP.calls + " call" + (DP.calls === 1 ? "" : "s") +
+    ", " + DP.types + " concrete type" + (DP.types === 1 ? "" : "s") + " at this site", 10.5, C.mute, null, "700"));
+  /* virtual bar, stacked */
+  var y = 46, h = 40, x = X0, i;
+  svg.appendChild(txt(X0 - 10, y + 25, "virtual", 11, C.bad, "end", "700"));
+  for (i = 0; i < parts.length; i++) {
+    var wpx = xw(parts[i][1] * DP.calls) * a;
+    if (wpx <= 0.4) continue;
+    svg.appendChild(mk("rect", { x: x, y: y, width: wpx, height: h, fill: parts[i][2], opacity: 0.82 }));
+    if (wpx > 46) svg.appendChild(txt(x + wpx / 2, y + 24, (parts[i][1] * DP.calls).toFixed(1), 9.5, "#0f1115", "middle", "700"));
+    x += wpx;
+  }
+  svg.appendChild(txt(Math.min(x + 7, X1 - 4), y + 25, (m.vt * a).toFixed(1) + " ns", 11, C.bad,
+    x + 7 > X1 - 60 ? "end" : "start", "700"));
+  /* template bar */
+  y = 104;
+  svg.appendChild(txt(X0 - 10, y + 25, "template", 11, C.ok, "end", "700"));
+  var tw = xw(m.tt) * a;
+  svg.appendChild(mk("rect", { x: X0, y: y, width: Math.max(1.5, tw), height: h, fill: C.acc, opacity: 0.9 }));
+  if (tw > 46) svg.appendChild(txt(X0 + tw / 2, y + 24, m.tt.toFixed(1), 9.5, "#0f1115", "middle", "700"));
+  svg.appendChild(txt(X0 + tw + 7, y + 25, (m.tt * a).toFixed(1) + " ns  ·  inlined, folded, no branch", 11, C.ok, null, "700"));
+  /* legend */
+  var lx = X0;
+  for (i = 0; i < parts.length; i++) {
+    if (parts[i][1] <= 0) continue;
+    svg.appendChild(mk("rect", { x: lx, y: 168, width: 10, height: 10, rx: 2, fill: parts[i][2] }));
+    svg.appendChild(txt(lx + 15, 177, parts[i][0], 9.5, C.mute));
+    lx += 26 + parts[i][0].length * 6.1;
+  }
+  svg.appendChild(txt(X0, 204, "the template bar is the work. Everything to the right of it on the top bar", 10, C.acc2));
+  svg.appendChild(txt(X0, 220, "is dispatch you paid for and did not need.", 10, C.acc2));
+
+  $("dpVc").textContent = m.vc.toFixed(2) + " ns";
+  $("dpVt").textContent = m.vt.toFixed(1) + " ns";
+  $("dpTc").textContent = m.tc.toFixed(2) + " ns";
+  $("dpTt").textContent = m.tt.toFixed(1) + " ns";
+  $("dpX").textContent = (m.vc / m.tc).toFixed(2) + "×";
+  $("dpSave").textContent = (m.vt - m.tt).toFixed(1) + " ns";
+  $("dpMp").textContent = (m.rate * 100).toFixed(0) + "%";
+  $("dpMp").className = "sv " + (m.rate > 0.4 ? "bad" : m.rate > 0 ? "warn" : "ok");
+  $("dpSec").textContent = ((m.vt - m.tt) * 2e6 / 1e6).toFixed(1) + " ms/s";
+  $("dpCallsInline").textContent = DP.calls;
+  $("dpMsg").innerHTML = DP.types === 1
+    ? "<b>Monomorphic site.</b> The branch predictor gets the indirect call right every time, so the mispredict term is zero — and virtual is <em>still</em> " +
+      (m.vc / m.tc).toFixed(1) + "× the template, entirely because the compiler could not see the body. This is the case people mean when they say “virtual is cheap”, and it is the case where the template still wins."
+    : "<b>" + DP.types + " concrete types at one site.</b> The branch-target buffer now mispredicts about " +
+      (m.rate * 100).toFixed(0) + "% of the time, and each miss costs 15 cycles — " + MISPREDICT_NS.toFixed(2) +
+      " ns at " + GHZ.toFixed(1) + " GHz. A template has nothing to predict: the target is in the instruction stream.";
+}
+$("dpCalls").addEventListener("input", function () { DP.calls = +this.value; $("dpCallsV").textContent = DP.calls; dpDraw(); });
+$("dpTypes").addEventListener("input", function () { DP.types = +this.value; $("dpTypesV").textContent = DP.types; dpDraw(); });
+$("dpRace").addEventListener("click", function () {
+  if (DP.timer) { clearInterval(DP.timer); DP.timer = null; }
+  DP.anim = 0;
+  DP.timer = setInterval(function () {
+    DP.anim += 0.07;
+    if (DP.anim >= 1) { DP.anim = 1; clearInterval(DP.timer); DP.timer = null; }
+    dpDraw();
+  }, 26);
+});
+$("dpMono").addEventListener("click", function () {
+  DP.types = 1; $("dpTypes").value = 1; $("dpTypesV").textContent = "1"; dpDraw();
+});
+$("dpPoly").addEventListener("click", function () {
+  DP.types = 6; $("dpTypes").value = 6; $("dpTypesV").textContent = "6"; dpDraw();
+});
+dpDraw();
+
+/* ════ 2. INSTANTIATION EXPLORER ══════════════════════════════ */
+var IN_TYPES = [
+  { k: "i32", n: "std::int32_t", mangled: "put<int>", body: "integer", bytes: 96,
+    note: "the integer arm: one memcpy of 4 bytes, then a return" },
+  { k: "i64", n: "std::int64_t", mangled: "put<long>", body: "integer", bytes: 96,
+    note: "the integer arm again — same shape, different width" },
+  { k: "price", n: "Price", mangled: "put<Price>", body: "integer", bytes: 96,
+    note: "a struct wrapping one int64_t. Byte-identical code to put<long>, and a SEPARATE symbol." },
+  { k: "dbl", n: "double", mangled: "put<double>", body: "floating", bytes: 168,
+    note: "the floating arm: a multiply, a rounding add, a cvttsd2si, then the memcpy" },
+  { k: "flt", n: "float", mangled: "put<float>", body: "floating", bytes: 168,
+    note: "the floating arm with a widening conversion first" },
+  { k: "sv", n: "std::string_view", mangled: "put<string_view>", body: "bytes", bytes: 240,
+    note: "the byte arm: pointer plus length, no ownership, no allocation" },
+  { k: "str", n: "std::string", mangled: "put<string>", body: "bytes", bytes: 264,
+    note: "the byte arm — and a third copy of it, because std::string is not string_view" },
+  { k: "arr", n: "char[8]", mangled: "put<char[8]>", body: "bytes", bytes: 232,
+    note: "a fourth copy. Array-to-pointer decay happens AFTER deduction, so char[8] is its own T." }
+];
+var IN = { sel: { i64: 1, dbl: 1, str: 1 } };
+function inBuild() {
+  var box = $("inPick"); box.innerHTML = "";
+  IN_TYPES.forEach(function (t) {
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "chk"; b.textContent = t.n;
+    b.setAttribute("aria-pressed", IN.sel[t.k] ? "true" : "false");
+    b.setAttribute("data-k", t.k);
+    b.addEventListener("click", function () {
+      if (IN.sel[t.k]) delete IN.sel[t.k]; else IN.sel[t.k] = 1;
+      b.setAttribute("aria-pressed", IN.sel[t.k] ? "true" : "false");
+      inDraw();
+    });
+    box.appendChild(b);
+  });
+}
+function inDraw() {
+  var chosen = IN_TYPES.filter(function (t) { return IN.sel[t.k]; });
+  var total = 0, bodies = {}, i;
+  for (i = 0; i < chosen.length; i++) { total += chosen[i].bytes; bodies[chosen[i].body] = 1; }
+  var nBodies = Object.keys(bodies).length;
+  $("inN").textContent = chosen.length;
+  $("inBodies").textContent = nBodies;
+  $("inBytes").textContent = kb(total);
+  $("inBytes").className = "sv " + (total > 1400 ? "bad" : total > 700 ? "warn" : "ok");
+
+  var lines = [
+    '<span class="c">// one template ...</span>',
+    '<span class="k">template</span> &lt;<span class="k">class</span> <span class="b">T</span>&gt;',
+    'std::size_t put(Buf&amp; b, <span class="k">const</span> T&amp; v);',
+    '',
+    '<span class="c">// ... and the ' + chosen.length + ' function' + (chosen.length === 1 ? "" : "s") + ' the compiler actually emitted:</span>'
+  ];
+  var kvh = "";
+  for (i = 0; i < chosen.length; i++) {
+    lines.push('std::size_t <span class="b">put&lt;' + chosen[i].n.replace(/</g, "&lt;") +
+      '&gt;</span>(Buf&amp;, <span class="k">const</span> ' + chosen[i].n.replace(/</g, "&lt;") + '&amp;);' +
+      '   <span class="c">// ' + chosen[i].bytes + ' B, ' + chosen[i].body + ' arm</span>');
+    kvh += "<b>" + chosen[i].mangled.replace(/</g, "&lt;") + "</b><span>" + chosen[i].note + "</span>";
+  }
+  if (!chosen.length) {
+    lines.push('<span class="c">// nothing. A template you never use emits NO code at all —</span>');
+    lines.push('<span class="c">// which is why an unused header costs you compile time, not size.</span>');
+    kvh = "<b>—</b><span>select a type</span>";
+  }
+  $("inCode").innerHTML = lines.join("\n");
+  $("inKv").innerHTML = kvh;
+
+  var dupes = chosen.length - nBodies;
+  $("inMsg").innerHTML = !chosen.length
+    ? "<b>Zero instantiations, zero bytes.</b> The definition sat in the header and nothing was emitted. Instantiation is driven by <em>use</em>."
+    : (dupes > 0
+      ? "<b>" + chosen.length + " symbols, " + nBodies + " distinct implementation" + (nBodies === 1 ? "" : "s") +
+        ".</b> " + dupes + " of them are duplicated work: <code>Price</code> and <code>std::int64_t</code> compile to identical code, and <code>std::string</code>, <code>std::string_view</code> and <code>char[8]</code> are three copies of one byte-copier. Normalise the parameter and the duplicates collapse."
+      : "<b>" + chosen.length + " symbol" + (chosen.length === 1 ? "" : "s") + ", " + nBodies +
+        " implementation" + (nBodies === 1 ? "" : "s") + ".</b> No duplication yet — every instantiation is doing genuinely different work.");
+
+  /* bar chart against L1i */
+  var svg = $("inSvg"); clear(svg);
+  var X0 = 20, X1 = 600, W = X1 - X0, Y = 44, H = 30;
+  var L1I = 32768, scaleMax = Math.max(2600, total * 1.15);
+  svg.appendChild(txt(X0, 22, "machine code emitted, byte for byte — the 32 KB L1i is " + Math.round(L1I / scaleMax * 100) + "× wider than this bar", 10.5, C.mute, null, "700"));
+  svg.appendChild(mk("rect", { x: X0, y: Y, width: W, height: H, rx: 5, fill: C.p2, stroke: C.line }));
+  var x = X0;
+  for (i = 0; i < chosen.length; i++) {
+    var w = chosen[i].bytes / scaleMax * W;
+    svg.appendChild(mk("rect", { x: x, y: Y, width: Math.max(1, w - 1), height: H,
+      fill: chosen[i].body === "integer" ? C.acc : chosen[i].body === "floating" ? C.info : C.warn, opacity: 0.85 }));
+    if (w > 44) svg.appendChild(txt(x + w / 2, Y + 19, chosen[i].bytes + "B", 9, "#0f1115", "middle", "700"));
+    x += w;
+  }
+  svg.appendChild(txt(X0, Y + H + 20, "total .text added: " + kb(total) + "  ·  " +
+    (total / L1I * 100).toFixed(2) + "% of one core's 32 KB instruction cache", 10.5,
+    total > 1400 ? C.warn : C.ok));
+  svg.appendChild(txt(X0, Y + H + 40, "irrelevant at this scale. It stops being irrelevant when the whole hot path stops fitting — see Part 3.", 10, C.dim));
+  svg.appendChild(txt(X0, Y + H + 60, "colour = which arm of the if constexpr survived: violet integer · blue floating · amber bytes", 10, C.dim));
+}
+$("inAll").addEventListener("click", function () {
+  IN_TYPES.forEach(function (t) { IN.sel[t.k] = 1; }); inBuild(); inDraw();
+});
+$("inNone").addEventListener("click", function () { IN.sel = {}; inBuild(); inDraw(); });
+inBuild(); inDraw();
+
+/* ════ 3. CONCEPT CHECKER ═════════════════════════════════════ */
+var CN_TYPES = [
+  { k: "i64", n: "std::int64_t", integral: 1, bytes: 8, trivial: 1, enc: 1, quote: 0,
+    decl: 'using Price = std::int64_t;   // ticks, not dollars' },
+  { k: "i16", n: "std::int16_t", integral: 1, bytes: 2, trivial: 1, enc: 1, quote: 0,
+    decl: 'std::int16_t depth;           // integral, but only 2 bytes' },
+  { k: "dbl", n: "double", integral: 0, bytes: 8, trivial: 1, enc: 1, quote: 0,
+    decl: 'double px;                    // 8 bytes, and not integral' },
+  { k: "quote", n: "Quote", integral: 0, bytes: 64, trivial: 1, enc: 0, quote: 1,
+    decl: 'struct alignas(64) Quote {\n  std::int64_t bid_ticks, ask_ticks;\n  std::uint32_t bid_qty, ask_qty;\n  std::uint64_t seq;\n  std::int64_t bid() const { return bid_ticks; }\n  std::int64_t ask() const { return ask_ticks; }\n};' },
+  { k: "str", n: "std::string", integral: 0, bytes: 32, trivial: 0, enc: 0, quote: 0,
+    decl: 'std::string symbol;           // owns a heap buffer' }
+];
+var CN_CONCEPTS = [
+  { k: "int", n: "std::integral",
+    code: '<span class="k">template</span> &lt;<span class="k">class</span> T&gt;\n<span class="k">concept</span> <span class="b">integral</span> = std::is_integral_v&lt;T&gt;;\n<span class="c">// from &lt;concepts&gt;</span>',
+    test: function (t) { return !!t.integral; },
+    why: function (t) { return t.integral ? "<code>std::is_integral_v</code> is true, so the constraint is satisfied and this overload stays in the set." : "not an integral type, so the constraint fails and the overload is removed — quietly, and with a readable message if nothing else matches."; } },
+  { k: "px", n: "PriceLike",
+    code: '<span class="k">template</span> &lt;<span class="k">class</span> T&gt;\n<span class="k">concept</span> <span class="b">PriceLike</span> = std::integral&lt;T&gt; &amp;&amp; <span class="k">sizeof</span>(T) &gt;= <span class="n">4</span>;\n<span class="c">// conjunction: BOTH clauses must hold</span>',
+    test: function (t) { return !!t.integral && t.bytes >= 4; },
+    why: function (t) {
+      if (!t.integral) return "fails the first clause: prices are integers of ticks in this system, never floating point, so a <code>double</code> is rejected on purpose.";
+      if (t.bytes < 4) return "integral, but <code>sizeof</code> is " + t.bytes + " bytes — fails the second clause. A 16-bit price overflows at 327.67, which is a bug you want the compiler to find.";
+      return "integral and " + t.bytes + " bytes wide, so both clauses hold. Note that a conjunction short-circuits: if the first clause fails, the second is never checked, which keeps the error message pointed at the real problem.";
+    } },
+  { k: "enc", n: "Encodable",
+    code: '<span class="k">template</span> &lt;<span class="k">class</span> T&gt;\n<span class="k">concept</span> <span class="b">Encodable</span> = <span class="k">requires</span>(Buf&amp; b, <span class="k">const</span> T&amp; v) {\n  { encode_one(b, v) } -&gt; std::same_as&lt;std::size_t&gt;;\n};\n<span class="c">// a requires-expression: must COMPILE, and</span>\n<span class="c">// must return exactly std::size_t</span>',
+    test: function (t) { return !!t.enc; },
+    why: function (t) { return t.enc ? "there is an <code>encode_one</code> overload that accepts this type and returns <code>std::size_t</code>, so the requires-expression compiles. The concept never runs it — it only asks whether it would compile." : "no <code>encode_one</code> overload accepts this type, so the requires-expression is ill-formed and the concept is false. This is the whole point: the failure is reported at your constraint, not two hundred lines inside the codec."; } },
+  { k: "quo", n: "Quotable",
+    code: '<span class="k">template</span> &lt;<span class="k">class</span> T&gt;\n<span class="k">concept</span> <span class="b">Quotable</span> = <span class="k">requires</span>(<span class="k">const</span> T&amp; q) {\n  { q.bid() } -&gt; PriceLike;\n  { q.ask() } -&gt; PriceLike;\n};\n<span class="c">// two requirements, and the RESULTS are</span>\n<span class="c">// themselves constrained by PriceLike</span>',
+    test: function (t) { return !!t.quote; },
+    why: function (t) { return t.quote ? "both <code>bid()</code> and <code>ask()</code> exist and return an integral type at least 4 bytes wide, so the nested <code>PriceLike</code> constraint on each result also holds." : "no <code>bid()</code> / <code>ask()</code> members, so the first requirement already fails to compile. Nested constraints like this are how you express “duck typing, but checked”."; } },
+  { k: "triv", n: "trivially_copyable",
+    code: '<span class="c">// not a concept — a trait, used as one</span>\n<span class="k">template</span> &lt;<span class="k">class</span> T&gt;\n<span class="k">concept</span> <span class="b">Wireable</span> = std::is_trivially_copyable_v&lt;T&gt;\n                 &amp;&amp; <span class="k">sizeof</span>(T) &lt;= <span class="n">64</span>;\n<span class="c">// safe to memcpy straight onto the wire</span>',
+    test: function (t) { return !!t.trivial && t.bytes <= 64; },
+    why: function (t) {
+      if (!t.trivial) return "not trivially copyable — it owns a heap pointer, so <code>memcpy</code>ing it onto the wire would send an address that means nothing on the other side. This is exactly the bug the constraint exists to prevent.";
+      if (t.bytes > 64) return "trivially copyable, but larger than one cache line, so it fails the size clause of this particular concept.";
+      return "trivially copyable and " + t.bytes + " bytes, so a single <code>memcpy</code> is a correct and complete serialisation.";
+    } }
+];
+var CN = { c: 1, t: 0 };
+function cnDraw() {
+  var svg = $("cnSvg"); clear(svg);
+  var X0 = 150, cw = 96, ch = 34, Y0 = 46, i, j;
+  svg.appendChild(txt(14, 24, "concept  ×  candidate type", 10.5, C.mute, null, "700"));
+  for (j = 0; j < CN_TYPES.length; j++) {
+    svg.appendChild(txt(X0 + j * cw + cw / 2, 34, CN_TYPES[j].n.replace("std::", ""), 9.5, C.ink, "middle", "700"));
+  }
+  for (i = 0; i < CN_CONCEPTS.length; i++) {
+    var y = Y0 + i * ch;
+    svg.appendChild(txt(X0 - 10, y + 21, CN_CONCEPTS[i].n, 10, i === CN.c ? C.acc2 : C.mute, "end",
+      i === CN.c ? "700" : null));
+    for (j = 0; j < CN_TYPES.length; j++) {
+      var ok = CN_CONCEPTS[i].test(CN_TYPES[j]);
+      var sel = (i === CN.c && j === CN.t);
+      svg.appendChild(mk("rect", { x: X0 + j * cw + 3, y: y + 3, width: cw - 6, height: ch - 6, rx: 5,
+        fill: ok ? "rgba(63,185,80,.20)" : "rgba(248,81,73,.16)",
+        stroke: sel ? C.acc2 : (ok ? "rgba(63,185,80,.55)" : "rgba(248,81,73,.5)"),
+        "stroke-width": sel ? 2.2 : 1 }));
+      svg.appendChild(txt(X0 + j * cw + cw / 2, y + 22, ok ? "satisfies" : "fails", 9.5,
+        ok ? C.ok : C.bad, "middle", "700"));
+    }
+  }
+  var cc = CN_CONCEPTS[CN.c], tt = CN_TYPES[CN.t], pass = cc.test(tt);
+  svg.appendChild(txt(14, Y0 + CN_CONCEPTS.length * ch + 24,
+    (pass ? "✓  " : "✗  ") + cc.n + "<" + tt.n + ">  is  " + (pass ? "true" : "false"),
+    11.5, pass ? C.ok : C.bad, null, "700"));
+  svg.appendChild(txt(14, Y0 + CN_CONCEPTS.length * ch + 42,
+    "a concept is a compile-time predicate on a type. Nothing is evaluated at run time; nothing is stored.", 10, C.dim));
+
+  $("cnTitle").innerHTML = cc.n + "&lt;" + tt.n.replace(/</g, "&lt;") + "&gt;";
+  $("cnPill").textContent = pass ? "satisfies the constraint" : "does not satisfy";
+  $("cnPill").className = "pill " + (pass ? "ok" : "bad");
+  $("cnWhy").innerHTML = cc.why(tt);
+  $("cnCode").innerHTML = cc.code;
+  $("cnType").textContent = tt.decl;
+  $("cnMsg").innerHTML = pass
+    ? "<b>Viable.</b> With <code>void send(" + cc.n + " auto&amp; m)</code>, this call compiles and the overload is selected. Constrained templates also participate in <em>ordering</em>: a more-constrained overload beats a less-constrained one, so you can layer a fast path over a generic one without a single runtime test."
+    : "<b>Removed from the overload set.</b> Not an error yet — if another overload matches, it is chosen silently. If none does, you get one message naming <code>" + cc.n + "</code> and the clause that failed, instead of the instantiation stack you would have got from <code>enable_if</code>.";
+  var bs = $("cnConcepts").querySelectorAll("button"), k;
+  for (k = 0; k < bs.length; k++) bs[k].setAttribute("aria-pressed", k === CN.c ? "true" : "false");
+  bs = $("cnTypes").querySelectorAll("button");
+  for (k = 0; k < bs.length; k++) bs[k].setAttribute("aria-pressed", k === CN.t ? "true" : "false");
+}
+(function () {
+  CN_CONCEPTS.forEach(function (c, i) {
+    var b = document.createElement("button");
+    b.type = "button"; b.textContent = c.n; b.setAttribute("aria-pressed", i === CN.c ? "true" : "false");
+    b.addEventListener("click", function () { CN.c = i; cnDraw(); });
+    $("cnConcepts").appendChild(b);
+  });
+  CN_TYPES.forEach(function (t, i) {
+    var b = document.createElement("button");
+    b.type = "button"; b.textContent = t.n; b.setAttribute("aria-pressed", i === CN.t ? "true" : "false");
+    b.addEventListener("click", function () { CN.t = i; cnDraw(); });
+    $("cnTypes").appendChild(b);
+  });
+})();
+cnDraw();
+
+/* ════ 4. IF CONSTEXPR — WHICH ARM SURVIVES ═══════════════════ */
+var IC_TYPES = [
+  { k: "i64", n: "std::int64_t", arm: 0 },
+  { k: "dbl", n: "double", arm: 1 },
+  { k: "sv", n: "std::string_view", arm: 2 },
+  { k: "quote", n: "Quote", arm: 3 }
+];
+var IC = { i: 0 };
+var IC_BODY = [
+  { txt: '<span class="k">template</span> &lt;<span class="k">class</span> <span class="b">T</span>&gt;', arm: -1 },
+  { txt: 'std::size_t put(Buf&amp; b, <span class="k">const</span> T&amp; v) {', arm: -1 },
+  { txt: '  <span class="k">if</span> <span class="k">constexpr</span> (std::is_integral_v&lt;T&gt;) {', arm: -1 },
+  { txt: '    std::memcpy(b.p, &amp;v, <span class="k">sizeof</span> v);        <span class="c">// integer</span>', arm: 0 },
+  { txt: '    <span class="k">return</span> <span class="k">sizeof</span> v;', arm: 0 },
+  { txt: '  } <span class="k">else</span> <span class="k">if</span> <span class="k">constexpr</span> (std::is_floating_point_v&lt;T&gt;) {', arm: -1 },
+  { txt: '    <span class="k">auto</span> ticks = <span class="k">static_cast</span>&lt;std::int64_t&gt;(v * <span class="n">100.0</span> + <span class="n">0.5</span>);', arm: 1 },
+  { txt: '    std::memcpy(b.p, &amp;ticks, <span class="k">sizeof</span> ticks);  <span class="c">// quantised</span>', arm: 1 },
+  { txt: '    <span class="k">return</span> <span class="k">sizeof</span> ticks;', arm: 1 },
+  { txt: '  } <span class="k">else</span> <span class="k">if</span> <span class="k">constexpr</span> (<span class="k">requires</span> { v.data(); v.size(); }) {', arm: -1 },
+  { txt: '    std::memcpy(b.p, v.data(), v.size());     <span class="c">// bytes</span>', arm: 2 },
+  { txt: '    <span class="k">return</span> v.size();', arm: 2 },
+  { txt: '  } <span class="k">else</span> <span class="k">if</span> <span class="k">constexpr</span> (std::is_trivially_copyable_v&lt;T&gt;) {', arm: -1 },
+  { txt: '    std::memcpy(b.p, &amp;v, <span class="k">sizeof</span> v);        <span class="c">// raw struct</span>', arm: 3 },
+  { txt: '    <span class="k">return</span> <span class="k">sizeof</span> v;', arm: 3 },
+  { txt: '  } <span class="k">else</span> <span class="k">static_assert</span>(always_false&lt;T&gt;, <span class="s">"unhandled type"</span>);', arm: -1 },
+  { txt: '}', arm: -1 }
+];
+function icDraw() {
+  var t = IC_TYPES[IC.i], i;
+  var good = [], bad = [];
+  good.push('<span class="c">// instantiated with T = ' + t.n.replace(/</g, "&lt;") + '</span>');
+  for (i = 0; i < IC_BODY.length; i++) {
+    var L = IC_BODY[i];
+    if (L.arm < 0) good.push(L.txt);
+    else if (L.arm === t.arm) good.push('<span class="keep">' + L.txt + "</span>");
+    else good.push('<span class="dead">' + L.txt + "</span>");
+  }
+  good.push('');
+  good.push('<span class="c">// emitted: exactly ' + [ "the integer arm", "the floating arm", "the byte arm", "the raw-struct arm" ][t.arm] + '. The other three were never instantiated.</span>');
+  $("icGood").innerHTML = good.join("\n");
+
+  /* the plain-if version: every arm must be well-formed */
+  var armErr = [
+    { arm: 1, needs: "v * 100.0", ok: function (x) { return x.arm === 0 || x.arm === 1; } },
+    { arm: 2, needs: "v.data() / v.size()", ok: function (x) { return x.arm === 2; } },
+    { arm: 3, needs: "sizeof v as raw bytes", ok: function () { return true; } }
+  ];
+  var broken = [];
+  bad.push('<span class="c">// same body, plain if — T = ' + t.n.replace(/</g, "&lt;") + '</span>');
+  bad.push('<span class="k">template</span> &lt;<span class="k">class</span> <span class="b">T</span>&gt;');
+  bad.push('std::size_t put(Buf&amp; b, <span class="k">const</span> T&amp; v) {');
+  bad.push('  <span class="k">if</span> (std::is_integral_v&lt;T&gt;) {');
+  bad.push('    std::memcpy(b.p, &amp;v, <span class="k">sizeof</span> v);        <span class="c">// ok for any T</span>');
+  bad.push('    <span class="k">return</span> <span class="k">sizeof</span> v;');
+  var floatOk = (t.arm === 0 || t.arm === 1);
+  bad.push('  } <span class="k">else</span> <span class="k">if</span> (std::is_floating_point_v&lt;T&gt;) {');
+  bad.push('    <span class="' + (floatOk ? "" : "err") + '">    <span class="k">auto</span> t = <span class="k">static_cast</span>&lt;std::int64_t&gt;(v * <span class="n">100.0</span>);</span>' +
+    (floatOk ? '  <span class="c">// ok</span>' : '  <span class="c">// ERROR: no operator*</span>'));
+  if (!floatOk) broken.push("<code>v * 100.0</code> — " + t.n + " has no <code>operator*</code> with a <code>double</code>");
+  var byteOk = (t.arm === 2);
+  bad.push('  } <span class="k">else</span> {');
+  bad.push('    <span class="' + (byteOk ? "" : "err") + '">    std::memcpy(b.p, v.data(), v.size());</span>' +
+    (byteOk ? '     <span class="c">// ok</span>' : '   <span class="c">// ERROR: no member</span>'));
+  if (!byteOk) broken.push("<code>v.data()</code> and <code>v.size()</code> — " + t.n + " has no such members");
+  bad.push('  }');
+  bad.push('}');
+  $("icBad").innerHTML = bad.join("\n");
+
+  $("icVerdict").innerHTML = broken.length
+    ? '<span style="color:#f85149">does not compile</span>'
+    : '<span style="color:#3fb950">compiles, by luck</span>';
+  $("icGoodMsg").innerHTML = "<b>One arm emitted.</b> The three discarded arms are not optimised away later — they are never instantiated, so they never have to be valid for <code>" +
+    t.n.replace(/</g, "&lt;") + "</code>. The final <code>static_assert(always_false&lt;T&gt;, …)</code> uses a <em>dependent</em> false so it only fires in an arm that is actually selected; a bare <code>static_assert(false)</code> would fail every build.";
+  $("icBadMsg").innerHTML = broken.length
+    ? "<b>" + broken.length + " hard error" + (broken.length === 1 ? "" : "s") + ".</b> " + broken.join(". Then ") +
+      ". A runtime <code>if</code> requires every arm to be well-formed for this instantiation, no matter what the condition evaluates to — and the condition being a compile-time constant makes no difference to that rule."
+    : "<b>It happens to compile</b> for <code>" + t.n.replace(/</g, "&lt;") +
+      "</code>, because every arm is coincidentally valid for this one type. That is the trap: it will break the moment you instantiate it with the next type, and the error will point at a branch that type never takes.";
+  var bs = $("icPick").querySelectorAll("button"), k;
+  for (k = 0; k < bs.length; k++) bs[k].setAttribute("aria-pressed", k === IC.i ? "true" : "false");
+}
+(function () {
+  IC_TYPES.forEach(function (t, i) {
+    var b = document.createElement("button");
+    b.type = "button"; b.textContent = "T = " + t.n;
+    b.setAttribute("aria-pressed", i === IC.i ? "true" : "false");
+    b.addEventListener("click", function () { IC.i = i; icDraw(); });
+    $("icPick").appendChild(b);
+  });
+})();
+icDraw();
+
+/* ════ 5. THE GENERIC LADDER ══════════════════════════════════ */
+var LD = { px: "i64", depth: 8, side: "bid", seen: {} };
+var LD_PX = { i64: { n: "std::int64_t", b: 8 }, i32: { n: "std::int32_t", b: 4 }, dbl: { n: "double", b: 8 } };
+function ldDraw() {
+  var pxi = LD_PX[LD.px], N = LD.depth;
+  var pxBytes = pxi.b * N, qtyBytes = 4 * N, nBytes = 8;
+  /* std::size_t n_ needs 8-byte alignment; pad after the qty array if needed */
+  var raw = pxBytes + qtyBytes;
+  var pad = (8 - (raw % 8)) % 8;
+  var total = raw + pad + nBytes;
+  var lines = Math.ceil(total / 64);
+  LD.seen[LD.px + N + LD.side] = 1;
+  var nInst = Object.keys(LD.seen).length;
+
+  var svg = $("ldSvg"); clear(svg);
+  var X0 = 20, X1 = 640, W = X1 - X0, Y = 52, H = 34;
+  var scale = W / Math.max(total, 64 * lines);
+  svg.appendChild(txt(X0, 24, "Ladder<" + pxi.n + ", " + N + ", Side::" + (LD.side === "bid" ? "Bid" : "Ask") +
+    ">  —  one object, no heap, no pointers", 10.5, C.acc2, null, "700"));
+  var segs = [["px_[" + N + "]", pxBytes, C.acc], ["qty_[" + N + "]", qtyBytes, C.info]];
+  if (pad) segs.push(["pad", pad, C.dim]);
+  segs.push(["n_", nBytes, C.warn]);
+  var x = X0, i;
+  for (i = 0; i < segs.length; i++) {
+    var w = segs[i][1] * scale;
+    svg.appendChild(mk("rect", { x: x, y: Y, width: Math.max(1, w - 1), height: H, fill: segs[i][2], opacity: 0.8 }));
+    if (w > 52) {
+      svg.appendChild(txt(x + w / 2, Y + 15, segs[i][0], 9.5, "#0f1115", "middle", "700"));
+      svg.appendChild(txt(x + w / 2, Y + 27, segs[i][1] + " B", 9, "#0f1115", "middle"));
+    }
+    x += w;
+  }
+  /* cache line boundaries */
+  for (i = 1; i <= lines; i++) {
+    var bx = X0 + i * 64 * scale;
+    if (bx > X1 + 1) break;
+    svg.appendChild(mk("line", { x1: bx, y1: Y - 9, x2: bx, y2: Y + H + 9, stroke: C.bad, "stroke-width": 1.4, "stroke-dasharray": "4 3" }));
+    svg.appendChild(txt(bx, Y - 13, "64×" + i, 8.5, C.bad, "middle"));
+  }
+  svg.appendChild(txt(X0, Y + H + 34, "sizeof = " + total + " B  ·  " + lines + " cache line" +
+    (lines === 1 ? "" : "s") + "  ·  0 heap allocations  ·  0 indirections to read the best price", 10.5, C.ok));
+  svg.appendChild(txt(X0, Y + H + 54, LD.side === "bid"
+    ? "better(a,b) instantiated as  a > b   (Side::Bid — a higher bid is more aggressive)"
+    : "better(a,b) instantiated as  a < b   (Side::Ask — a lower ask is more aggressive)", 10.5, C.acc2));
+  svg.appendChild(txt(X0, Y + H + 74, LD.px === "dbl"
+    ? "double prices: 0.01 is not representable, so equal prices compare unequal and time priority silently breaks."
+    : "integer ticks: exact equality, exact arithmetic, and the comparison is one instruction.", 10.5,
+    LD.px === "dbl" ? C.bad : C.dim));
+  svg.appendChild(txt(X0, Y + H + 94, "each distinct <Px, N, S> triple is a separate class and a separate copy of every member function. " +
+    nInst + " instantiated so far on this page.", 10, C.dim));
+
+  $("ldSize").textContent = total + " B";
+  $("ldLines").textContent = lines;
+  $("ldLines").className = "sv " + (lines > 2 ? "warn" : "ok");
+  $("ldHeap").textContent = "0";
+  $("ldCmp").textContent = LD.side === "bid" ? "a > b" : "a < b";
+  $("ldInst").textContent = nInst;
+  $("ldMsg").innerHTML = LD.px === "dbl"
+    ? "<b>Do not do this.</b> The template will happily accept <code>double</code> — which is why the real one is constrained: <code>template &lt;PriceLike Px, std::size_t Depth, Side S&gt;</code> rejects it at the constraint, with a message that names <code>PriceLike</code>. Prices are integers of ticks. Always."
+    : (total <= 64
+      ? "<b>The whole book side fits in one cache line.</b> One fetch brings you the top " + N +
+        " levels of prices and quantities. That is the reason to parameterise on the price type rather than always using <code>double</code>."
+      : "<b>" + lines + " cache lines.</b> Prices and quantities are separate arrays, so scanning prices alone touches only the price lines — a struct-of-arrays layout you got for free by writing two <code>std::array</code>s instead of an array of structs.");
+
+  $("ldCode").innerHTML = [
+    '<span class="k">template</span> &lt;<span class="b">PriceLike</span> Px, std::size_t Depth, <span class="b">Side</span> S&gt;',
+    '<span class="k">class</span> <span class="b">Ladder</span> {',
+    '  <span class="k">static_assert</span>(Depth &gt; <span class="n">0</span> &amp;&amp; Depth &lt;= <span class="n">64</span>, <span class="s">"Depth must be 1..64"</span>);',
+    '  std::array&lt;Px, Depth&gt;            px_{};      <span class="c">// inline: no heap</span>',
+    '  std::array&lt;std::uint32_t, Depth&gt; qty_{};',
+    '  std::size_t                      n_ = <span class="n">0</span>;',
+    ' <span class="k">public</span>:',
+    '  <span class="k">static constexpr</span> <span class="k">bool</span> is_bid = (S == Side::Bid);',
+    '',
+    '  <span class="k">constexpr</span> <span class="k">bool</span> better(Px a, Px b) <span class="k">const</span> {   <span class="c">// one comparator,</span>',
+    '    <span class="k">if</span> <span class="k">constexpr</span> (is_bid) <span class="k">return</span> a &gt; b;    <span class="c">// both sides</span>',
+    '    <span class="k">else</span>                   <span class="k">return</span> a &lt; b;',
+    '  }',
+    '  Px best() <span class="k">const</span> { <span class="k">return</span> n_ ? px_[<span class="n">0</span>] : Px{}; }',
+    '};',
+    '',
+    '<span class="c">// the instantiation you selected:</span>',
+    '<span class="k">using</span> <span class="b">Top</span> = Ladder&lt;' + pxi.n + ', ' + N + ', Side::' + (LD.side === "bid" ? "Bid" : "Ask") + '&gt;;',
+    '<span class="k">static_assert</span>(<span class="k">sizeof</span>(Top) == <span class="n">' + total + '</span>);',
+    '<span class="k">static_assert</span>(std::is_trivially_copyable_v&lt;Top&gt;);'
+  ].join("\n");
+}
+$("ldPx").addEventListener("change", function () { LD.px = this.value; ldDraw(); });
+$("ldSide").addEventListener("change", function () { LD.side = this.value; ldDraw(); });
+$("ldDepth").addEventListener("input", function () { LD.depth = +this.value; $("ldDepthV").textContent = LD.depth; ldDraw(); });
+ldDraw();
+
+/* ════ 6. BLOAT vs COMPILE TIME ═══════════════════════════════ */
+var BL = { t: 6, k: 3, b: 380, h: 14 };
+var L1I = 32768;
+function blDraw() {
+  var gen = BL.t * BL.k * BL.b;
+  var foot = gen + BL.h * 1024;
+  var pctv = foot / L1I * 100;
+  /* compile time: base + per-instantiation, superlinear in template count */
+  var ct = 1.1 + BL.t * BL.k * 0.085 + Math.pow(BL.k, 1.35) * 0.35;
+  $("blGen").textContent = kb(gen);
+  $("blGen").className = "sv " + (gen > 16384 ? "bad" : gen > 6144 ? "warn" : "ok");
+  $("blFoot").textContent = kb(foot);
+  $("blPct").textContent = pctv.toFixed(0) + "%";
+  $("blPct").className = "sv " + (pctv > 100 ? "bad" : pctv > 75 ? "warn" : "ok");
+  $("blCt").textContent = ct.toFixed(1) + " s";
+  $("blCt").className = "sv " + (ct > 12 ? "bad" : ct > 5 ? "warn" : "ok");
+
+  var svg = $("blSvg"); clear(svg);
+  var X0 = 20, X1 = 600, W = X1 - X0, Y = 48, H = 36;
+  var scaleMax = Math.max(L1I * 1.25, foot * 1.08);
+  svg.appendChild(txt(X0, 24, "instruction footprint of the hot path", 10.5, C.mute, null, "700"));
+  svg.appendChild(mk("rect", { x: X0, y: Y, width: W, height: H, rx: 5, fill: C.p2, stroke: C.line }));
+  var wBase = BL.h * 1024 / scaleMax * W, wGen = gen / scaleMax * W;
+  svg.appendChild(mk("rect", { x: X0, y: Y, width: wBase, height: H, fill: C.dim, opacity: 0.7 }));
+  if (wBase > 70) svg.appendChild(txt(X0 + wBase / 2, Y + 22, "hand-written  " + BL.h + " KB", 9.5, "#0f1115", "middle", "700"));
+  svg.appendChild(mk("rect", { x: X0 + wBase, y: Y, width: wGen, height: H,
+    fill: pctv > 100 ? C.bad : C.acc, opacity: 0.85 }));
+  if (wGen > 78) svg.appendChild(txt(X0 + wBase + wGen / 2, Y + 22, "generated  " + kb(gen), 9.5, "#0f1115", "middle", "700"));
+  var lx = X0 + L1I / scaleMax * W;
+  svg.appendChild(mk("line", { x1: lx, y1: Y - 12, x2: lx, y2: Y + H + 12, stroke: C.bad, "stroke-width": 2 }));
+  svg.appendChild(txt(lx + 5, Y - 15, "32 KB L1i", 10, C.bad, null, "700"));
+  svg.appendChild(txt(X0, Y + H + 34, BL.t + " types × " + BL.k + " templates × " + BL.b + " B  =  " +
+    kb(gen) + " generated  ·  " + kb(foot) + " total  ·  " + pctv.toFixed(0) + "% of L1i", 10.5,
+    pctv > 100 ? C.bad : pctv > 75 ? C.warn : C.ok));
+  svg.appendChild(txt(X0, Y + H + 54, "compile time for this translation unit: about " + ct.toFixed(1) +
+    " s — a real cost, paid by every person on the team, every build.", 10, C.dim));
+
+  var t, why;
+  if (pctv > 100) {
+    t = "Over the cliff";
+    why = "The hot path no longer fits in a 32 KB L1i, so the first tick after any pause starts with instruction-fetch misses. Every individual call is still as fast as hand-written code — that half of the template promise is intact — but your p99 is now paying for code you never execute on this tick. Collapse the type set: normalise to <code>std::string_view</code> and <code>std::span</code>, hoist every non-dependent line into an ordinary function, and type-erase the cold path. Then measure the tail again, because that is the only number that moved.";
+  } else if (pctv > 75) {
+    t = "Tight — measure before you add more";
+    why = "You are at " + pctv.toFixed(0) + "% of L1i with " + BL.t * BL.k + " instantiations. Nothing is wrong yet, but you have no headroom, and the next feature is the one that pushes you over. Check the actual symbols now, while it is cheap: <code>nm -C --size-sort your_bot | tail -40</code>. If one algorithm shows up three times under different types, that is free space.";
+  } else if (ct > 12) {
+    t = "Fine at run time, painful at build time";
+    why = "The generated code fits comfortably — " + pctv.toFixed(0) + "% of L1i — so there is no latency problem here at all. The cost is " + ct.toFixed(1) + " s of compilation for one translation unit, which every developer pays on every build and which is the single most common reason a team quietly gives up on templates. Explicit instantiation in a <code>.cpp</code> caps it, at the price of a closed type set.";
+  } else {
+    t = "Healthy";
+    why = "About " + kb(gen) + " of generated code and " + pctv.toFixed(0) +
+      "% of L1i, built in " + ct.toFixed(1) + " s. This is the normal case, and it is why the default advice is to template the hot path without agonising: the bloat argument is real but it has a threshold, and you are nowhere near it. Keep the check in your habit list, not in your way.";
+  }
+  $("blT2").textContent = t;
+  $("blWhy").innerHTML = why;
+}
+$("blT").addEventListener("input", function () { BL.t = +this.value; $("blTV").textContent = BL.t; blDraw(); });
+$("blK").addEventListener("input", function () { BL.k = +this.value; $("blKV").textContent = BL.k; blDraw(); });
+$("blB").addEventListener("input", function () { BL.b = +this.value; $("blBV").textContent = BL.b + " B"; blDraw(); });
+$("blH").addEventListener("input", function () { BL.h = +this.value; $("blHV").textContent = BL.h + " KB"; blDraw(); });
+$("blOk").addEventListener("click", function () {
+  BL.t = 4; BL.k = 2; BL.b = 260; BL.h = 12;
+  $("blT").value = 4; $("blTV").textContent = "4";
+  $("blK").value = 2; $("blKV").textContent = "2";
+  $("blB").value = 260; $("blBV").textContent = "260 B";
+  $("blH").value = 12; $("blHV").textContent = "12 KB"; blDraw();
+});
+$("blBad").addEventListener("click", function () {
+  BL.t = 20; BL.k = 7; BL.b = 900; BL.h = 22;
+  $("blT").value = 20; $("blTV").textContent = "20";
+  $("blK").value = 7; $("blKV").textContent = "7";
+  $("blB").value = 900; $("blBV").textContent = "900 B";
+  $("blH").value = 22; $("blHV").textContent = "22 KB"; blDraw();
+});
+blDraw();
+
+/* ── MCQ engine (shared across week pages) ───────────────────── */
+Array.prototype.forEach.call(document.querySelectorAll(".mcq"), function (q) {
+  var answer = parseInt(q.getAttribute("data-a"), 10);
+  var opts = Array.prototype.slice.call(q.querySelectorAll(".opt"));
+  var fb = q.querySelector(".fb");
+  opts.forEach(function (o, i) {
+    o.addEventListener("click", function () {
+      if (q.dataset.done === "1") return;
+      q.dataset.done = "1";
+      var right = i === answer;
+      opts.forEach(function (b, j) {
+        b.disabled = true;
+        if (j === answer) b.classList.add("right");
+        else if (j === i) b.classList.add("wrong");
+        else b.classList.add("dim");
+      });
+      fb.innerHTML = (right ? "<b>Correct.</b> " : "<b>Not quite.</b> ") + q.getAttribute("data-exp");
+      fb.className = "fb show " + (right ? "good" : "poor");
+    });
+  });
+});
+</script>
+</body>
+</html>

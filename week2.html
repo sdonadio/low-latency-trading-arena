@@ -1,0 +1,1307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" href="data:," />
+<title>Week 2 · C++ Performance Foundations — Low-Latency Trading Arena</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    /* ── Low-Latency Trading Arena · shared palette (identical on every page) ── */
+    --accent:       #7c3aed;
+    --accent-2:     #c4b5fd;
+    --accent-3:     #ede9fe;
+    --accent-rgb:   124,58,237;
+    --accent-2-rgb: 196,181,253;
+    --bg:           #0f1115;
+    --panel:        #181b22;
+    --panel2:       #1e222b;
+    --panel-2:      #13161b;
+    --ink:          #e8e6e3;
+    --ink-dim:      #c6c3bf;
+    --ink-mute:     #6f757f;
+    --muted:        #9aa0a6;
+    --dim:          #5f6673;
+    --line:         #272c36;
+    --line-2:       #333a47;
+    --border:       #272c36;
+    --ok:           #3fb950;
+    --warn:         #d29922;
+    --bad:          #f85149;
+    --info:         #6cb6ff;
+    --sky:          #58a6ff;
+    --violet:       #a78bfa;
+    --teal:         #2dd4bf;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.62;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent-2);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  /* ── nav / footer ─────────────────────────────────────────── */
+  nav.top{position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+    padding:11px 22px;background:rgba(15,17,21,.94);border-bottom:1px solid var(--line)}
+  nav.top>a:first-child{font-weight:800;letter-spacing:-.2px;color:var(--ink);font-size:14.5px;
+    border-left:3px solid var(--accent);padding-left:10px}
+  nav.top .crumbs{font-size:12px;color:var(--muted)}
+  nav.top .crumbs b{color:var(--ink);font-weight:700}
+  footer{border-top:1px solid var(--line);background:var(--panel);
+    padding:26px 22px 34px;text-align:center;font-size:11.5px;color:var(--dim);letter-spacing:.3px}
+
+  /* ── sections & typography ────────────────────────────────── */
+  section{max-width:1180px;margin:0 auto;padding:36px 22px 42px;border-top:1px solid var(--line)}
+  section#hero{border-top:none}
+  .kicker{font-size:10.5px;font-weight:800;letter-spacing:1.9px;text-transform:uppercase;color:var(--accent-2)}
+  h1{font-size:clamp(26px,4.2vw,40px);font-weight:800;letter-spacing:-.9px;line-height:1.13;margin:10px 0 6px}
+  h2{font-size:21px;font-weight:700;letter-spacing:-.3px;margin:4px 0 4px}
+  h3{font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);margin-bottom:11px}
+  h4{font-size:13.5px;font-weight:700;margin-bottom:5px}
+  p{margin:9px 0;max-width:82ch}
+  .lead{color:var(--muted);font-size:15px;max-width:84ch}
+  .sub{color:var(--muted);font-size:12.5px}
+  strong{color:#fff;font-weight:650}
+  em.hi{color:var(--accent-2);font-style:normal;font-weight:600}
+  code,.mono{font-family:var(--mono);font-size:12.5px}
+  code{background:rgba(var(--accent-2-rgb),.13);color:#ddd4fb;padding:1px 5px;border-radius:4px}
+  ul.you{list-style:none;margin:16px 0 0;display:grid;gap:8px}
+  ul.you li{position:relative;padding-left:26px;font-size:13.5px;color:var(--ink);max-width:78ch}
+  ul.you li::before{content:"";position:absolute;left:4px;top:8px;width:8px;height:8px;border-radius:2px;
+    background:var(--accent);box-shadow:0 0 0 3px rgba(var(--accent-rgb),.22)}
+  ul.plain{list-style:none;display:grid;gap:7px;font-size:13px;color:var(--muted)}
+  ul.plain li{padding-left:16px;position:relative}
+  ul.plain li::before{content:"\2022";position:absolute;left:2px;color:var(--accent-2)}
+
+  /* ── panels & layout ──────────────────────────────────────── */
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .panel.tight{padding:13px 14px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;align-items:start}
+  .split{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:18px;align-items:start}
+  .split-r{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:18px;align-items:start}
+  .stack{display:grid;gap:14px}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+
+  /* ── controls ─────────────────────────────────────────────── */
+  .btn{font-family:inherit;font-size:12px;font-weight:650;cursor:pointer;color:var(--ink);
+    background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:7px 14px;transition:.15s}
+  .btn:hover:not(:disabled){border-color:var(--accent-2);color:#fff}
+  .btn:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .btn:disabled{opacity:.35;cursor:not-allowed}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.primary:hover:not(:disabled){filter:brightness(1.25)}
+  .btn.on{background:rgba(var(--accent-rgb),.28);border-color:var(--accent-2);color:#fff}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+  .tab{font-family:inherit;font-size:12px;font-weight:650;cursor:pointer;color:var(--muted);
+    background:transparent;border:1px solid var(--line);border-radius:20px;padding:6px 14px;transition:.15s}
+  .tab:hover{color:var(--ink)}
+  .tab[aria-selected="true"]{background:rgba(var(--accent-rgb),.3);border-color:var(--accent-2);color:#fff}
+  .tab:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .ctl{display:grid;gap:4px;margin-bottom:12px}
+  .ctl label{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);
+    display:flex;justify-content:space-between;gap:10px}
+  .ctl label b{font-family:var(--mono);color:var(--accent-2);font-size:12px;text-transform:none;letter-spacing:0}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:3px;
+    background:#2b313d;outline:none;cursor:pointer}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;
+    background:var(--accent-2);border:2px solid var(--bg);cursor:pointer}
+  input[type=range]::-moz-range-thumb{width:15px;height:15px;border-radius:50%;background:var(--accent-2);
+    border:2px solid var(--bg);cursor:pointer}
+  input[type=range]:focus-visible{box-shadow:0 0 0 3px rgba(var(--accent-2-rgb),.4)}
+  select,textarea,input[type=text]{font-family:var(--mono);font-size:12.5px;color:var(--ink);
+    background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:7px 9px;width:100%}
+  select:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px solid var(--accent-2);outline-offset:1px}
+  textarea{line-height:1.55;resize:vertical}
+
+  /* ── stats / pills / code ─────────────────────────────────── */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:1px;
+    background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .stat{background:var(--panel);padding:10px 12px}
+  .stat .sl{font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--dim)}
+  .stat .sv{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--ink);margin-top:3px}
+  .stat .sv.ok{color:var(--ok)} .stat .sv.bad{color:var(--bad)} .stat .sv.warn{color:var(--warn)}
+  .stat .sv.acc{color:var(--accent-2)}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;letter-spacing:.5px;
+    padding:3px 9px;border-radius:20px;border:1px solid var(--line);color:var(--muted)}
+  .pill.ok{color:var(--ok);border-color:rgba(63,185,80,.5);background:rgba(63,185,80,.1)}
+  .pill.bad{color:var(--bad);border-color:rgba(248,81,73,.5);background:rgba(248,81,73,.1)}
+  .pill.warn{color:var(--warn);border-color:rgba(210,153,34,.5);background:rgba(210,153,34,.1)}
+  .pill.acc{color:var(--accent-2);border-color:rgba(var(--accent-2-rgb),.5);background:rgba(var(--accent-rgb),.18)}
+  pre.code{font-family:var(--mono);font-size:11.8px;line-height:1.62;background:#0b0e14;color:#dbe3ea;
+    border:1px solid var(--line);border-radius:10px;padding:13px 14px;overflow-x:auto;white-space:pre}
+  pre.code .k{color:#6cb6ff} pre.code .s{color:#8ddb8c} pre.code .c{color:#6b7484;font-style:italic}
+  pre.code .n{color:#e0b070} pre.code .b{color:#ddd4fb;font-weight:700}
+  .note{border-left:3px solid var(--accent);background:rgba(var(--accent-rgb),.12);border-radius:0 8px 8px 0;
+    padding:10px 13px;font-size:12.5px;color:var(--muted)}
+  .note b{color:var(--ink)}
+  .log{font-family:var(--mono);font-size:11.5px;max-height:230px;overflow-y:auto;display:grid;gap:5px}
+  .log div{background:var(--panel2);border-left:3px solid var(--line);border-radius:0 6px 6px 0;padding:6px 9px;color:var(--muted)}
+  .log div.hl{border-left-color:var(--accent-2);color:var(--ink);background:rgba(var(--accent-rgb),.15)}
+  .log div.ok{border-left-color:var(--ok)} .log div.bad{border-left-color:var(--bad)}
+  svg{display:block;max-width:100%;height:auto}
+  .svgwrap{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px;overflow-x:auto}
+  table.t{width:100%;border-collapse:collapse;font-size:12px}
+  table.t th{font-size:9.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--dim);
+    text-align:left;padding:0 8px 7px;border-bottom:1px solid var(--line)}
+  table.t td{padding:7px 8px;border-bottom:1px solid rgba(39,44,54,.6);color:var(--muted);font-family:var(--mono);font-size:11.8px}
+  table.t td.n{color:var(--ink);font-weight:600}
+
+  /* ── pitfalls ─────────────────────────────────────────────── */
+  details.pit{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:10px;overflow:hidden}
+  details.pit>summary{cursor:pointer;padding:12px 15px;font-size:13.5px;font-weight:650;color:var(--ink);
+    list-style:none;display:flex;gap:11px;align-items:flex-start}
+  details.pit>summary::-webkit-details-marker{display:none}
+  details.pit>summary::before{content:"\25B8";color:var(--accent-2);font-size:12px;line-height:1.5;transition:.2s}
+  details.pit[open]>summary::before{transform:rotate(90deg)}
+  details.pit>summary:focus-visible{outline:2px solid var(--accent-2);outline-offset:-2px}
+  details.pit .body{padding:0 15px 15px 39px;font-size:13px;color:var(--muted);display:grid;gap:9px}
+  details.pit .body .fix{color:var(--ok);font-weight:600}
+
+  /* ── MCQ ──────────────────────────────────────────────────── */
+  .mcq{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 17px;margin-bottom:13px}
+  .mcq .q{font-size:13.8px;font-weight:650;color:var(--ink);margin:0 0 11px;max-width:84ch}
+  .mcq .q span{color:var(--accent-2);font-family:var(--mono);margin-right:7px}
+  .opts{display:grid;gap:7px}
+  .opt{text-align:left;font-family:inherit;font-size:13px;cursor:pointer;color:var(--muted);
+    background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:9px 12px;transition:.15s}
+  .opt:hover:not(:disabled){border-color:var(--accent-2);color:var(--ink)}
+  .opt:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .opt.right{border-color:var(--ok);background:rgba(63,185,80,.13);color:#bce8c4}
+  .opt.wrong{border-color:var(--bad);background:rgba(248,81,73,.12);color:#f4b6b1}
+  .opt.dim{opacity:.5}
+  .fb{margin-top:11px;font-size:12.5px;line-height:1.6;color:var(--muted);display:none;
+    border-left:3px solid var(--line);padding-left:11px}
+  .fb.show{display:block}
+  .fb.show.good{border-left-color:var(--ok)} .fb.show.poor{border-left-color:var(--bad)}
+  .fb b{color:var(--ink)}
+
+  /* ── next ─────────────────────────────────────────────────── */
+  .nextgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+  .nextcard{display:block;background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:15px 17px;transition:.18s;color:inherit}
+  .nextcard:hover{border-color:var(--accent-2);transform:translateY(-2px);text-decoration:none}
+  .nextcard .nl{font-size:10px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--accent-2)}
+  .nextcard .nt{font-size:14.5px;font-weight:700;color:var(--ink);margin-top:5px}
+  .nextcard .nd{font-size:12px;color:var(--muted);margin-top:5px}
+
+  @media (max-width:720px){
+    .grid2,.grid3,.split,.split-r{grid-template-columns:1fr}
+    section{padding:26px 15px 32px}
+    nav.top{padding:10px 15px;gap:8px}
+    nav.top .crumbs{font-size:11px}
+    p,.lead{max-width:none}
+  }
+
+  /* ── week-page shared ─────────────────────────────────────── */
+  #hero{padding:52px 22px 40px;
+    background:radial-gradient(ellipse 820px 340px at 22% -14%,rgba(var(--accent-rgb),.3),transparent 66%)}
+  #hero .wk{font-family:var(--mono);font-size:12px;letter-spacing:2px;color:var(--accent-2);font-weight:700}
+  #hero h1{max-width:24ch}
+  #hero .promise{font-size:16.5px;color:var(--ink);max-width:74ch;margin-top:10px;line-height:1.55}
+  .secnum{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;
+    background:rgba(var(--accent-rgb),.35);border:1px solid var(--accent-2);color:#fff;font-family:var(--mono);
+    font-size:11px;font-weight:700;margin-right:9px;vertical-align:2px}
+  .sw{display:inline-flex;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex-wrap:wrap}
+  .sw button{font-family:inherit;font-size:11.5px;font-weight:650;cursor:pointer;color:var(--muted);
+    background:var(--panel2);border:none;padding:7px 13px;transition:.15s}
+  .sw button[aria-pressed="true"]{background:rgba(var(--accent-rgb),.32);color:#fff}
+  .sw button:focus-visible{outline:2px solid var(--accent-2);outline-offset:-2px}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-top:10px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
+
+
+  /* ── week-2 specific ──────────────────────────────────────── */
+  .codepair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+  .tablewrap{overflow-x:auto}
+  .rungs{display:grid;gap:5px}
+  .rung{display:grid;grid-template-columns:138px minmax(0,1fr) 84px;gap:9px;align-items:center;
+    padding:3px 6px;border-radius:7px;border:1px solid transparent;cursor:pointer;text-align:left;
+    background:transparent;font-family:inherit;width:100%}
+  .rung:hover{border-color:var(--line-2)}
+  .rung[aria-pressed="true"]{border-color:var(--accent-2);background:rgba(var(--accent-rgb),.14)}
+  .rung:focus-visible{outline:2px solid var(--accent-2);outline-offset:1px}
+  .rung .rn{font-size:10.5px;font-weight:700;letter-spacing:.4px;color:var(--dim)}
+  .rung[aria-pressed="true"] .rn{color:var(--ink)}
+  .rung .rt{position:relative;height:17px;border-radius:5px;background:#0b0e14;border:1px solid var(--line);overflow:hidden}
+  .rung .rt i{display:block;height:100%;width:0;transition:width .2s}
+  .rung .rv{font-family:var(--mono);font-size:10.5px;color:var(--accent-2);text-align:right}
+  .steps{display:grid;gap:5px;font-family:var(--mono);font-size:11.5px}
+  .steps div{background:var(--panel2);border-left:3px solid var(--line);border-radius:0 6px 6px 0;
+    padding:6px 10px;color:var(--dim);white-space:pre-wrap;overflow-wrap:anywhere}
+  .steps div.on{border-left-color:var(--accent-2);color:var(--ink);background:rgba(var(--accent-rgb),.16)}
+  .steps div.past{color:var(--muted)}
+  .toggles{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:9px}
+  .tg{display:flex;gap:10px;align-items:flex-start;background:var(--panel2);border:1px solid var(--line);
+    border-radius:9px;padding:9px 11px;cursor:pointer;transition:.15s}
+  .tg:hover{border-color:var(--line-2)}
+  .tg.on{border-color:var(--accent-2);background:rgba(var(--accent-rgb),.14)}
+  .tg input{margin-top:2px;width:15px;height:15px;accent-color:var(--accent);flex-shrink:0;cursor:pointer}
+  .tg .tt{font-size:12px;font-weight:650;color:var(--ink)}
+  .tg .td{font-size:11px;color:var(--muted);margin-top:2px}
+  .verdict{margin-top:14px;font-family:var(--mono);font-size:13px;font-weight:700;letter-spacing:.6px}
+  .verdict.met{color:var(--ok)} .verdict.miss{color:var(--bad)}
+  .big{font-family:var(--mono);font-size:26px;font-weight:700;color:var(--accent-2);letter-spacing:-.5px}
+  .bigsub{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--dim);margin-top:2px}
+
+  /* ── mobile guard (identical on every page): single column under 720px,
+        no horizontal overflow. Must stay last in the sheet. ───────────── */
+  @media (max-width:720px){
+    .grid2,.grid3,.grid2.narrow-right,.split,.split-r,.codepair,
+    .nextgrid,.dash,.toggles,.lanes,.weeknav,.weeks,.roles,.stack{
+      grid-template-columns:minmax(0,1fr)}
+    [class*="grid"]>*,.stack>*,.wrap>*,.panel,.panel.tight,.nextcard,.wk,.row>*{min-width:0}
+    pre,pre.code,.svgwrap,svg,canvas,table,select,input,textarea,.mono{max-width:100%}
+    pre,pre.code,.svgwrap,.tablewrap{overflow-x:auto}
+    code,.mono{overflow-wrap:anywhere}
+    .ctl,.ctl>*,.controls>*,.row,.legend>*{min-width:0}
+    .ctl{flex-wrap:wrap} .ctl select,.ctl input[type=range]{flex:1 1 100%;width:100%}
+    p,.lead,.sub,.promise{max-width:none}
+  }
+</style>
+</head>
+<body>
+
+<nav class="top"><a href="index.html">Low-Latency Trading Arena</a><span class="crumbs"><a href="week1.html">← Week 1</a> · <b>Week 2 · C++ Performance Foundations</b> · <a href="week3.html">Week 3 →</a></span></nav>
+
+
+<!-- ══════════════ HERO ══════════════ -->
+<section id="hero">
+  <div class="wk">WEEK 2 · 15-WEEK TRACK  ·  SESSION 2 · 9-SESSION TRACK</div>
+  <h1>C++ Performance Foundations</h1>
+  <p class="promise">Your microseconds are not hiding in your arithmetic. They are hiding in
+  <strong>memory</strong> — in which cache level holds the number you asked for, in how many bytes you
+  copied to get it, and in whether you called the allocator on the way. This week installs a cost model in
+  your head, and a measuring habit you will use for the next thirteen topics.</p>
+  <ul class="you">
+    <li>Quote, from memory, what a <em class="hi">register access, an L1 hit, a DRAM miss, an allocation and a syscall</em> cost — to the right order of magnitude.</li>
+    <li>Count the copies in a piece of code by reading it, and say which ones the compiler will elide.</li>
+    <li>Explain why <code>new</code> on the hot path is a bug rather than merely slow.</li>
+    <li>Write a micro-benchmark that does not lie: release build, warm-up, a sink for the result, and percentiles instead of a mean.</li>
+  </ul>
+  <div class="row" style="margin-top:22px">
+    <span class="pill acc">Lab: stack vs heap, contiguous vs pointer-chase, <code>alignas(64)</code></span>
+    <span class="pill">Baseline your bot's <code>on_book</code> p99.9 this week</span>
+    <span class="pill warn">A benchmark without warm-up and a sink is not a result</span>
+  </div>
+</section>
+
+<!-- ══════════════ WHAT ══════════════ -->
+<section id="what">
+  <div class="kicker">Part 1</div>
+  <h2><span class="secnum">1</span>What is it? A cost model, in nanoseconds</h2>
+  <p class="lead">A modern core issues several instructions per nanosecond and then waits. Everything
+  interesting about performance is <strong>what it waits for</strong>. The ladder below is the whole
+  model: each rung is roughly an order of magnitude, and your job all term is to keep the hot path on the
+  top few rungs. Click a rung.</p>
+
+  <div class="split" style="margin-top:18px">
+    <div class="panel">
+      <h3>The cost of one operation · log scale</h3>
+      <div class="rungs" id="ladder" role="group" aria-label="Operations ordered by cost; select one to read what it is"></div>
+      <p class="sub" style="margin-top:12px">Representative figures for a ~3&#8239;GHz x86-64 server core.
+      Your machine will differ by a factor of two; it will not differ by a factor of ten, and the
+      <em class="hi">ordering</em> never changes.</p>
+    </div>
+    <div class="stack">
+      <div class="panel tight"><h3>This rung</h3>
+        <h4 id="lgName">—</h4>
+        <p class="sub" id="lgDesc"></p>
+        <div class="stats" style="margin-top:11px">
+          <div class="stat"><div class="sl">Cost</div><div class="sv acc" id="lgNs">—</div></div>
+          <div class="stat"><div class="sl">Cycles at 3 GHz</div><div class="sv" id="lgCyc">—</div></div>
+          <div class="stat"><div class="sl">Versus an L1 hit</div><div class="sv" id="lgRel">—</div></div>
+          <div class="stat"><div class="sl">Taught in</div><div class="sv" id="lgWk">—</div></div>
+        </div>
+      </div>
+      <div class="panel tight">
+        <h3>How many fit in your budget?</h3>
+        <div class="ctl"><label for="lgBud">Tick-to-trade budget <b id="lgBudV">10.0 µs</b></label>
+          <input type="range" id="lgBud" min="5" max="500" value="100" aria-label="Tick-to-trade budget in tenths of a microsecond"/></div>
+        <div class="big" id="lgFit">—</div>
+        <div class="bigsub" id="lgFitL">of the selected operation, per tick</div>
+      </div>
+      <div class="note" id="lgNote"></div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:30px">Copies you did not ask for</h3>
+  <p class="lead">C++ has value semantics: <code>=</code> means <em class="hi">copy</em> unless you say
+  otherwise, and a copy of a container is an allocation plus a memcpy. Step through the same six lines
+  twice — once with the function taking its argument by value, once by <code>const&amp;</code> — and
+  watch the counters.</p>
+
+  <div class="split-r" style="margin-top:16px">
+    <div class="stack">
+      <div class="row" role="group" aria-label="Choose how the function takes its argument">
+        <div class="sw" id="cpSw">
+          <button type="button" data-m="val" aria-pressed="true">by value · <code>Book b</code></button>
+          <button type="button" data-m="ref" aria-pressed="false">by reference · <code>const Book&amp; b</code></button>
+        </div>
+      </div>
+      <div class="panel tight" style="margin-top:12px"><h3>Execution</h3>
+        <div class="steps" id="cpSteps"></div>
+        <div class="row" style="margin-top:12px">
+          <button class="btn primary" type="button" id="cpStep">Step →</button>
+          <button class="btn" type="button" id="cpBack">← Back</button>
+          <button class="btn" type="button" id="cpRun">Run all</button>
+          <button class="btn" type="button" id="cpReset">Reset</button>
+        </div>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="sl">Copy ctors</div><div class="sv" id="cpC">0</div></div>
+        <div class="stat"><div class="sl">Move ctors</div><div class="sv ok" id="cpM">0</div></div>
+        <div class="stat"><div class="sl">Allocations</div><div class="sv" id="cpA">0</div></div>
+        <div class="stat"><div class="sl">Bytes copied</div><div class="sv acc" id="cpB">0</div></div>
+        <div class="stat"><div class="sl">Est. cost</div><div class="sv" id="cpNs">0 ns</div></div>
+      </div>
+      <div class="note" id="cpNote"></div>
+    </div>
+    <div class="stack">
+      <pre class="code" id="cpCode"></pre>
+      <div class="note"><b>Why this is a latency lesson, not a style lesson.</b> The 48&#8239;KB copy does
+      not just cost a memcpy — it <em class="hi">evicts your working set</em>. Whatever was warm in the
+      32&#8239;KB L1 before that line is gone afterwards, so the next few reads that used to cost
+      1&#8239;ns now cost 90&#8239;ns each. A copy on the hot path is a cache-eviction event with a memcpy
+      attached.</div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:30px">Layout: the same data, two ways, one order of magnitude apart</h3>
+  <div class="codepair">
+    <div class="stack">
+      <pre class="code">// AoS — array of structs. Hot and cold fields interleaved.
+struct QuoteAoS {
+    double px;          //  8 B  &lt;- the only field we scan
+    int    qty;         //  4 B
+    char   venue[36];   // 36 B  cold, dragged in anyway
+};                      // 48 B per element
+
+// Scanning px touches 48 B per useful 8 B:
+// one 64-byte line feeds 1.3 prices.</pre>
+      <p class="sub">A scan of 4,096 prices reads <strong>192&#8239;KB</strong> — six times L1 — so it
+      misses on very nearly every line.</p>
+    </div>
+    <div class="stack">
+      <pre class="code">// SoA — struct of arrays. Hot fields packed together.
+struct BookSoA {
+    std::array&lt;double, 4096&gt; px{};    // contiguous
+    std::array&lt;int,    4096&gt; qty{};   // contiguous
+    std::array&lt;Venue,  4096&gt; venue{}; // never touched in the scan
+};
+
+// One 64-byte line feeds 8 prices, and the
+// hardware prefetcher sees the pattern coming.</pre>
+      <p class="sub">The same scan reads <strong>32&#8239;KB</strong> — it fits in L1, and the prefetcher
+      hides most of what does not.</p>
+    </div>
+  </div>
+  <div class="note" style="margin-top:14px"><b>The unit of memory traffic is the 64-byte cache line, not
+  the byte.</b> Touch one byte and the machine moves all 64. Layout is therefore a decision about
+  <em class="hi">how much of every line you actually use</em> — and it is a decision you make before you
+  profile, because no profiler will restructure your data for you.</div>
+</section>
+
+<!-- ══════════════ HOW ══════════════ -->
+<section id="how">
+  <div class="kicker">Part 2</div>
+  <h2><span class="secnum">2</span>How it works: build a benchmark that does not lie</h2>
+  <p class="lead">Below is a micro-benchmark of one operation whose <em class="hi">true</em> cost is
+  <strong>42&#8239;ns</strong>. You do not get to see that number — you get to see what your harness
+  reports. Switch the four pitfalls on and off and watch the reported figure wander between zero and
+  several hundred nanoseconds, all of it from the same code.</p>
+
+  <div class="split" style="margin-top:18px">
+    <div class="stack">
+      <div class="panel">
+        <h3>Your harness</h3>
+        <div class="toggles" id="bmTg">
+          <label class="tg on"><input type="checkbox" id="bmRel" checked aria-label="Compile with optimisation"/>
+            <span><span class="tt">Release build (<code>-O2</code>)</span>
+            <span class="td">Off means a debug build: no inlining, every abstraction paid for at run time.</span></span></label>
+          <label class="tg on"><input type="checkbox" id="bmSink" checked aria-label="Sink the result so it is not optimised away"/>
+            <span><span class="tt">Sink the result (<code>doNotOptimize</code>)</span>
+            <span class="td">Off means the result is unused, so the optimiser deletes the work entirely.</span></span></label>
+          <label class="tg on"><input type="checkbox" id="bmWarm" checked aria-label="Warm up before timing"/>
+            <span><span class="tt">Warm up first</span>
+            <span class="td">Off means the first samples pay for cold caches, a cold predictor and lazy page faults.</span></span></label>
+          <label class="tg on"><input type="checkbox" id="bmQuiet" checked aria-label="Quiet machine with a fixed clock"/>
+            <span><span class="tt">Quiet machine, fixed clock</span>
+            <span class="td">Off means turbo, thermal throttling and a browser in the background.</span></span></label>
+        </div>
+        <div class="ctl" style="margin-top:14px"><label for="bmN">Samples <b id="bmNV">10,000</b></label>
+          <input type="range" id="bmN" min="1" max="60" value="40" aria-label="Number of samples, logarithmic"/></div>
+        <div class="row" role="group" aria-label="Choose which statistic your harness reports">
+          <div class="sw" id="bmStat">
+            <button type="button" data-s="mean" aria-pressed="true">mean</button>
+            <button type="button" data-s="min" aria-pressed="false">min</button>
+            <button type="button" data-s="p50" aria-pressed="false">p50</button>
+            <button type="button" data-s="p999" aria-pressed="false">p99.9</button>
+          </div>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <button class="btn" type="button" id="bmFix">Fix my harness</button>
+          <button class="btn" type="button" id="bmRuin">Ruin my harness</button>
+        </div>
+      </div>
+      <div class="svgwrap">
+        <svg id="bmSvg" viewBox="0 0 640 250" role="img" aria-label="A strip plot of individual timing samples in the order they were taken, with the warm-up region shaded and the reported statistic drawn as a horizontal line"></svg>
+      </div>
+    </div>
+    <div class="stack">
+      <div class="panel tight">
+        <h3>What your harness reports</h3>
+        <div class="big" id="bmRep">—</div>
+        <div class="bigsub" id="bmRepL">reported</div>
+        <div class="stats" style="margin-top:13px">
+          <div class="stat"><div class="sl">True cost</div><div class="sv" id="bmTrue">42 ns</div></div>
+          <div class="stat"><div class="sl">Error</div><div class="sv" id="bmErr">—</div></div>
+          <div class="stat"><div class="sl">Samples</div><div class="sv" id="bmNS">—</div></div>
+          <div class="stat"><div class="sl">Statistic</div><div class="sv acc" id="bmStatV">mean</div></div>
+        </div>
+        <div class="verdict" id="bmVerdict">—</div>
+      </div>
+      <div class="panel tight"><h3>Active pitfalls</h3><div class="log" id="bmLog"></div></div>
+      <pre class="code">// bench.hpp — the shape of the harness the grader uses (C++20)
+#include &lt;algorithm&gt;
+#include &lt;chrono&gt;
+#include &lt;vector&gt;
+
+template &lt;class T&gt;
+inline void doNotOptimize(const T&amp; v) {          // the sink
+    asm volatile("" : : "r,m"(v) : "memory");
+}
+
+template &lt;class F&gt;
+std::vector&lt;double&gt; sample_ns(F&amp;&amp; f, int n) {
+    using clk = std::chrono::steady_clock;       // monotonic
+    for (int i = 0; i &lt; n / 10; ++i) doNotOptimize(f());  // warm up
+    std::vector&lt;double&gt; ns;
+    ns.reserve(static_cast&lt;std::size_t&gt;(n));
+    for (int i = 0; i &lt; n; ++i) {
+        const auto t0 = clk::now();
+        auto r = f();
+        const auto t1 = clk::now();
+        doNotOptimize(r);                        // or it never ran
+        ns.push_back(
+            std::chrono::duration&lt;double, std::nano&gt;(t1 - t0).count());
+    }
+    std::sort(ns.begin(), ns.end());             // percentiles, not a mean
+    return ns;
+}</pre>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ WHY ══════════════ -->
+<section id="why">
+  <div class="kicker">Part 3</div>
+  <h2><span class="secnum">3</span>Why it matters: one <code>new</code> per tick is a tail, not a slowdown</h2>
+  <p class="lead">Here is the point of the whole week in one picture. An allocation costs about
+  60&#8239;ns most of the time — which is nothing. The problem is the word <em class="hi">most</em>. One
+  call in sixty walks a free list; one in a thousand takes a lock or faults a fresh page. Those calls do
+  not move your median at all, and they are the only ones the LATENCY board can see.</p>
+
+  <div class="split" style="margin-top:18px">
+    <div class="stack">
+      <div class="svgwrap">
+        <svg id="alSvg" viewBox="0 0 640 260" role="img" aria-label="A per-tick latency timeline in which most ticks are flat and a few spike far above the rest, with the per-tick budget drawn as a line"></svg>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="sl">p50</div><div class="sv acc" id="alP50">—</div></div>
+        <div class="stat"><div class="sl">p99</div><div class="sv" id="alP99">—</div></div>
+        <div class="stat"><div class="sl">p99.9</div><div class="sv" id="alP999">—</div></div>
+        <div class="stat"><div class="sl">Worst tick</div><div class="sv bad" id="alMax">—</div></div>
+        <div class="stat"><div class="sl">Over budget</div><div class="sv" id="alOver">—</div></div>
+      </div>
+    </div>
+    <div class="stack">
+      <div class="panel">
+        <h3>Where the memory comes from</h3>
+        <div class="row" role="group" aria-label="Choose where per-tick memory comes from">
+          <div class="sw" id="alSw">
+            <button type="button" data-m="stack" aria-pressed="true">Stack buffer</button>
+            <button type="button" data-m="pool" aria-pressed="false">Pool slot</button>
+            <button type="button" data-m="heap" aria-pressed="false">new / delete</button>
+          </div>
+        </div>
+        <div class="ctl" style="margin-top:14px"><label for="alN">Allocations per tick <b id="alNV">1</b></label>
+          <input type="range" id="alN" min="0" max="6" value="1" aria-label="Number of allocations per tick"/></div>
+        <div class="ctl"><label for="alSz">Bytes per allocation <b id="alSzV">256 B</b></label>
+          <input type="range" id="alSz" min="0" max="12" value="4" aria-label="Allocation size, logarithmic"/></div>
+        <div class="ctl"><label for="alBud">Per-tick budget <b id="alBudV">1.0 µs</b></label>
+          <input type="range" id="alBud" min="2" max="100" value="10" aria-label="Per-tick budget in tenths of a microsecond"/></div>
+      </div>
+      <div class="note" id="alNote"></div>
+      <div class="panel tight"><h3>The rule this produces</h3><ul class="plain">
+        <li><b>Off the hot path:</b> allocate all of it — at start-up, before the session opens, while
+        nobody is timing you.</li>
+        <li><b>On the hot path:</b> stack buffers, pre-sized containers, pool slots. No <code>new</code>,
+        no <code>make_shared</code>, no <code>push_back</code> that can grow, no <code>std::string</code>
+        concatenation.</li>
+        <li><b>Prove it:</b> with the harness histogram, not with your intentions. Week 4 builds the pool;
+        Week 14 shows you the flame graph that finds the allocation you forgot.</li>
+      </ul></div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:30px">What the optimiser does for you, and what it will not</h3>
+  <p class="lead">Abstraction in C++ is free only when the compiler can see through it. Walk the same
+  price-to-tick conversion through three versions of one idea and watch the work disappear — first into an
+  inlined call, then into the binary itself.</p>
+
+  <div class="row" role="group" aria-label="Choose which version of the conversion to view">
+    <div class="sw" id="inSw">
+      <button type="button" data-v="virt" aria-pressed="true">1 · virtual + runtime divide</button>
+      <button type="button" data-v="inline" aria-pressed="false">2 · inline, non-virtual</button>
+      <button type="button" data-v="ce" aria-pressed="false">3 · constexpr table</button>
+    </div>
+  </div>
+
+  <div class="split" style="margin-top:16px">
+    <pre class="code" id="inCode"></pre>
+    <div class="stack">
+      <div class="stats">
+        <div class="stat"><div class="sl">Instructions / call</div><div class="sv acc" id="inI">—</div></div>
+        <div class="stat"><div class="sl">Est. cost</div><div class="sv" id="inNs">—</div></div>
+        <div class="stat"><div class="sl">Indirect branches</div><div class="sv" id="inB">—</div></div>
+        <div class="stat"><div class="sl">Cache lines touched</div><div class="sv" id="inL">—</div></div>
+      </div>
+      <div class="svgwrap">
+        <svg id="inSvg" viewBox="0 0 620 150" role="img" aria-label="Three bars comparing instructions executed per call for the virtual, inlined and compile-time versions of the same conversion"></svg>
+      </div>
+      <div class="note" id="inNote"></div>
+      <p class="sub"><b>Illustrative.</b> The instruction counts above are hand-drawn to show the shape of
+      the effect, not measured on your machine. The <em class="hi">method</em> is the transferable part:
+      compile at <code>-O2</code>, read the assembly with <code>objdump -d</code>, and count for yourself.
+      Week 6 makes this the main event.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ PITFALLS ══════════════ -->
+<section id="pitfalls">
+  <div class="kicker">Part 4</div>
+  <h2><span class="secnum">4</span>Five ways this goes wrong</h2>
+  <p class="lead">Every one of these has shipped in a submission. Open them.</p>
+
+  <details class="pit"><summary>The benchmark reports 0&#8239;ns, and you believe it</summary>
+    <div class="body">
+      <p>At <code>-O2</code> the optimiser may delete any computation whose result is never observed. Your
+      timing loop computes something, throws it away, and the compiler removes the body — so you have
+      carefully measured an empty loop and a pair of <code>steady_clock</code> reads.</p>
+      <p>The tell is a number that is suspiciously round, suspiciously small, or does not change when you
+      double the work.</p>
+      <p class="fix">Fix: sink every result through a <code>doNotOptimize</code> helper, and sanity-check
+      by doubling the iteration count — if the time does not roughly double, you are not measuring what
+      you think you are.</p>
+    </div></details>
+
+  <details class="pit"><summary>Benchmarking a debug build</summary>
+    <div class="body">
+      <p>A <code>-O0</code> build keeps every function call, every temporary and every abstraction layer.
+      Ratios between two implementations can invert entirely: the version with more inlineable structure
+      looks worse, because none of it got inlined.</p>
+      <p class="fix">Fix: <code>-O2</code> or <code>-O3</code> plus <code>-g</code> so you still get
+      symbols in the profiler. Benchmark the thing you will ship — including the same <code>-march</code>,
+      since Week 13's SIMD depends on it.</p>
+    </div></details>
+
+  <details class="pit"><summary>Reporting a mean, and computing it over the warm-up</summary>
+    <div class="body">
+      <p>Two errors that hide each other. The first samples of any loop pay for cold caches, an untrained
+      branch predictor and first-touch page faults, so an unwarmed mean is inflated. And a mean over a
+      right-skewed distribution describes no actual tick: a 38&#8239;µs mean is equally consistent with a
+      20&#8239;µs median and a 5&#8239;ms tail.</p>
+      <p class="fix">Fix: warm up for roughly a tenth of your sample count, then collect, sort and report
+      p50 / p99 / p99.9. Keep the minimum too — it is the closest thing you have to the cost with no noise
+      in it, which is exactly what you want when comparing two implementations.</p>
+    </div></details>
+
+  <details class="pit"><summary>Using <code>system_clock</code>, or timing a region that contains I/O</summary>
+    <div class="body">
+      <p><code>std::chrono::system_clock</code> is wall-clock time and may step backwards when NTP
+      corrects it, which produces negative durations and nonsense percentiles. And a <code>std::cout</code>
+      inside the timed region measures your terminal: a flush is easily tens of microseconds, hundreds of
+      times the thing you meant to time.</p>
+      <p class="fix">Fix: <code>std::chrono::steady_clock</code>, and time the smallest region that
+      contains the work and nothing else. Push log lines into a pre-allocated ring buffer and drain them
+      from another thread — Week 10 builds exactly that ring.</p>
+    </div></details>
+
+  <details class="pit"><summary>The threaded version is slower, and the source looks fine</summary>
+    <div class="body">
+      <p>Two <code>std::atomic&lt;long&gt;</code> members declared next to each other land on one 64-byte
+      cache line. Two cores incrementing them independently now invalidate each other's copy on every
+      write — <em class="hi">false sharing</em> — and you get a threaded program slower than the
+      single-threaded one, with nothing visibly wrong in the source.</p>
+      <p class="fix">Fix: <code>alignas(64)</code> on each hot counter, or a padding array between them.
+      Padding is not waste when it buys a clean line. Week 9 explains the coherency protocol underneath,
+      and Week 10 depends on the fix for its SPSC ring.</p>
+      <pre class="code" style="margin-top:9px">#include &lt;atomic&gt;
+#include &lt;new&gt;
+
+struct Counters {              // 2–4× faster than the unpadded version
+    alignas(64) std::atomic&lt;long&gt; produced{0};
+    alignas(64) std::atomic&lt;long&gt; consumed{0};
+};
+static_assert(sizeof(Counters) == 128);
+static_assert(alignof(Counters) == 64);</pre>
+    </div></details>
+</section>
+
+<!-- ══════════════ CHECK ══════════════ -->
+<section id="check">
+  <div class="kicker">Part 5</div>
+  <h2><span class="secnum">5</span>Check yourself</h2>
+  <p class="lead">Three questions, instant feedback, nothing recorded.</p>
+
+  <div class="mcq" data-a="2" data-exp="<b>About 100.</b> An L1 hit is roughly 1 ns (~4 cycles); a main-memory access is roughly 100 ns (~300 cycles). That single ratio is the reason this week exists: it means data layout dominates instruction count for any code that touches more than a few kilobytes. It is also why SoA beats AoS by an order of magnitude on a scan, and why the order book in Week 7 lives in flat arrays rather than a map of heap nodes.">
+    <p class="q"><span>Q1</span>Roughly how many L1 cache hits fit in the time of one main-memory access?</p>
+    <div class="opts">
+      <button class="opt" type="button">About 3 — memory is only a little slower than cache</button>
+      <button class="opt" type="button">About 10</button>
+      <button class="opt" type="button">About 100</button>
+      <button class="opt" type="button">About 10,000 — memory is closer to disk than to cache</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+
+  <div class="mcq" data-a="3" data-exp="<b>Because its worst case is unbounded, not because its typical case is large.</b> The median malloc is ~60 ns — genuinely cheap. But the same call can walk a free list, block on a lock another thread holds, or ask the kernel for a fresh page, and that last case is microseconds. Those rare calls leave p50 untouched and land squarely in p99.9, which is the number the board ranks. This is why the fix is not &ldquo;make allocation faster&rdquo; but &ldquo;remove it from the path&rdquo; — Week 4's pool turns it into a bounded, branch-light O(1) operation instead.">
+    <p class="q"><span>Q2</span>Why is a single <code>new</code> inside <code>on_book</code> a problem, given that the median allocation takes about 60&#8239;ns?</p>
+    <div class="opts">
+      <button class="opt" type="button">It is not a problem — 60&#8239;ns is inside any sane budget</button>
+      <button class="opt" type="button">Because <code>new</code> always issues a system call</button>
+      <button class="opt" type="button">Because the copy it implies evicts L1</button>
+      <button class="opt" type="button">Because its worst case is unbounded, and the worst case is what p99.9 measures</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+
+  <div class="mcq" data-a="0" data-exp="<b>The result is never observed, so -O2 deleted the work.</b> This is the most common benchmarking failure and it is completely silent: no warning, no crash, just a number that is too good. Sink the result — asm volatile(&quot;&quot; : : &quot;r,m&quot;(v) : &quot;memory&quot;) or an equivalent doNotOptimize — and confirm by doubling the iteration count and checking that the time roughly doubles. A debug build would have made it slower, not zero, and steady_clock is exactly the right clock here.">
+    <p class="q"><span>Q3</span>Your release-build benchmark of a function that clearly does real work reports 0.3&#8239;ns per operation. What happened?</p>
+    <div class="opts">
+      <button class="opt" type="button">The result is unused, so the optimiser removed the loop body</button>
+      <button class="opt" type="button"><code>steady_clock</code> is too coarse to measure it</button>
+      <button class="opt" type="button">You forgot <code>-O2</code>, so the loop was unrolled incorrectly</button>
+      <button class="opt" type="button">The data was already in L1, so the work was genuinely free</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+</section>
+
+<!-- ══════════════ NEXT ══════════════ -->
+<section id="next">
+  <div class="kicker">Part 6</div>
+  <h2><span class="secnum">6</span>Do the work</h2>
+  <div class="grid2" style="margin-top:14px">
+    <div class="panel"><h4>In the lab (~60 min)</h4><ul class="plain">
+      <li>Write one honest micro-benchmark, then delete the sink and watch the time collapse to zero. Be
+      able to explain why.</li>
+      <li>Time a stack buffer against <code>new[]</code>/<code>delete[]</code> of the same size. Expect
+      10–50×, and report percentiles.</li>
+      <li>Time a contiguous scan against a pointer chase over the same million values. Expect 5–10×.</li>
+      <li>Reproduce a false-sharing regression with two adjacent atomics, then fix it with
+      <code>alignas(64)</code> and measure again.</li>
+    </ul></div>
+    <div class="panel"><h4>After the session</h4><ul class="plain">
+      <li>Sweep the contiguous scan across sizes that fit in L1 (~32&#8239;KB), L2 and DRAM, and mark where
+      each level falls off. That plot is your cost model, measured on your own machine.</li>
+      <li>Record your bot's <code>on_book</code> p50 / p99 / p99.9 baseline. Every later topic is graded
+      against this number.</li>
+      <li>State your machine, your compiler and your flags with every result. A benchmark without them is
+      not a result.</li>
+    </ul></div>
+  </div>
+  <div class="nextgrid" style="margin-top:18px">
+    <a class="nextcard" href="https://github.com/sdonadio/hft-cpp-starter-columbia"><div class="nl">Get the code</div>
+      <div class="nt">15-week track starter</div>
+      <div class="nd">Header stubs, the autograder and the C++ arena client, one topic per session.</div></a>
+    <a class="nextcard" href="https://github.com/sdonadio/hft-cpp-starter-uchicago"><div class="nl">Get the code</div>
+      <div class="nt">9-session track starter</div>
+      <div class="nd">The same stubs and the same grader, packaged for the condensed nine-session schedule.</div></a>
+    <a class="nextcard" href="week1.html"><div class="nl">Back</div>
+      <div class="nt">← Week 1 · HFT Landscape</div>
+      <div class="nd">The order book and the queue position that all of this speed is for.</div></a>
+    <a class="nextcard" href="week3.html"><div class="nl">Next</div>
+      <div class="nt">Week 3 · Memory Management &amp; Smart Pointers →</div>
+      <div class="nd">You know what memory costs. Now decide who owns it, and when it dies.</div></a>
+  </div>
+</section>
+
+
+<footer>Low-Latency Trading Arena · an interactive companion for a course on low-latency trading systems in C++ · <a href="https://github.com/sdonadio/low-latency-trading-arena">Source</a></footer>
+
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════
+   Week 2 — C++ Performance Foundations
+   ════════════════════════════════════════════════════════════════ */
+var $ = function (id) { return document.getElementById(id); };
+/* SVG namespace taken from the document so no absolute URL appears in this file */
+var SVGNS = $("bmSvg").namespaceURI;
+function mk(tag, attrs) {
+  var e = document.createElementNS(SVGNS, tag);
+  for (var k in attrs) { if (attrs.hasOwnProperty(k)) e.setAttribute(k, attrs[k]); }
+  return e;
+}
+function txt(x, y, s, size, fill, anchor, weight) {
+  var t = mk("text", { x: x, y: y, "font-size": size || 10, "font-family": "monospace", fill: fill || "#9aa0a6" });
+  if (anchor) t.setAttribute("text-anchor", anchor);
+  if (weight) t.setAttribute("font-weight", weight);
+  t.textContent = s;
+  return t;
+}
+function clear(n) { while (n.firstChild) n.removeChild(n.firstChild); }
+function lcg(seed) { var s = seed >>> 0; return function () { s = (1664525 * s + 1013904223) >>> 0; return s / 4294967296; }; }
+var AC = "#c4b5fd", AC1 = "#7c3aed", GRN = "#3fb950", RED = "#f85149", WRN = "#d29922";
+function fmtNs(v) {
+  if (v >= 1000000) return (v / 1000000).toFixed(2) + " ms";
+  if (v >= 1000) return (v / 1000).toFixed(v >= 10000 ? 1 : 2) + " µs";
+  if (v >= 10) return Math.round(v) + " ns";
+  return v.toFixed(1) + " ns";
+}
+function commas(n) { return Math.round(n).toLocaleString(); }
+
+/* ════ 1. THE COST LADDER ═════════════════════════════════════ */
+var RUNGS = [
+  { n: "register / add", ns: 0.33, wk: "Week 2",
+    d: "One integer or floating-point operation on data already in a register. A wide core retires three or four of these per nanosecond, so at this rung instruction count is almost never your problem." },
+  { n: "L1 cache hit", ns: 1.1, wk: "Week 2",
+    d: "About four cycles for a load that hits the 32 KB level-one data cache. This is the rung you want your whole hot path on: the order book's touch, your inventory, your signal state. Everything in this course about layout is about staying here." },
+  { n: "L2 cache hit", ns: 4, wk: "Weeks 2 · 7",
+    d: "Roughly twelve cycles, from a private cache of a few hundred kilobytes to a megabyte. Still cheap, and where a price ladder of a few thousand levels naturally lives." },
+  { n: "branch mispredict", ns: 5, wk: "Weeks 2 · 6",
+    d: "Fifteen to twenty cycles of speculated work thrown away and a pipeline refill. Unpredictable branches on the hot path are worth removing — but measure, because the predictor is very good and often already wins." },
+  { n: "L3 cache hit", ns: 15, wk: "Weeks 2 · 7",
+    d: "Around forty cycles, from the last-level cache shared across the socket. Shared means contended: another core's working set can evict yours, which is one reason production HFT boxes pin and isolate cores." },
+  { n: "atomic RMW, uncontended", ns: 20, wk: "Weeks 9 · 10",
+    d: "A lock-free read-modify-write on a line this core already owns exclusively. Cheap enough to use, expensive enough that a shared_ptr copy on the hot path is a real cost — and it is why Week 3 says unique_ptr." },
+  { n: "mutex lock + unlock", ns: 25, wk: "Weeks 9 · 10",
+    d: "Uncontended, this is roughly an atomic pair. Contended, it is a trip through the kernel's futex and a context switch — which is three rungs further down. That variance is the reason the feed pipeline in Week 10 is lock-free." },
+  { n: "malloc + free, small", ns: 60, wk: "Weeks 3 · 4",
+    d: "The typical case: a size-class lookup and a free-list pop. The typical case is not the problem. One call in sixty walks a longer list, one in a thousand takes a lock or asks the kernel for a page — and those are the calls that decide your p99.9." },
+  { n: "DRAM access (cache miss)", ns: 90, wk: "Weeks 2 · 7 · 8",
+    d: "About 300 cycles for a load that misses every cache. One hundred L1 hits' worth of time for one number. Pointer-chasing data structures pay this on every hop, which is the whole argument for flat arrays." },
+  { n: "contended cache line", ns: 140, wk: "Weeks 9 · 10",
+    d: "Two cores writing the same 64-byte line ping-pong it between their private caches. This is false sharing when the variables were logically unrelated, and it is why every hot counter in this course gets alignas(64)." },
+  { n: "syscall (no work)", ns: 400, wk: "Weeks 12 · 13",
+    d: "A round trip into the kernel and back with no useful work in between — mode switch, register save, and on modern hardware the mitigations for speculative-execution vulnerabilities. This is why the fast path polls instead of blocking, and why kernel bypass exists." },
+  { n: "context switch", ns: 3000, wk: "Weeks 13 · 14",
+    d: "The scheduler takes your core away: registers saved, TLB and caches now cold for whoever runs next. Three microseconds of direct cost and considerably more of after-effects. Pin your threads, isolate the cores, and never block on the hot path." },
+  { n: "same-rack network RTT", ns: 20000, wk: "Weeks 11 · 13 · 15",
+    d: "Twenty microseconds there and back inside one datacentre, on ordinary kernel networking. This is the rung the entire colocation industry exists to shave, and the reason a bypassed NIC is the biggest single win in the waterfall on the home page." },
+  { n: "SSD read, 4 KB", ns: 100000, wk: "Week 14",
+    d: "A hundred microseconds. Nothing on the hot path may ever touch storage — not a log file, not a config reload, not a memory-mapped page that has not been faulted in yet. Pre-fault everything and lock it in memory." },
+  { n: "cross-town network RTT", ns: 1000000, wk: "Week 15",
+    d: "A millisecond, and it is physics rather than software: light in fibre travels about 200 metres per microsecond. This is why the same instrument trading on two venues produces a race nobody can code their way out of — only shorten." }
+];
+var lgSel = 1;
+function lgDraw() {
+  var bud = (+$("lgBud").value) * 100;      /* tenths of a µs -> ns */
+  $("lgBudV").textContent = fmtNs(bud);
+  var host = $("ladder"); clear(host);
+  var lo = Math.log10(0.3), hi = Math.log10(1200000);
+  RUNGS.forEach(function (r, i) {
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "rung";
+    b.setAttribute("aria-pressed", i === lgSel ? "true" : "false");
+    var nm = document.createElement("div"); nm.className = "rn"; nm.textContent = r.n;
+    var tr = document.createElement("div"); tr.className = "rt";
+    var fi = document.createElement("i");
+    fi.style.width = (100 * (Math.log10(r.ns) - lo) / (hi - lo)) + "%";
+    fi.style.background = i === lgSel ? AC
+      : (r.ns <= 5 ? "rgba(63,185,80,.55)" : (r.ns <= 150 ? "rgba(var(--accent-rgb),.7)" : "rgba(248,81,73,.55)"));
+    tr.appendChild(fi);
+    var vv = document.createElement("div"); vv.className = "rv"; vv.textContent = fmtNs(r.ns);
+    b.appendChild(nm); b.appendChild(tr); b.appendChild(vv);
+    b.addEventListener("click", function () { lgSel = i; lgDraw(); });
+    host.appendChild(b);
+  });
+  var R = RUNGS[lgSel], L1 = RUNGS[1].ns;
+  $("lgName").textContent = R.n;
+  $("lgDesc").textContent = R.d;
+  $("lgNs").textContent = fmtNs(R.ns);
+  $("lgCyc").textContent = R.ns < 1 ? "~1" : commas(R.ns * 3);
+  $("lgRel").textContent = (R.ns / L1) < 1.5 ? "1×" : Math.round(R.ns / L1) + "×";
+  $("lgWk").textContent = R.wk;
+  var fit = bud / R.ns;
+  $("lgFit").textContent = fit >= 1 ? commas(fit) : fit.toFixed(2);
+  $("lgFitL").textContent = (fit >= 1 ? "of “" + R.n + "” fit in " + fmtNs(bud) : "— one of these does not even fit in " + fmtNs(bud));
+  var note;
+  if (fit < 1) {
+    note = "<b>One " + R.n + " does not fit in the budget at all.</b> Anything on this rung must be off the tick-to-trade path by construction — done at start-up, done on another thread, or not done.";
+  } else if (fit < 40) {
+    note = "<b>Only " + commas(fit) + " of these fit in " + fmtNs(bud) + ".</b> That is a countable budget: you can afford this operation a handful of times per tick and you should know exactly where each one is.";
+  } else {
+    note = "<b>" + commas(fit) + " of these fit in " + fmtNs(bud) + ".</b> At this rung you are not counting operations, you are counting <em class=\"hi\">misses</em> — the interesting question is not how many instructions you execute but how many of them wait.";
+  }
+  $("lgNote").innerHTML = note;
+}
+$("lgBud").addEventListener("input", lgDraw);
+lgDraw();
+
+/* ════ 2. THE COPY COUNTER ════════════════════════════════════ */
+var BYTES = 4096 * 8 + 4096 * 4;    /* px + qty = 49,152 B */
+var CP_CODE = {
+  val:
+'// Book holds 4,096 doubles + 4,096 ints = 48 KB of payload.\n' +
+'struct Book {\n' +
+'    std::vector&lt;double&gt; px  = std::vector&lt;double&gt;(4096);\n' +
+'    std::vector&lt;int&gt;    qty = std::vector&lt;int&gt;(4096);\n' +
+'};\n' +
+'\n' +
+'// BY VALUE: every call copies 48 KB and allocates twice.\n' +
+'double top_of_book(Book b) {\n' +
+'    return b.px.empty() ? 0.0 : b.px.front();\n' +
+'}\n' +
+'\n' +
+'int main() {\n' +
+'    Book book;                  // 1 · construct\n' +
+'    auto snapshot = book;       // 2 · copy\n' +
+'    double total = 0.0;\n' +
+'    for (int i = 0; i &lt; 3; ++i) // 3,4,5 · three ticks\n' +
+'        total += top_of_book(book);\n' +
+'    auto moved = std::move(book); // 6 · move\n' +
+'    return total &gt; 0.0 ? 0 : 1;\n' +
+'}',
+  ref:
+'// Book holds 4,096 doubles + 4,096 ints = 48 KB of payload.\n' +
+'struct Book {\n' +
+'    std::vector&lt;double&gt; px  = std::vector&lt;double&gt;(4096);\n' +
+'    std::vector&lt;int&gt;    qty = std::vector&lt;int&gt;(4096);\n' +
+'};\n' +
+'\n' +
+'// BY REFERENCE: every call copies 8 bytes — an address.\n' +
+'double top_of_book(const Book&amp; b) {\n' +
+'    return b.px.empty() ? 0.0 : b.px.front();\n' +
+'}\n' +
+'\n' +
+'int main() {\n' +
+'    Book book;                  // 1 · construct\n' +
+'    auto snapshot = book;       // 2 · copy\n' +
+'    double total = 0.0;\n' +
+'    for (int i = 0; i &lt; 3; ++i) // 3,4,5 · three ticks\n' +
+'        total += top_of_book(book);\n' +
+'    auto moved = std::move(book); // 6 · move\n' +
+'    return total &gt; 0.0 ? 0 : 1;\n' +
+'}'
+};
+function cpSteps(mode) {
+  var byVal = mode === "val";
+  var call = byVal
+    ? { t: "top_of_book(book)  — argument copied into b", c: 1, m: 0, a: 2, b: BYTES }
+    : { t: "top_of_book(book)  — a reference is bound, nothing copied", c: 0, m: 0, a: 0, b: 8 };
+  return [
+    { t: "Book book;  — two vectors sized 4,096", c: 0, m: 0, a: 2, b: 0 },
+    { t: "auto snapshot = book;  — copy constructor", c: 1, m: 0, a: 2, b: BYTES },
+    { t: "tick 1 · " + call.t, c: call.c, m: call.m, a: call.a, b: call.b },
+    { t: "tick 2 · " + call.t, c: call.c, m: call.m, a: call.a, b: call.b },
+    { t: "tick 3 · " + call.t, c: call.c, m: call.m, a: call.a, b: call.b },
+    { t: "auto moved = std::move(book);  — pointers stolen, no payload touched", c: 0, m: 1, a: 0, b: 24 }
+  ];
+}
+var cp = { mode: "val", i: 0 };
+function cpDraw() {
+  var S = cpSteps(cp.mode);
+  $("cpCode").innerHTML = CP_CODE[cp.mode];
+  var host = $("cpSteps"); clear(host);
+  var c = 0, m = 0, a = 0, b = 0;
+  S.forEach(function (s, i) {
+    var d = document.createElement("div");
+    d.className = i === cp.i - 1 ? "on" : (i < cp.i ? "past" : "");
+    d.textContent = (i + 1) + "  " + s.t;
+    host.appendChild(d);
+    if (i < cp.i) { c += s.c; m += s.m; a += s.a; b += s.b; }
+  });
+  $("cpC").textContent = String(c);
+  $("cpM").textContent = String(m);
+  $("cpA").textContent = String(a);
+  $("cpB").textContent = b >= 1024 ? (b / 1024).toFixed(1) + " KB" : b + " B";
+  /* ~0.12 ns per byte memcpy at L1/L2 speeds, plus ~60 ns per allocation */
+  var ns = b * 0.12 + a * 60;
+  $("cpNs").textContent = fmtNs(ns);
+  $("cpNs").className = "sv " + (ns > 3000 ? "bad" : (ns > 500 ? "warn" : "ok"));
+  var note;
+  if (cp.i === 0) {
+    note = "<b>Nothing has run yet.</b> Press <em class=\"hi\">Step</em>. Six lines, three of them a call into <code>top_of_book</code> — the same three lines your bot runs once per tick.";
+  } else if (cp.mode === "val") {
+    note = "<b>By value, after " + cp.i + " step" + (cp.i === 1 ? "" : "s") + ": " + c + " copy constructor" +
+      (c === 1 ? "" : "s") + " and " + a + " allocations.</b> Each call to <code>top_of_book</code> duplicates 48&#8239;KB " +
+      "so that it can read <em class=\"hi\">eight bytes</em> of it. At three ticks that is " +
+      (3 * BYTES / 1024).toFixed(0) + "&#8239;KB copied and six allocations — and the copy is not even the worst part: " +
+      "48&#8239;KB is one and a half times your L1, so every call also throws away the working set you had warm.";
+  } else {
+    note = "<b>By reference, after " + cp.i + " step" + (cp.i === 1 ? "" : "s") + ": " + c + " copy constructor" +
+      (c === 1 ? "" : "s") + " and " + a + " allocations.</b> The three calls copy eight bytes each — an address — " +
+      "and the only remaining copy is the explicit <code>snapshot</code> on line 2, which you asked for. " +
+      "Note that the <code>std::move</code> at the end is free in both versions: it steals three pointers and " +
+      "leaves the payload exactly where it is. <em class=\"hi\">Moving is not copying quickly; it is not copying.</em>";
+  }
+  $("cpNote").innerHTML = note;
+}
+Array.prototype.forEach.call($("cpSw").querySelectorAll("button"), function (bt) {
+  bt.addEventListener("click", function () {
+    cp.mode = bt.getAttribute("data-m");
+    Array.prototype.forEach.call($("cpSw").querySelectorAll("button"), function (o) {
+      o.setAttribute("aria-pressed", o.getAttribute("data-m") === cp.mode ? "true" : "false");
+    });
+    cpDraw();
+  });
+});
+$("cpStep").addEventListener("click", function () { if (cp.i < 6) cp.i++; cpDraw(); });
+$("cpBack").addEventListener("click", function () { if (cp.i > 0) cp.i--; cpDraw(); });
+$("cpRun").addEventListener("click", function () { cp.i = 6; cpDraw(); });
+$("cpReset").addEventListener("click", function () { cp.i = 0; cpDraw(); });
+cpDraw();
+
+/* ════ 3. THE BENCHMARK-PITFALLS HARNESS ═════════════════════ */
+var TRUE_NS = 42;
+var bm = { stat: "mean" };
+function bmN() { return Math.round(Math.pow(10, 1 + 3 * (+$("bmN").value) / 60) * 10); }
+function bmModel() {
+  var rel = $("bmRel").checked, sink = $("bmSink").checked,
+      warm = $("bmWarm").checked, quiet = $("bmQuiet").checked;
+  var n = Math.max(10, Math.min(4000, bmN()));
+  var base = TRUE_NS * (rel ? 1 : 7.4);           /* a debug build keeps every call */
+  var rnd = lcg(20260904), s = [], raw = [];
+  var wu = warm ? 0 : Math.max(1, Math.round(n * 0.12));
+  for (var i = 0; i < n; i++) {
+    var v;
+    if (!sink) {
+      /* the optimiser removed the body: all that is left is the clock pair */
+      v = 0.28 + 0.06 * rnd();
+    } else {
+      var u = rnd(), w = rnd();
+      v = base * (1 + 0.10 * (u - 0.5));
+      if (i < wu) v += base * (2.2 + 3.4 * (1 - i / Math.max(1, wu)));  /* cold start */
+      if (!quiet) {
+        v *= 1.18;                                 /* clock below nominal */
+        if (w < 0.03) v += base * (3 + 22 * rnd()); /* the neighbour woke up */
+      }
+      if (w > 0.997) v += base * (1 + 6 * rnd());  /* ordinary tail */
+    }
+    raw.push(v); s.push(v);
+  }
+  s.sort(function (a, b) { return a - b; });
+  var rep;
+  if (bm.stat === "mean") rep = raw.reduce(function (a, b) { return a + b; }, 0) / n;
+  else if (bm.stat === "min") rep = s[0];
+  else if (bm.stat === "p50") rep = s[Math.floor(0.5 * n)];
+  else rep = s[Math.min(n - 1, Math.floor(0.999 * n))];
+  return { rel: rel, sink: sink, warm: warm, quiet: quiet, n: n, wu: wu, raw: raw, sorted: s, rep: rep, base: base };
+}
+function bmDraw() {
+  var m = bmModel();
+  $("bmNV").textContent = commas(m.n);
+  $("bmNS").textContent = commas(m.n);
+  $("bmStatV").textContent = bm.stat === "p999" ? "p99.9" : bm.stat;
+  $("bmRep").textContent = fmtNs(m.rep);
+  $("bmRepL").textContent = "reported as the " + (bm.stat === "p999" ? "p99.9" : bm.stat) + " of " + commas(m.n) + " samples";
+  var err = 100 * (m.rep - TRUE_NS) / TRUE_NS;
+  var ee = $("bmErr");
+  ee.textContent = (err >= 0 ? "+" : "") + err.toFixed(0) + "%";
+  ee.className = "sv " + (Math.abs(err) < 12 ? "ok" : (Math.abs(err) < 60 ? "warn" : "bad"));
+  Array.prototype.forEach.call($("bmTg").querySelectorAll(".tg"), function (l) {
+    var cb = l.querySelector("input");
+    l.className = "tg" + (cb.checked ? " on" : "");
+  });
+
+  var L = $("bmLog"); clear(L);
+  var probs = [];
+  if (!m.sink) probs.push(["dead-code elimination — the result is unused, so -O2 deleted the work", "bad"]);
+  if (!m.rel) probs.push(["debug build — nothing inlined, every abstraction paid for at run time", "bad"]);
+  if (!m.warm) probs.push(["no warm-up — the first " + commas(m.wu) + " samples pay for cold caches and page faults", "bad"]);
+  if (!m.quiet) probs.push(["noisy machine — frequency scaling plus another process stealing the core", "bad"]);
+  if (bm.stat === "mean") probs.push(["reporting a mean over a right-skewed sample: describes no actual call", ""]);
+  if (bm.stat === "p999" && m.n < 1000) probs.push(["p99.9 from only " + commas(m.n) + " samples is one or two data points of noise", ""]);
+  if (m.n < 200) probs.push(["only " + commas(m.n) + " samples — not enough for any tail statistic", ""]);
+  if (!probs.length) probs.push(["none — release build, sunk result, warmed up, quiet machine", "ok"]);
+  probs.forEach(function (p) {
+    var d = document.createElement("div"); d.className = p[1]; d.textContent = p[0]; L.appendChild(d);
+  });
+
+  var V = $("bmVerdict");
+  if (!m.sink) {
+    V.className = "verdict miss";
+    V.textContent = "YOU MEASURED NOTHING — this is the clock, not the code";
+  } else if (Math.abs(err) < 12 && m.rel && m.warm && m.quiet) {
+    V.className = "verdict met";
+    V.textContent = "TRUSTWORTHY — within " + Math.abs(err).toFixed(0) + "% of the real cost";
+  } else {
+    V.className = "verdict miss";
+    V.textContent = "OFF BY " + (err >= 0 ? "+" : "") + err.toFixed(0) + "% — fix the harness before you trust it";
+  }
+
+  /* strip plot, in sample order */
+  var C = $("bmSvg"); clear(C);
+  C.appendChild(mk("rect", { x: 0, y: 0, width: 640, height: 250, fill: "transparent" }));
+  var gx = 54, gy = 24, gw = 556, gh = 168;
+  C.appendChild(mk("rect", { x: gx, y: gy, width: gw, height: gh, rx: 5, fill: "#0b0e14", stroke: "#272c36" }));
+  var top = Math.max(TRUE_NS * 2.2, m.sorted[Math.floor(0.995 * m.n)] * 1.15, m.rep * 1.15);
+  function Y(v) { return gy + gh * (1 - Math.min(1, v / top)); }
+  if (m.wu > 0) {
+    C.appendChild(mk("rect", { x: gx, y: gy, width: gw * m.wu / m.n, height: gh, fill: "rgba(248,81,73,.12)" }));
+    C.appendChild(txt(gx + 5, gy + 13, "warm-up, timed anyway", 9, RED));
+  }
+  var stepN = Math.max(1, Math.floor(m.n / 420));
+  for (var i = 0; i < m.n; i += stepN) {
+    var x = gx + gw * i / m.n;
+    C.appendChild(mk("circle", { cx: x, cy: Y(m.raw[i]), r: 1.5,
+      fill: i < m.wu ? "rgba(248,81,73,.7)" : "rgba(var(--accent-2-rgb),.55)" }));
+  }
+  C.appendChild(mk("path", { d: "M" + gx + " " + Y(TRUE_NS) + " L" + (gx + gw) + " " + Y(TRUE_NS),
+    stroke: GRN, "stroke-width": 1.6, "stroke-dasharray": "6 4" }));
+  C.appendChild(txt(gx + gw - 4, Y(TRUE_NS) - 5, "true cost 42 ns", 9.5, GRN, "end"));
+  C.appendChild(mk("path", { d: "M" + gx + " " + Y(m.rep) + " L" + (gx + gw) + " " + Y(m.rep), stroke: AC, "stroke-width": 1.9 }));
+  C.appendChild(txt(gx + 4, Y(m.rep) - 5, "reported " + fmtNs(m.rep), 9.5, AC));
+  [0, 0.5, 1].forEach(function (f) {
+    C.appendChild(txt(gx - 6, gy + gh * (1 - f) + 4, fmtNs(top * f), 9, "#5f6673", "end"));
+  });
+  C.appendChild(txt(gx, 17, "one dot per timed call, in the order they were taken", 10, "#9aa0a6"));
+  C.appendChild(txt(gx, gy + gh + 16, "sample 1", 9, "#5f6673"));
+  C.appendChild(txt(gx + gw, gy + gh + 16, "sample " + commas(m.n), 9, "#5f6673", "end"));
+  C.appendChild(txt(gx, 242, "a benchmark is an experiment; these four switches are its controls", 9.5, "#5f6673"));
+}
+["bmRel", "bmSink", "bmWarm", "bmQuiet"].forEach(function (id) { $(id).addEventListener("change", bmDraw); });
+$("bmN").addEventListener("input", bmDraw);
+Array.prototype.forEach.call($("bmStat").querySelectorAll("button"), function (b) {
+  b.addEventListener("click", function () {
+    bm.stat = b.getAttribute("data-s");
+    Array.prototype.forEach.call($("bmStat").querySelectorAll("button"), function (o) {
+      o.setAttribute("aria-pressed", o.getAttribute("data-s") === bm.stat ? "true" : "false");
+    });
+    bmDraw();
+  });
+});
+$("bmFix").addEventListener("click", function () {
+  $("bmRel").checked = true; $("bmSink").checked = true;
+  $("bmWarm").checked = true; $("bmQuiet").checked = true;
+  $("bmN").value = 48; bm.stat = "p50";
+  Array.prototype.forEach.call($("bmStat").querySelectorAll("button"), function (o) {
+    o.setAttribute("aria-pressed", o.getAttribute("data-s") === "p50" ? "true" : "false");
+  });
+  bmDraw();
+});
+$("bmRuin").addEventListener("click", function () {
+  $("bmRel").checked = false; $("bmSink").checked = false;
+  $("bmWarm").checked = false; $("bmQuiet").checked = false;
+  $("bmN").value = 6; bm.stat = "mean";
+  Array.prototype.forEach.call($("bmStat").querySelectorAll("button"), function (o) {
+    o.setAttribute("aria-pressed", o.getAttribute("data-s") === "mean" ? "true" : "false");
+  });
+  bmDraw();
+});
+bmDraw();
+
+/* ════ 4. THE ALLOCATION TIMELINE ════════════════════════════ */
+var AL = {
+  stack: { n: "stack buffer", per: 0.4, walk: 0, lock: 0, fault: 0,
+    note: "A stack buffer is a subtraction from a register, and the top of the stack is essentially always hot in L1. There is no free list, no lock, no page to fault, and no worst case to speak of — the cost is the same on every tick, which is the property you actually want." },
+  pool:  { n: "pool slot", per: 6, walk: 0, lock: 0, fault: 0,
+    note: "A pool pops a pre-allocated slot off a free list you own: one load, one store, no branching on size class and no kernel. It is a few nanoseconds and — the point — it is a <em class=\"hi\">bounded</em> few nanoseconds. This is what Week 4 builds, and it is why the rule &ldquo;never allocate on the hot path&rdquo; is livable." },
+  heap:  { n: "new / delete", per: 60, walk: 0.017, lock: 0.004, fault: 0.0012,
+    note: "The general-purpose allocator is excellent on average and unbounded in the worst case: a size-class lookup usually, a longer free-list walk sometimes, a lock or an <code>mmap</code> occasionally. Every one of those rare paths lands in your p99.9, and none of them move your median." }
+};
+var al = { mode: "stack" };
+function alDraw() {
+  var A = AL[al.mode];
+  var n = +$("alN").value;
+  var szExp = +$("alSz").value;
+  var sz = Math.pow(2, szExp + 4);                 /* 16 B … 64 KB */
+  var bud = (+$("alBud").value) * 100;             /* ns */
+  $("alNV").textContent = String(n);
+  $("alSzV").textContent = sz >= 1024 ? (sz / 1024) + " KB" : sz + " B";
+  $("alBudV").textContent = fmtNs(bud);
+  var szF = 1 + Math.log2(sz / 16) * 0.09;         /* bigger blocks cost a little more */
+  var rnd = lcg(20260904), N = 1200, s = [];
+  for (var i = 0; i < N; i++) {
+    var v = 118 + 14 * rnd();                      /* the useful work: parse, book, signal, encode */
+    for (var k = 0; k < n; k++) {
+      v += A.per * szF * (0.85 + 0.3 * rnd());
+      var u = rnd();
+      if (u < A.fault) v += 4000 + 9000 * rnd();   /* a fresh page from the kernel */
+      else if (u < A.fault + A.lock) v += 900 + 2600 * rnd(); /* contended arena lock */
+      else if (u < A.fault + A.lock + A.walk) v += 120 + 340 * rnd(); /* free-list walk */
+    }
+    s.push(v);
+  }
+  var raw = s.slice();
+  s.sort(function (a, b) { return a - b; });
+  function P(q) { return s[Math.min(N - 1, Math.floor(q * N))]; }
+  var p50 = P(0.5), p99 = P(0.99), p999 = P(0.999), mx = s[N - 1];
+  var over = raw.filter(function (v) { return v > bud; }).length;
+  $("alP50").textContent = fmtNs(p50);
+  $("alP99").textContent = fmtNs(p99);
+  $("alP99").className = "sv " + (p99 > bud ? "bad" : "ok");
+  $("alP999").textContent = fmtNs(p999);
+  $("alP999").className = "sv " + (p999 > bud ? "bad" : "ok");
+  $("alMax").textContent = fmtNs(mx);
+  var oe = $("alOver");
+  oe.textContent = (100 * over / N).toFixed(1) + "%";
+  oe.className = "sv " + (over / N > 0.01 ? "bad" : (over ? "warn" : "ok"));
+
+  var C = $("alSvg"); clear(C);
+  C.appendChild(mk("rect", { x: 0, y: 0, width: 640, height: 260, fill: "transparent" }));
+  var gx = 54, gy = 24, gw = 556, gh = 178;
+  C.appendChild(mk("rect", { x: gx, y: gy, width: gw, height: gh, rx: 5, fill: "#0b0e14", stroke: "#272c36" }));
+  var lo = Math.log10(80), hi = Math.log10(Math.max(2000, mx * 1.3));
+  function Y(v) { return gy + gh * (1 - (Math.log10(Math.max(80, v)) - lo) / (hi - lo)); }
+  [100, 300, 1000, 3000, 10000].forEach(function (v) {
+    if (v > Math.pow(10, hi)) return;
+    C.appendChild(mk("path", { d: "M" + gx + " " + Y(v) + " L" + (gx + gw) + " " + Y(v), stroke: "#1c2129", "stroke-width": 1 }));
+    C.appendChild(txt(gx - 6, Y(v) + 4, fmtNs(v), 9, "#5f6673", "end"));
+  });
+  var show = 220;
+  for (var j = 0; j < show; j++) {
+    var v2 = raw[j], x = gx + gw * j / show, h = gy + gh - Y(v2);
+    C.appendChild(mk("rect", { x: x, y: Y(v2), width: Math.max(1.2, gw / show - 0.8), height: Math.max(1, h),
+      fill: v2 > bud ? "rgba(248,81,73,.85)" : "rgba(var(--accent-rgb),.65)" }));
+  }
+  C.appendChild(mk("path", { d: "M" + gx + " " + Y(bud) + " L" + (gx + gw) + " " + Y(bud), stroke: RED, "stroke-width": 1.8, "stroke-dasharray": "6 4" }));
+  C.appendChild(txt(gx + gw - 4, Y(bud) - 5, "budget " + fmtNs(bud), 9.5, RED, "end"));
+  C.appendChild(txt(gx, 17, A.n + "  ·  " + n + " allocation" + (n === 1 ? "" : "s") + " per tick  ·  " + show + " consecutive ticks (log scale)", 10, "#9aa0a6"));
+  C.appendChild(txt(gx, 252, "the flat floor is your real work; the spikes are the allocator, and they are the whole grade", 9.5, "#5f6673"));
+
+  var note = "<b>" + A.n + ", " + n + " per tick.</b> " + A.note;
+  if (al.mode === "heap" && n > 0) {
+    note += " Right now p50 is " + fmtNs(p50) + " and p99.9 is " + fmtNs(p999) + " — a <em class=\"hi\">" +
+      (p999 / p50).toFixed(1) + "×</em> ratio. Notice that turning the allocation count up barely moves p50 " +
+      "and moves p99.9 a great deal: you are not buying slowness, you are buying variance.";
+  } else if (n === 0) {
+    note += " With zero allocations you are looking at your actual work — parse, book update, signal, encode — " +
+      "and the distribution is nearly flat. This is the shape a graded hot path should have.";
+  }
+  $("alNote").innerHTML = note;
+}
+Array.prototype.forEach.call($("alSw").querySelectorAll("button"), function (b) {
+  b.addEventListener("click", function () {
+    al.mode = b.getAttribute("data-m");
+    Array.prototype.forEach.call($("alSw").querySelectorAll("button"), function (o) {
+      o.setAttribute("aria-pressed", o.getAttribute("data-m") === al.mode ? "true" : "false");
+    });
+    alDraw();
+  });
+});
+["alN", "alSz", "alBud"].forEach(function (id) { $(id).addEventListener("input", alDraw); });
+alDraw();
+
+/* ════ 5. INLINING & CONSTEXPR ═══════════════════════════════ */
+var INL = {
+  virt: { i: 34, ns: 12.5, br: 1, lines: 3,
+    code:
+'// 1 · a virtual call and a division, every tick\n' +
+'struct TickSizer {\n' +
+'    virtual ~TickSizer() = default;\n' +
+'    virtual int to_ticks(double px) const = 0;\n' +
+'};\n' +
+'\n' +
+'struct PennySizer final : TickSizer {\n' +
+'    int to_ticks(double px) const override {\n' +
+'        return static_cast&lt;int&gt;(px / 0.01 + 0.5);   // fdiv\n' +
+'    }\n' +
+'};\n' +
+'\n' +
+'// The compiler cannot see which override it will get,\n' +
+'// so: load vptr, load slot, indirect call, divide.\n' +
+'int hot(const TickSizer&amp; s, double px) {\n' +
+'    return s.to_ticks(px);\n' +
+'}',
+    note: "<b>Three things the compiler is not allowed to remove.</b> It must load the vptr, load the slot, and make an <em class=\"hi\">indirect</em> call — which it cannot inline, so the divide stays a divide and nothing either side of the call can be optimised across it. An indirect call also costs a branch-target prediction you may not get." },
+  inline: { i: 6, ns: 2.1, br: 0, lines: 1,
+    code:
+'// 2 · no virtual, and the divide becomes a multiply\n' +
+'struct PennySizer {\n' +
+'    static constexpr double kTick = 0.01;\n' +
+'\n' +
+'    // no override, no vptr: the call site knows the target\n' +
+'    int to_ticks(double px) const noexcept {\n' +
+'        return static_cast&lt;int&gt;(px * (1.0 / kTick) + 0.5);\n' +
+'    }\n' +
+'};\n' +
+'\n' +
+'// Inlined at -O2: the body lands in the caller, and\n' +
+'// 1.0/0.01 is folded to 100.0 at compile time.\n' +
+'int hot(const PennySizer&amp; s, double px) {\n' +
+'    return s.to_ticks(px);\n' +
+'}',
+    note: "<b>Devirtualise, and the optimiser can finally see the body.</b> The call disappears into the caller, the reciprocal is constant-folded, and a floating divide (about 15 cycles) becomes a multiply (about 4). Nothing here required cleverness — only that you did not ask for run-time polymorphism you were not using. Week 6 makes this systematic with templates and policies." },
+  ce: { i: 2, ns: 0.6, br: 0, lines: 1,
+    code:
+'// 3 · computed while the compiler runs, not while you trade\n' +
+'#include &lt;array&gt;\n' +
+'\n' +
+'consteval std::array&lt;int, 256&gt; make_tick_table() {\n' +
+'    std::array&lt;int, 256&gt; t{};\n' +
+'    for (int i = 0; i &lt; 256; ++i) t[i] = i * 100;   // penny ticks\n' +
+'    return t;\n' +
+'}\n' +
+'\n' +
+'inline constexpr auto kTicks = make_tick_table();\n' +
+'static_assert(kTicks[100] == 10000);\n' +
+'\n' +
+'// One load from a 1 KB table that is warm all session.\n' +
+'int hot(int whole_dollars) noexcept {\n' +
+'    return kTicks[static_cast&lt;unsigned&gt;(whole_dollars) &amp; 255u];\n' +
+'}',
+    note: "<b>The work happened during the build.</b> <code>consteval</code> forces the table to be computed at compile time — it is data in the binary, verified by a <code>static_assert</code>, and the run-time cost is one L1 load plus a mask. The mask, rather than a bounds check, is the other half of the trick: it makes the access unconditionally safe with no branch. This is the Week 6 idea in miniature." }
+};
+var inSel = "virt";
+function inDraw() {
+  var I = INL[inSel];
+  Array.prototype.forEach.call($("inSw").querySelectorAll("button"), function (o) {
+    o.setAttribute("aria-pressed", o.getAttribute("data-v") === inSel ? "true" : "false");
+  });
+  $("inCode").innerHTML = I.code;
+  $("inI").textContent = "~" + I.i;
+  $("inNs").textContent = I.ns.toFixed(1) + " ns";
+  $("inNs").className = "sv " + (I.ns < 1 ? "ok" : (I.ns > 8 ? "bad" : "warn"));
+  $("inB").textContent = String(I.br);
+  $("inL").textContent = String(I.lines);
+  $("inNote").innerHTML = I.note;
+
+  var C = $("inSvg"); clear(C);
+  C.appendChild(mk("rect", { x: 0, y: 0, width: 620, height: 150, fill: "transparent" }));
+  var names = [["virt", "virtual + divide"], ["inline", "inline, non-virtual"], ["ce", "constexpr table"]];
+  var mx = 34, gx = 150, gw = 400;
+  names.forEach(function (nm, i) {
+    var J = INL[nm[0]], on = nm[0] === inSel, y = 22 + i * 40;
+    C.appendChild(txt(gx - 10, y + 14, nm[1], on ? 10.5 : 10, on ? "#fff" : "#6f757f", "end", on ? 700 : 400));
+    C.appendChild(mk("rect", { x: gx, y: y, width: gw, height: 20, rx: 4, fill: "#0b0e14", stroke: "#272c36" }));
+    C.appendChild(mk("rect", { x: gx + 1, y: y + 1, width: Math.max(3, (gw - 2) * J.i / mx), height: 18, rx: 3,
+      fill: on ? AC : "rgba(var(--accent-rgb),.6)" }));
+    C.appendChild(txt(gx + Math.max(3, (gw - 2) * J.i / mx) + 7, y + 14, "~" + J.i + " instr  ·  " + J.ns.toFixed(1) + " ns", 9.5, on ? AC : "#6f757f"));
+  });
+  C.appendChild(txt(gx, 140, "same arithmetic, same answer — the difference is what the compiler was allowed to see", 9.5, "#5f6673"));
+}
+Array.prototype.forEach.call($("inSw").querySelectorAll("button"), function (b) {
+  b.addEventListener("click", function () { inSel = b.getAttribute("data-v"); inDraw(); });
+});
+inDraw();
+
+/* ── MCQ engine (shared across week pages) ───────────────────── */
+Array.prototype.forEach.call(document.querySelectorAll(".mcq"), function (q) {
+  var answer = parseInt(q.getAttribute("data-a"), 10);
+  var opts = Array.prototype.slice.call(q.querySelectorAll(".opt"));
+  var fb = q.querySelector(".fb");
+  opts.forEach(function (o, i) {
+    o.addEventListener("click", function () {
+      if (q.dataset.done === "1") return;
+      q.dataset.done = "1";
+      var right = i === answer;
+      opts.forEach(function (b, j) {
+        b.disabled = true;
+        if (j === answer) b.classList.add("right");
+        else if (j === i) b.classList.add("wrong");
+        else b.classList.add("dim");
+      });
+      fb.innerHTML = (right ? "<b>Correct.</b> " : "<b>Not quite.</b> ") + q.getAttribute("data-exp");
+      fb.className = "fb show " + (right ? "good" : "poor");
+    });
+  });
+});
+</script>
+</body>
+</html>

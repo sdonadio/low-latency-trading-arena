@@ -1,0 +1,1355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" href="data:," />
+<title>Week 1 · HFT Landscape &amp; Market Microstructure — Low-Latency Trading Arena</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    /* ── Low-Latency Trading Arena · shared palette (identical on every page) ── */
+    --accent:       #7c3aed;
+    --accent-2:     #c4b5fd;
+    --accent-3:     #ede9fe;
+    --accent-rgb:   124,58,237;
+    --accent-2-rgb: 196,181,253;
+    --bg:           #0f1115;
+    --panel:        #181b22;
+    --panel2:       #1e222b;
+    --panel-2:      #13161b;
+    --ink:          #e8e6e3;
+    --ink-dim:      #c6c3bf;
+    --ink-mute:     #6f757f;
+    --muted:        #9aa0a6;
+    --dim:          #5f6673;
+    --line:         #272c36;
+    --line-2:       #333a47;
+    --border:       #272c36;
+    --ok:           #3fb950;
+    --warn:         #d29922;
+    --bad:          #f85149;
+    --info:         #6cb6ff;
+    --sky:          #58a6ff;
+    --violet:       #a78bfa;
+    --teal:         #2dd4bf;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.62;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent-2);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  /* ── nav / footer ─────────────────────────────────────────── */
+  nav.top{position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+    padding:11px 22px;background:rgba(15,17,21,.94);border-bottom:1px solid var(--line)}
+  nav.top>a:first-child{font-weight:800;letter-spacing:-.2px;color:var(--ink);font-size:14.5px;
+    border-left:3px solid var(--accent);padding-left:10px}
+  nav.top .crumbs{font-size:12px;color:var(--muted)}
+  nav.top .crumbs b{color:var(--ink);font-weight:700}
+  footer{border-top:1px solid var(--line);background:var(--panel);
+    padding:26px 22px 34px;text-align:center;font-size:11.5px;color:var(--dim);letter-spacing:.3px}
+
+  /* ── sections & typography ────────────────────────────────── */
+  section{max-width:1180px;margin:0 auto;padding:36px 22px 42px;border-top:1px solid var(--line)}
+  section#hero{border-top:none}
+  .kicker{font-size:10.5px;font-weight:800;letter-spacing:1.9px;text-transform:uppercase;color:var(--accent-2)}
+  h1{font-size:clamp(26px,4.2vw,40px);font-weight:800;letter-spacing:-.9px;line-height:1.13;margin:10px 0 6px}
+  h2{font-size:21px;font-weight:700;letter-spacing:-.3px;margin:4px 0 4px}
+  h3{font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);margin-bottom:11px}
+  h4{font-size:13.5px;font-weight:700;margin-bottom:5px}
+  p{margin:9px 0;max-width:82ch}
+  .lead{color:var(--muted);font-size:15px;max-width:84ch}
+  .sub{color:var(--muted);font-size:12.5px}
+  strong{color:#fff;font-weight:650}
+  em.hi{color:var(--accent-2);font-style:normal;font-weight:600}
+  code,.mono{font-family:var(--mono);font-size:12.5px}
+  code{background:rgba(var(--accent-2-rgb),.13);color:#ddd4fb;padding:1px 5px;border-radius:4px}
+  ul.you{list-style:none;margin:16px 0 0;display:grid;gap:8px}
+  ul.you li{position:relative;padding-left:26px;font-size:13.5px;color:var(--ink);max-width:78ch}
+  ul.you li::before{content:"";position:absolute;left:4px;top:8px;width:8px;height:8px;border-radius:2px;
+    background:var(--accent);box-shadow:0 0 0 3px rgba(var(--accent-rgb),.22)}
+  ul.plain{list-style:none;display:grid;gap:7px;font-size:13px;color:var(--muted)}
+  ul.plain li{padding-left:16px;position:relative}
+  ul.plain li::before{content:"\2022";position:absolute;left:2px;color:var(--accent-2)}
+
+  /* ── panels & layout ──────────────────────────────────────── */
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .panel.tight{padding:13px 14px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;align-items:start}
+  .split{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:18px;align-items:start}
+  .split-r{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:18px;align-items:start}
+  .stack{display:grid;gap:14px}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+
+  /* ── controls ─────────────────────────────────────────────── */
+  .btn{font-family:inherit;font-size:12px;font-weight:650;cursor:pointer;color:var(--ink);
+    background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:7px 14px;transition:.15s}
+  .btn:hover:not(:disabled){border-color:var(--accent-2);color:#fff}
+  .btn:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .btn:disabled{opacity:.35;cursor:not-allowed}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.primary:hover:not(:disabled){filter:brightness(1.25)}
+  .btn.on{background:rgba(var(--accent-rgb),.28);border-color:var(--accent-2);color:#fff}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+  .tab{font-family:inherit;font-size:12px;font-weight:650;cursor:pointer;color:var(--muted);
+    background:transparent;border:1px solid var(--line);border-radius:20px;padding:6px 14px;transition:.15s}
+  .tab:hover{color:var(--ink)}
+  .tab[aria-selected="true"]{background:rgba(var(--accent-rgb),.3);border-color:var(--accent-2);color:#fff}
+  .tab:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .ctl{display:grid;gap:4px;margin-bottom:12px}
+  .ctl label{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);
+    display:flex;justify-content:space-between;gap:10px}
+  .ctl label b{font-family:var(--mono);color:var(--accent-2);font-size:12px;text-transform:none;letter-spacing:0}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:3px;
+    background:#2b313d;outline:none;cursor:pointer}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;
+    background:var(--accent-2);border:2px solid var(--bg);cursor:pointer}
+  input[type=range]::-moz-range-thumb{width:15px;height:15px;border-radius:50%;background:var(--accent-2);
+    border:2px solid var(--bg);cursor:pointer}
+  input[type=range]:focus-visible{box-shadow:0 0 0 3px rgba(var(--accent-2-rgb),.4)}
+  select,textarea,input[type=text]{font-family:var(--mono);font-size:12.5px;color:var(--ink);
+    background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:7px 9px;width:100%}
+  select:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px solid var(--accent-2);outline-offset:1px}
+  textarea{line-height:1.55;resize:vertical}
+
+  /* ── stats / pills / code ─────────────────────────────────── */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:1px;
+    background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .stat{background:var(--panel);padding:10px 12px}
+  .stat .sl{font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--dim)}
+  .stat .sv{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--ink);margin-top:3px}
+  .stat .sv.ok{color:var(--ok)} .stat .sv.bad{color:var(--bad)} .stat .sv.warn{color:var(--warn)}
+  .stat .sv.acc{color:var(--accent-2)}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;letter-spacing:.5px;
+    padding:3px 9px;border-radius:20px;border:1px solid var(--line);color:var(--muted)}
+  .pill.ok{color:var(--ok);border-color:rgba(63,185,80,.5);background:rgba(63,185,80,.1)}
+  .pill.bad{color:var(--bad);border-color:rgba(248,81,73,.5);background:rgba(248,81,73,.1)}
+  .pill.warn{color:var(--warn);border-color:rgba(210,153,34,.5);background:rgba(210,153,34,.1)}
+  .pill.acc{color:var(--accent-2);border-color:rgba(var(--accent-2-rgb),.5);background:rgba(var(--accent-rgb),.18)}
+  pre.code{font-family:var(--mono);font-size:11.8px;line-height:1.62;background:#0b0e14;color:#dbe3ea;
+    border:1px solid var(--line);border-radius:10px;padding:13px 14px;overflow-x:auto;white-space:pre}
+  pre.code .k{color:#6cb6ff} pre.code .s{color:#8ddb8c} pre.code .c{color:#6b7484;font-style:italic}
+  pre.code .n{color:#e0b070} pre.code .b{color:#ddd4fb;font-weight:700}
+  .note{border-left:3px solid var(--accent);background:rgba(var(--accent-rgb),.12);border-radius:0 8px 8px 0;
+    padding:10px 13px;font-size:12.5px;color:var(--muted)}
+  .note b{color:var(--ink)}
+  .log{font-family:var(--mono);font-size:11.5px;max-height:230px;overflow-y:auto;display:grid;gap:5px}
+  .log div{background:var(--panel2);border-left:3px solid var(--line);border-radius:0 6px 6px 0;padding:6px 9px;color:var(--muted)}
+  .log div.hl{border-left-color:var(--accent-2);color:var(--ink);background:rgba(var(--accent-rgb),.15)}
+  .log div.ok{border-left-color:var(--ok)} .log div.bad{border-left-color:var(--bad)}
+  svg{display:block;max-width:100%;height:auto}
+  .svgwrap{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px;overflow-x:auto}
+  table.t{width:100%;border-collapse:collapse;font-size:12px}
+  table.t th{font-size:9.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--dim);
+    text-align:left;padding:0 8px 7px;border-bottom:1px solid var(--line)}
+  table.t td{padding:7px 8px;border-bottom:1px solid rgba(39,44,54,.6);color:var(--muted);font-family:var(--mono);font-size:11.8px}
+  table.t td.n{color:var(--ink);font-weight:600}
+
+  /* ── pitfalls ─────────────────────────────────────────────── */
+  details.pit{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:10px;overflow:hidden}
+  details.pit>summary{cursor:pointer;padding:12px 15px;font-size:13.5px;font-weight:650;color:var(--ink);
+    list-style:none;display:flex;gap:11px;align-items:flex-start}
+  details.pit>summary::-webkit-details-marker{display:none}
+  details.pit>summary::before{content:"\25B8";color:var(--accent-2);font-size:12px;line-height:1.5;transition:.2s}
+  details.pit[open]>summary::before{transform:rotate(90deg)}
+  details.pit>summary:focus-visible{outline:2px solid var(--accent-2);outline-offset:-2px}
+  details.pit .body{padding:0 15px 15px 39px;font-size:13px;color:var(--muted);display:grid;gap:9px}
+  details.pit .body .fix{color:var(--ok);font-weight:600}
+
+  /* ── MCQ ──────────────────────────────────────────────────── */
+  .mcq{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 17px;margin-bottom:13px}
+  .mcq .q{font-size:13.8px;font-weight:650;color:var(--ink);margin:0 0 11px;max-width:84ch}
+  .mcq .q span{color:var(--accent-2);font-family:var(--mono);margin-right:7px}
+  .opts{display:grid;gap:7px}
+  .opt{text-align:left;font-family:inherit;font-size:13px;cursor:pointer;color:var(--muted);
+    background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:9px 12px;transition:.15s}
+  .opt:hover:not(:disabled){border-color:var(--accent-2);color:var(--ink)}
+  .opt:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .opt.right{border-color:var(--ok);background:rgba(63,185,80,.13);color:#bce8c4}
+  .opt.wrong{border-color:var(--bad);background:rgba(248,81,73,.12);color:#f4b6b1}
+  .opt.dim{opacity:.5}
+  .fb{margin-top:11px;font-size:12.5px;line-height:1.6;color:var(--muted);display:none;
+    border-left:3px solid var(--line);padding-left:11px}
+  .fb.show{display:block}
+  .fb.show.good{border-left-color:var(--ok)} .fb.show.poor{border-left-color:var(--bad)}
+  .fb b{color:var(--ink)}
+
+  /* ── next ─────────────────────────────────────────────────── */
+  .nextgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+  .nextcard{display:block;background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:15px 17px;transition:.18s;color:inherit}
+  .nextcard:hover{border-color:var(--accent-2);transform:translateY(-2px);text-decoration:none}
+  .nextcard .nl{font-size:10px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--accent-2)}
+  .nextcard .nt{font-size:14.5px;font-weight:700;color:var(--ink);margin-top:5px}
+  .nextcard .nd{font-size:12px;color:var(--muted);margin-top:5px}
+
+  @media (max-width:720px){
+    .grid2,.grid3,.split,.split-r{grid-template-columns:1fr}
+    section{padding:26px 15px 32px}
+    nav.top{padding:10px 15px;gap:8px}
+    nav.top .crumbs{font-size:11px}
+    p,.lead{max-width:none}
+  }
+
+  /* ── week-page shared ─────────────────────────────────────── */
+  #hero{padding:52px 22px 40px;
+    background:radial-gradient(ellipse 820px 340px at 22% -14%,rgba(var(--accent-rgb),.3),transparent 66%)}
+  #hero .wk{font-family:var(--mono);font-size:12px;letter-spacing:2px;color:var(--accent-2);font-weight:700}
+  #hero h1{max-width:24ch}
+  #hero .promise{font-size:16.5px;color:var(--ink);max-width:74ch;margin-top:10px;line-height:1.55}
+  .secnum{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;
+    background:rgba(var(--accent-rgb),.35);border:1px solid var(--accent-2);color:#fff;font-family:var(--mono);
+    font-size:11px;font-weight:700;margin-right:9px;vertical-align:2px}
+  .sw{display:inline-flex;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex-wrap:wrap}
+  .sw button{font-family:inherit;font-size:11.5px;font-weight:650;cursor:pointer;color:var(--muted);
+    background:var(--panel2);border:none;padding:7px 13px;transition:.15s}
+  .sw button[aria-pressed="true"]{background:rgba(var(--accent-rgb),.32);color:#fff}
+  .sw button:focus-visible{outline:2px solid var(--accent-2);outline-offset:-2px}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-top:10px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
+
+
+  /* ── week-1 specific ──────────────────────────────────────── */
+  .codepair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+  .tablewrap{overflow-x:auto}
+  .pil{display:none} .pil.on{display:grid;gap:12px}
+  .chips{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px}
+  .chip{font-family:var(--mono);font-size:11.5px;font-weight:650;cursor:pointer;color:var(--muted);
+    background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:6px 11px;transition:.15s}
+  .chip:hover{color:var(--ink);border-color:var(--line-2)}
+  .chip[aria-pressed="true"]{background:rgba(var(--accent-rgb),.3);border-color:var(--accent-2);color:#fff}
+  .chip:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .qrow{display:grid;grid-template-columns:minmax(0,1fr) 88px;gap:9px;align-items:center;font-size:12px}
+  .qrow .qb{position:relative;height:18px;border-radius:5px;background:#0b0e14;border:1px solid var(--line);overflow:hidden}
+  .qrow .qb i{display:block;height:100%;width:0}
+  .qrow .qv{font-family:var(--mono);font-size:11px;color:var(--ink-dim);text-align:right}
+  .bars{display:grid;gap:7px;margin-top:6px}
+  .metergrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:10px}
+  .meter{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:9px 11px}
+  .meter .ml{font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--dim)}
+  .meter .mv{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--accent-2);margin-top:3px}
+  .meter .mt{position:relative;height:5px;border-radius:3px;background:#0b0e14;margin-top:7px;overflow:hidden}
+  .meter .mt i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--accent-2))}
+
+  /* ── mobile guard (identical on every page): single column under 720px,
+        no horizontal overflow. Must stay last in the sheet. ───────────── */
+  @media (max-width:720px){
+    .grid2,.grid3,.grid2.narrow-right,.split,.split-r,.codepair,
+    .nextgrid,.dash,.toggles,.lanes,.weeknav,.weeks,.roles,.stack{
+      grid-template-columns:minmax(0,1fr)}
+    [class*="grid"]>*,.stack>*,.wrap>*,.panel,.panel.tight,.nextcard,.wk,.row>*{min-width:0}
+    pre,pre.code,.svgwrap,svg,canvas,table,select,input,textarea,.mono{max-width:100%}
+    pre,pre.code,.svgwrap,.tablewrap{overflow-x:auto}
+    code,.mono{overflow-wrap:anywhere}
+    .ctl,.ctl>*,.controls>*,.row,.legend>*{min-width:0}
+    .ctl{flex-wrap:wrap} .ctl select,.ctl input[type=range]{flex:1 1 100%;width:100%}
+    p,.lead,.sub,.promise{max-width:none}
+  }
+</style>
+</head>
+<body>
+
+<nav class="top"><a href="index.html">Low-Latency Trading Arena</a><span class="crumbs"><a href="index.html">← Home</a> · <b>Week 1 · HFT Landscape &amp; Market Microstructure</b> · <a href="week2.html">Week 2 →</a></span></nav>
+
+
+<!-- ══════════════ HERO ══════════════ -->
+<section id="hero">
+  <div class="wk">WEEK 1 · 15-WEEK TRACK  ·  SESSION 1 · 9-SESSION TRACK</div>
+  <h1>HFT Landscape &amp; Market Microstructure</h1>
+  <p class="promise">High-frequency trading is not forecasting. It is a <strong>race</strong>: two bots
+  running the same idea finish in the order their messages reach the matching engine. Before you write a
+  line of C++ you need to know what you are racing for — a place in a queue — and what it is worth.</p>
+  <ul class="you">
+    <li>Read a <em class="hi">central limit order book</em> the way the matching engine reads it: two sorted sides, price first, then time.</li>
+    <li>Compute the four numbers your bot actually trades on — <code>spread</code>, <code>mid</code>, <code>microprice</code>, <code>obi</code> — and say which way each of them leans.</li>
+    <li>Explain, with a number, why a 10&#8239;µs bot beats a 100&#8239;µs bot even when both are right about the direction.</li>
+    <li>Get a C++ client onto the arena's LATENCY board and read your own p50 / p99 / p99.9.</li>
+  </ul>
+  <div class="row" style="margin-top:22px">
+    <span class="pill acc">Lab: build the client, land on the board, hand-compute the metrics</span>
+    <span class="pill">No optimisation yet — orientation and vocabulary</span>
+    <span class="pill warn">Speed buys queue position, nothing else</span>
+  </div>
+</section>
+
+<!-- ══════════════ WHAT ══════════════ -->
+<section id="what">
+  <div class="kicker">Part 1</div>
+  <h2><span class="secnum">1</span>What is it? Four participants and one data structure</h2>
+  <p class="lead">Every modern equity, futures and crypto venue runs the same thing: a
+  <strong>central limit order book</strong> — resting orders on two sides, matched by rules that fit on an
+  index card. Everything else in this course is a consequence of those rules and of the fact that several
+  people are trying to obey them faster than you.</p>
+
+  <div class="tabs" id="pTabs" role="tablist" aria-label="Choose a market participant to explore">
+    <button class="tab" type="button" role="tab" id="tab-mm" aria-selected="true" aria-controls="pPanel">Market maker</button>
+    <button class="tab" type="button" role="tab" id="tab-stat" aria-selected="false" aria-controls="pPanel">Stat-arb</button>
+    <button class="tab" type="button" role="tab" id="tab-lat" aria-selected="false" aria-controls="pPanel">Latency arb</button>
+    <button class="tab" type="button" role="tab" id="tab-exch" aria-selected="false" aria-controls="pPanel">The exchange</button>
+  </div>
+
+  <div class="split" id="pPanel" role="tabpanel" aria-labelledby="tab-mm">
+    <div class="stack">
+      <div class="panel">
+        <h3>Who they are</h3>
+        <h4 id="pName">—</h4>
+        <p class="sub" id="pOne"></p>
+        <div class="bars" style="margin-top:14px">
+          <div class="qrow"><span>Objective</span><span class="qv" id="pObjV"></span></div>
+          <p class="sub" id="pObj" style="margin:0"></p>
+        </div>
+        <div class="metergrid" style="margin-top:14px">
+          <div class="meter"><div class="ml">Holding horizon</div><div class="mv" id="pHor"></div><div class="mt"><i id="pHorB"></i></div></div>
+          <div class="meter"><div class="ml">Latency sensitivity</div><div class="mv" id="pLat"></div><div class="mt"><i id="pLatB"></i></div></div>
+          <div class="meter"><div class="ml">Messages per fill</div><div class="mv" id="pMsg"></div><div class="mt"><i id="pMsgB"></i></div></div>
+          <div class="meter"><div class="ml">Capital at risk</div><div class="mv" id="pCap"></div><div class="mt"><i id="pCapB"></i></div></div>
+        </div>
+      </div>
+      <div class="svgwrap">
+        <svg id="pSvg" viewBox="0 0 620 260" role="img" aria-label="A plane whose horizontal axis is holding horizon and whose vertical axis is latency sensitivity, with the four participants placed on it and the selected one highlighted"></svg>
+      </div>
+    </div>
+    <div class="stack">
+      <div class="panel tight"><h3>What they optimise</h3><ul class="plain" id="pOpt"></ul></div>
+      <div class="panel tight"><h3>How they lose money</h3><ul class="plain" id="pLose"></ul></div>
+      <div class="note" id="pNote"></div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:30px">The four numbers, and what each one leans on</h3>
+  <div class="split-r">
+    <div class="stack">
+      <div class="tablewrap"><table class="t">
+        <thead><tr><th>Term</th><th>Definition</th><th>What it is for</th></tr></thead>
+        <tbody>
+          <tr><td class="n">best bid / ask</td><td>highest buy, lowest sell resting</td><td>the touch — where you can trade now</td></tr>
+          <tr><td class="n">spread</td><td>ask − bid</td><td>the price of immediacy, in ticks</td></tr>
+          <tr><td class="n">mid</td><td>(bid + ask) / 2</td><td>a reference, not a prediction</td></tr>
+          <tr><td class="n">microprice</td><td>(ask·bid_sz + bid·ask_sz) / (bid_sz + ask_sz)</td><td>size-weighted touch — leans toward the thin side</td></tr>
+          <tr><td class="n">obi</td><td>(bid_sz − ask_sz) / (bid_sz + ask_sz)</td><td>imbalance in [−1, 1]; +1 = all bids</td></tr>
+          <tr><td class="n">depth</td><td>resting quantity per level</td><td>how far a market order walks</td></tr>
+          <tr><td class="n">queue_ahead</td><td>same-side, same-price qty in front of you</td><td>how much must trade before you fill</td></tr>
+        </tbody>
+      </table></div>
+      <div class="note"><b>Note the cross-weighting in the microprice.</b> The <em class="hi">bid</em> size
+      multiplies the <em class="hi">ask</em> price. With 800 lots bid and 200 offered, buyers dominate:
+      <code>obi = +0.6</code> and the microprice sits at 100.016 — <strong>above</strong> the 100.010 mid,
+      leaning toward the ask. Over a short horizon the microprice predicts the next mid better than the mid
+      does, and that lean is the cheapest alpha in the building.</div>
+    </div>
+    <div class="stack">
+      <pre class="code">// book_metrics.cpp — real, compilable C++20
+#include &lt;algorithm&gt;
+#include &lt;cstdio&gt;
+
+struct Metrics { double mid, spread, micro, obi; };
+
+constexpr Metrics compute(double bid_px, double bid_sz,
+                          double ask_px, double ask_sz) noexcept {
+    const double sz = bid_sz + ask_sz;
+    return Metrics{
+        .mid    = 0.5 * (bid_px + ask_px),
+        .spread = std::max(0.0, ask_px - bid_px),   // locked/crossed -&gt; 0
+        .micro  = sz &gt; 0.0 ? (ask_px * bid_sz + bid_px * ask_sz) / sz
+                           : 0.5 * (bid_px + ask_px),
+        .obi    = sz &gt; 0.0 ? (bid_sz - ask_sz) / sz : 0.0};
+}
+
+constexpr bool near(double a, double b, double eps = 1e-9) noexcept {
+    return (a &gt; b ? a - b : b - a) &lt;= eps;
+}
+
+// the balanced-book sanity check, moved to compile time
+static_assert(compute(100.00, 500, 100.02, 500).obi == 0.0);
+// NOT ==: micro is 100.01000000000001, mid is 100.00999999999999
+static_assert(near(compute(100.00, 500, 100.02, 500).micro,
+                   compute(100.00, 500, 100.02, 500).mid));
+
+int main() {
+    const auto m = compute(100.00, 800, 100.02, 200);
+    std::printf("mid=%.4f spread=%.4f micro=%.4f obi=%.4f\n",
+                m.mid, m.spread, m.micro, m.obi);
+    // mid=100.0100 spread=0.0200 micro=100.0160 obi=0.6000
+}</pre>
+      <p class="sub"><code>clang++ -std=c++20 -O2 book_metrics.cpp</code> — and note the second
+      <code>static_assert</code>. Writing it as <code>micro == mid</code> <strong>does not compile</strong>:
+      the two expressions differ by one ulp (100.01000000000001 against 100.00999999999999) because they
+      sum the same terms in a different order. Two computed <code>double</code>s are never compared with
+      <code>==</code>. Week 6 is about moving much more of your checking here, to compile time.</p>
+    </div>
+  </div>
+
+  <h3 style="margin-top:30px">Order types: you may fix the price, or fix the fill, not both</h3>
+  <p class="lead">Every order type is a position on one trade-off. A limit order fixes your price and
+  leaves the fill uncertain; a market order fixes the fill and leaves the price uncertain. Pick a type and
+  see where it sits.</p>
+  <div class="chips" id="otChips" role="group" aria-label="Choose an order type">
+    <button class="chip" type="button" data-o="limit" aria-pressed="true">limit</button>
+    <button class="chip" type="button" data-o="market" aria-pressed="false">market</button>
+    <button class="chip" type="button" data-o="ioc" aria-pressed="false">limit IOC</button>
+    <button class="chip" type="button" data-o="post" aria-pressed="false">post-only</button>
+    <button class="chip" type="button" data-o="cancel" aria-pressed="false">cancel / replace</button>
+  </div>
+  <div class="split">
+    <div class="svgwrap">
+      <svg id="otSvg" viewBox="0 0 620 260" role="img" aria-label="A plane with price certainty on one axis and fill certainty on the other, with the five order types placed on it and the selected one highlighted"></svg>
+    </div>
+    <div class="stack">
+      <div class="panel tight"><h3>The type</h3><h4 id="otName">—</h4>
+        <p class="sub" id="otD"></p>
+        <div class="stats" style="margin-top:11px">
+          <div class="stat"><div class="sl">Price certainty</div><div class="sv acc" id="otP"></div></div>
+          <div class="stat"><div class="sl">Fill certainty</div><div class="sv" id="otF"></div></div>
+          <div class="stat"><div class="sl">Fee side</div><div class="sv" id="otFee"></div></div>
+          <div class="stat"><div class="sl">Queue effect</div><div class="sv" id="otQ"></div></div>
+        </div>
+      </div>
+      <div class="note" id="otNote"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ HOW ══════════════ -->
+<section id="how">
+  <div class="kicker">Part 2</div>
+  <h2><span class="secnum">2</span>How it works: run the book yourself</h2>
+  <p class="lead">This is a working central limit order book with price-time priority. Post a limit order
+  and it joins the FIFO queue at its price — behind everything already there. Send a market order and it
+  walks the other side, oldest order first at each level. Watch your <code>queue_ahead</code>, then press
+  <strong>Reprice</strong> and watch what repricing costs you.</p>
+
+  <div class="split" style="margin-top:18px">
+    <div class="stack">
+      <div class="svgwrap">
+        <svg id="obSvg" viewBox="0 0 640 340" role="img" aria-label="An order book ladder: bid levels below and ask levels above a mid line, with resting quantity drawn as bars and the student's own order highlighted inside the queue at its price level"></svg>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="sl">Best bid</div><div class="sv ok" id="obBid">—</div></div>
+        <div class="stat"><div class="sl">Best ask</div><div class="sv bad" id="obAsk">—</div></div>
+        <div class="stat"><div class="sl">Spread</div><div class="sv" id="obSpr">—</div></div>
+        <div class="stat"><div class="sl">Mid</div><div class="sv" id="obMid">—</div></div>
+        <div class="stat"><div class="sl">Microprice</div><div class="sv acc" id="obMic">—</div></div>
+        <div class="stat"><div class="sl">OBI</div><div class="sv" id="obObi">—</div></div>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="sl">Your order</div><div class="sv" id="obMine">none</div></div>
+        <div class="stat"><div class="sl">Queue ahead</div><div class="sv warn" id="obQa">—</div></div>
+        <div class="stat"><div class="sl">Level qty</div><div class="sv" id="obLvl">—</div></div>
+        <div class="stat"><div class="sl">Your fills</div><div class="sv ok" id="obFills">0</div></div>
+      </div>
+    </div>
+
+    <div class="stack">
+      <div class="panel">
+        <h3>Send an order</h3>
+        <div class="row" style="margin-bottom:12px" role="group" aria-label="Choose which side you are on">
+          <div class="sw" id="obSide">
+            <button type="button" data-s="buy" aria-pressed="true">Buy</button>
+            <button type="button" data-s="sell" aria-pressed="false">Sell</button>
+          </div>
+        </div>
+        <div class="ctl"><label for="obPx">Limit price <b id="obPxV">100.02</b></label>
+          <input type="range" id="obPx" min="9996" max="10008" step="1" value="10002" aria-label="Limit price in hundredths"/></div>
+        <div class="ctl"><label for="obQty">Quantity <b id="obQtyV">200</b></label>
+          <input type="range" id="obQty" min="100" max="1000" step="100" value="200" aria-label="Order quantity"/></div>
+        <div class="row">
+          <button class="btn primary" type="button" id="obPost">Post limit</button>
+          <button class="btn" type="button" id="obCancel">Cancel mine</button>
+          <button class="btn" type="button" id="obRe">Reprice +1 tick</button>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn" type="button" id="obMktB">Taker buys 400</button>
+          <button class="btn" type="button" id="obMktS">Taker sells 400</button>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn" type="button" id="obAhead">A rival ahead of you cancels</button>
+          <button class="btn" type="button" id="obReset">Reset book</button>
+        </div>
+      </div>
+      <div class="panel tight"><h3>The queue at your price</h3>
+        <div class="bars" id="obQueue"></div>
+        <p class="sub" id="obQNote" style="margin-top:10px">Post an order to join a queue.</p>
+      </div>
+      <div class="panel tight"><h3>Engine log</h3><div class="log" id="obLog"></div></div>
+    </div>
+  </div>
+
+  <div class="note" style="margin-top:18px"><b>The two rules, and nothing else.</b>
+  <strong>Price first</strong> — a more aggressive price always trades ahead of a worse one.
+  <strong>Then time</strong> — at the same price, whoever arrived earlier fills first, strictly FIFO. That
+  is the entire matching algorithm, and it is why speed is worth money: it is the only way to buy the
+  second rule.</div>
+</section>
+
+<!-- ══════════════ WHY ══════════════ -->
+<section id="why">
+  <div class="kicker">Part 3</div>
+  <h2><span class="secnum">3</span>Why it matters: 10 µs versus 100 µs, in fills</h2>
+  <p class="lead">Here is the payoff, and it is arithmetic, not attitude. You and a rival see the same book
+  update at the same instant and both decide to post the same limit order at the same price. The engine
+  does not know who is cleverer. It timestamps arrivals. The slower order sits <em class="hi">behind</em>
+  the faster one, and when a taker arrives with less quantity than the queue, only the front of the queue
+  gets paid.</p>
+
+  <div class="split" style="margin-top:18px">
+    <div class="stack">
+      <div class="svgwrap">
+        <svg id="raceSvg" viewBox="0 0 640 250" role="img" aria-label="A timeline showing a book update, then your order and a rival's order arriving after their respective tick-to-trade latencies, and the resulting queue order at the price level"></svg>
+      </div>
+      <div class="svgwrap">
+        <svg id="fillSvg" viewBox="0 0 640 250" role="img" aria-label="A curve of fill probability against your tick-to-trade latency on a logarithmic axis, with markers at ten and one hundred microseconds and a dot at your current latency"></svg>
+      </div>
+    </div>
+    <div class="stack">
+      <div class="panel">
+        <h3>Controls</h3>
+        <div class="ctl"><label for="rcYou">Your tick-to-trade <b id="rcYouV">10 µs</b></label>
+          <input type="range" id="rcYou" min="10" max="2000" value="100" aria-label="Your tick-to-trade latency, in tenths of a microsecond"/></div>
+        <div class="ctl"><label for="rcRiv">Rival median tick-to-trade <b id="rcRivV">25 µs</b></label>
+          <input type="range" id="rcRiv" min="10" max="2000" value="250" aria-label="The rival's median tick-to-trade latency, in tenths of a microsecond"/></div>
+        <div class="ctl"><label for="rcTake">Taker quantity that arrives <b id="rcTakeV">300</b></label>
+          <input type="range" id="rcTake" min="100" max="1200" step="100" value="300" aria-label="Quantity the taker removes from your price level"/></div>
+        <div class="ctl"><label for="rcRest">Quantity already resting ahead of both of you <b id="rcRestV">100</b></label>
+          <input type="range" id="rcRest" min="0" max="800" step="100" value="100" aria-label="Quantity already resting at the level before either order arrives"/></div>
+        <div class="row">
+          <button class="btn" type="button" id="rcColo">Colocate me (10 µs)</button>
+          <button class="btn" type="button" id="rcSlow">Make me a 100 µs bot</button>
+        </div>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="sl">You win the race</div><div class="sv acc" id="rcWin">—</div></div>
+        <div class="stat"><div class="sl">Your fill probability</div><div class="sv" id="rcFill">—</div></div>
+        <div class="stat"><div class="sl">Expected filled qty</div><div class="sv" id="rcQty">—</div></div>
+        <div class="stat"><div class="sl">Rebate per 1,000 ticks</div><div class="sv ok" id="rcPnl">—</div></div>
+      </div>
+      <div class="note" id="rcNote"></div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:30px">The arena is the live market, and the LATENCY board is the grade</h3>
+  <p class="lead">The venue, the feed and the matching engine are already running; your bot is just another
+  client on the wire, speaking JSON over a WebSocket. You override one hook, <code>on_book</code>, and
+  every order you send from inside it is timestamped from feed-decode to send. That microsecond number is
+  what the LATENCY board ranks — at p50, p99 and <strong>p99.9</strong>.</p>
+
+  <div class="split-r">
+    <div class="stack">
+      <div class="panel">
+        <h3>Your latency distribution</h3>
+        <div class="ctl"><label for="lbMed">Median tick-to-trade <b id="lbMedV">38 µs</b></label>
+          <input type="range" id="lbMed" min="5" max="400" value="38" aria-label="Median tick-to-trade latency, in microseconds"/></div>
+        <div class="ctl"><label for="lbJit">Jitter <b id="lbJitV">25%</b></label>
+          <input type="range" id="lbJit" min="0" max="200" value="25" aria-label="Jitter as a percentage of the median"/></div>
+        <div class="row" role="group" aria-label="Toggle rare stalls caused by allocating on the hot path">
+          <div class="sw" id="lbSw">
+            <button type="button" data-a="clean" aria-pressed="true">No allocation in on_book</button>
+            <button type="button" data-a="alloc" aria-pressed="false">One malloc per tick</button>
+          </div>
+        </div>
+      </div>
+      <div class="svgwrap">
+        <svg id="lbSvg" viewBox="0 0 640 230" role="img" aria-label="A histogram of tick-to-trade latency on a logarithmic axis with the median, ninety-ninth and ninety-nine-point-nine percentile marked"></svg>
+      </div>
+    </div>
+    <div class="stack">
+      <div class="stats">
+        <div class="stat"><div class="sl">p50</div><div class="sv acc" id="lbP50">—</div></div>
+        <div class="stat"><div class="sl">p99</div><div class="sv" id="lbP99">—</div></div>
+        <div class="stat"><div class="sl">p99.9 · the grade</div><div class="sv" id="lbP999">—</div></div>
+        <div class="stat"><div class="sl">Worst tick</div><div class="sv bad" id="lbMax">—</div></div>
+      </div>
+      <div class="panel tight"><h3>What the board would say</h3>
+        <div class="log" id="lbLog"></div>
+      </div>
+      <div class="note"><b>The mean is not on the board.</b> Turn on <em class="hi">one malloc per
+      tick</em>: the median barely moves and p99.9 explodes, because an allocator call is usually a few
+      tens of nanoseconds and occasionally a lock, a free-list walk or a page fault. Weeks 3 and 4 exist to
+      delete that line from your hot path; Week 14 teaches you to prove it is gone.</div>
+      <pre class="code">// include/hft_bot.hpp — the one hook that matters
+void on_book(const std::string&amp; symbol,
+             double bid, double ask, double mid,
+             double microprice, double obi) override {
+    if (bid &lt;= 0.0 || ask &lt;= 0.0) return;      // need two sides
+    if (ask - bid &lt; 0.02) return;              // spread too tight
+    // orders sent from here are latency-stamped for you
+    if (obi &gt; 0.4) buy_limit(symbol, 1, bid);
+}</pre>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ PITFALLS ══════════════ -->
+<section id="pitfalls">
+  <div class="kicker">Part 4</div>
+  <h2><span class="secnum">4</span>Five ways week one goes wrong</h2>
+  <p class="lead">These are the mistakes that survive all fifteen weeks if nobody names them now. Open them.</p>
+
+  <details class="pit"><summary>Treating the mid as fair value</summary>
+    <div class="body">
+      <p>The mid is the average of two prices and ignores how much size stands behind each one. With
+      100.00 × 800 bid and 100.02 × 200 offered, the mid says 100.010 and the book says
+      <em class="hi">buyers are three times as eager</em>: <code>obi = +0.6</code>, microprice 100.016.
+      A strategy that mean-reverts to the mid here is systematically selling into pressure.</p>
+      <p class="fix">Fix: use the microprice as your reference and the mid only as a display number. Both
+      arrive pre-computed in <code>on_book</code>, so there is no excuse of cost — and Week 8 shows you
+      how to update them in O(1) when you compute them yourself.</p>
+    </div></details>
+
+  <details class="pit"><summary>Repricing on every tick, and never counting the queue you threw away</summary>
+    <div class="body">
+      <p>Cancel plus re-post is two cheap messages and one expensive consequence: a new timestamp, which
+      means the <strong>back of the queue</strong>. If 900 lots were ahead of you and you were 200 from the
+      front, one reprice can cost you the whole session's fills at that level.</p>
+      <p>The tell is a bot with an excellent order-to-trade ratio in the wrong direction: thousands of
+      messages, almost no fills, and a P&amp;L that is entirely fees.</p>
+      <p class="fix">Fix: put a hysteresis band on requoting — only move when the microprice has left the
+      band by more than the queue is worth — and track <code>queue_ahead</code> from the acknowledgement so
+      the cost is a number in your log, not a feeling.</p>
+    </div></details>
+
+  <details class="pit"><summary>Assuming a fill is good news</summary>
+    <div class="body">
+      <p>Your resting bid fills instantly and in full. That usually means the market just decided your
+      price was generous: somebody with better information crossed the spread to hit you. This is
+      <em class="hi">adverse selection</em>, and it is why the fastest passive fills are often the worst
+      ones.</p>
+      <p class="fix">Fix: measure a markout — the mid 1&#8239;s, 5&#8239;s and 30&#8239;s after each fill —
+      and grade yourself on markout-adjusted P&amp;L, not on fill count. Speed's second job, after winning
+      the queue, is letting you <strong>cancel</strong> before the bad fill happens.</p>
+    </div></details>
+
+  <details class="pit"><summary>Optimising the mean because the mean is what your <code>printf</code> shows</summary>
+    <div class="body">
+      <p>A 38&#8239;µs average with a 5.2&#8239;ms worst tick is a losing bot, and the average will never
+      tell you. The races that pay are concentrated in the busiest microseconds of the session — exactly
+      when queues are longest, when everyone fires at once, and when your tail shows up.</p>
+      <p class="fix">Fix: collect a sample, sort it, and report p50 / p99 / p99.9 from the first week. The
+      arena's harness already does; make your own benchmarks match it so the numbers are comparable.</p>
+    </div></details>
+
+  <details class="pit"><summary>Measuring latency with the wrong clock — or with the print inside the timer</summary>
+    <div class="body">
+      <p><code>std::chrono::system_clock</code> is wall-clock: it can step backwards when NTP corrects it,
+      which turns a percentile table into fiction. And a <code>std::cout</code> inside the timed region
+      measures your terminal, not your strategy — a flush is easily tens of microseconds.</p>
+      <p class="fix">Fix: <code>std::chrono::steady_clock</code> (monotonic) around the smallest region you
+      mean to measure; log to a pre-allocated ring buffer and drain it off the hot path. Week 2 builds the
+      harness properly, and Week 14 shows what the harness still hides.</p>
+    </div></details>
+</section>
+
+<!-- ══════════════ CHECK ══════════════ -->
+<section id="check">
+  <div class="kicker">Part 5</div>
+  <h2><span class="secnum">5</span>Check yourself</h2>
+  <p class="lead">Three questions, instant feedback, nothing recorded.</p>
+
+  <div class="mcq" data-a="1" data-exp="<b>The order that arrived first.</b> Price-time priority has exactly two rules: better price wins outright, and at the same price the earlier arrival wins, strictly FIFO. Size is irrelevant, and so is who you are. This is why speed is worth money — the only thing latency buys you is rule two. It is also why cancel-and-replace is expensive: the replacement is a new arrival, so it goes to the back of that same queue.">
+    <p class="q"><span>Q1</span>Two buy orders rest at 100.02: yours for 500 lots, posted 40&#8239;µs later than a rival's 100-lot order. A taker sells 200 lots. Who trades?</p>
+    <div class="opts">
+      <button class="opt" type="button">You — you have the larger resting size, so you get the fill</button>
+      <button class="opt" type="button">The rival's 100 lots fill first, then 100 of yours</button>
+      <button class="opt" type="button">Both pro-rata: 167 lots to you, 33 to the rival</button>
+      <button class="opt" type="button">Neither — a 200-lot sell cannot fill a 500-lot order</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+
+  <div class="mcq" data-a="2" data-exp="<b>Above the mid, because the bid is the heavy side.</b> micro = (ask·bid_sz + bid·ask_sz)/(bid_sz+ask_sz) = (100.02·800 + 100.00·200)/1000 = 100.016, against a mid of 100.010, with obi = (800−200)/1000 = +0.60. Note the cross-weighting: the bid's size multiplies the ask's price, so a heavy bid pulls the reference up toward the offer. Intuitively there is a queue of buyers and only a little stock for sale, so the next print is more likely to be at the offer.">
+    <p class="q"><span>Q2</span>The book is 100.00 × 800 bid, 100.02 × 200 offered. Where is the microprice, and what is the OBI?</p>
+    <div class="opts">
+      <button class="opt" type="button">Below the mid, at 100.004, with <code>obi = −0.60</code></button>
+      <button class="opt" type="button">Above the mid, at 100.016, with <code>obi = +0.60</code></button>
+      <button class="opt" type="button">Exactly at the mid, 100.010, with <code>obi = +0.60</code></button>
+      <button class="opt" type="button">Above the mid, at 100.016, with <code>obi = −0.60</code></button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+
+  <div class="mcq" data-a="3" data-exp="<b>p99.9 = 2.1 ms.</b> Bot B is the loser and the mean is what hides it: its median is 40% better, so on a dashboard of averages it looks like the faster bot. But the ticks that decide races are the busiest ones, and one in a thousand of B's ticks takes 2.1 ms — during which the quote it was racing for has been taken, moved, or cancelled. That is what &ldquo;won on the tail, not the mean&rdquo; means, and it is why the board ranks p99.9.">
+    <p class="q"><span>Q3</span>Bot A: p50 = 38&#8239;µs, p99 = 71&#8239;µs, p99.9 = 210&#8239;µs. Bot B: p50 = 22&#8239;µs, p99 = 95&#8239;µs, p99.9 = 2.1&#8239;ms. Which single number tells you B loses races A wins?</p>
+    <div class="opts">
+      <button class="opt" type="button">B's p50 of 22&#8239;µs — it is doing less work per tick</button>
+      <button class="opt" type="button">B's p99 of 95&#8239;µs — a 24&#8239;µs gap at the 99th percentile</button>
+      <button class="opt" type="button">B's p99.9 of 2.1&#8239;ms — one tick in a thousand is a lost race</button>
+      <button class="opt" type="button">None of them; you cannot compare bots without their P&amp;L</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+</section>
+
+<!-- ══════════════ NEXT ══════════════ -->
+<section id="next">
+  <div class="kicker">Part 6</div>
+  <h2><span class="secnum">6</span>Do the work</h2>
+  <div class="grid2" style="margin-top:14px">
+    <div class="panel"><h4>In the lab (~60 min)</h4><ul class="plain">
+      <li>Build the arena C++ client — <code>cmake -B build &amp;&amp; cmake --build build</code> — and run
+      the grader once (<code>make test</code>) to see the whole term laid out in red.</li>
+      <li>Connect with your team id, confirm the <code>[latency] tick-&gt;order = N us</code> line, and find
+      yourself on the LATENCY tab.</li>
+      <li>Write <code>compute(bid_px, bid_sz, ask_px, ask_sz)</code> yourself and check it on three
+      snapshots: balanced 500/500, bid-heavy 900/100, ask-heavy 100/900.</li>
+      <li>Decide what <code>spread</code> should return on a locked or crossed book, and defend it.</li>
+    </ul></div>
+    <div class="panel"><h4>After the session</h4><ul class="plain">
+      <li>Formalise the metrics into a small header with <code>static_assert</code> coverage of the
+      balanced case.</li>
+      <li>Run the offline replay harness and record your p50 / p99 / p99.9 — this is your baseline for the
+      next fourteen topics.</li>
+      <li>Read the wire protocol end to end. You cannot parse quickly what you do not know the shape of.</li>
+      <li>In one paragraph: why does cancel-and-replace cost more than the two messages it sends?</li>
+    </ul></div>
+  </div>
+  <div class="nextgrid" style="margin-top:18px">
+    <a class="nextcard" href="https://github.com/sdonadio/hft-cpp-starter-columbia"><div class="nl">Get the code</div>
+      <div class="nt">15-week track starter</div>
+      <div class="nd">Header stubs, the autograder and the C++ arena client, one topic per session.</div></a>
+    <a class="nextcard" href="https://github.com/sdonadio/hft-cpp-starter-uchicago"><div class="nl">Get the code</div>
+      <div class="nt">9-session track starter</div>
+      <div class="nd">The same stubs and the same grader, packaged for the condensed nine-session schedule.</div></a>
+    <a class="nextcard" href="index.html"><div class="nl">Course home</div>
+      <div class="nt">The two-track map</div>
+      <div class="nd">Where week 1 sits, and the tick-to-trade path every later topic makes cheaper.</div></a>
+    <a class="nextcard" href="week2.html"><div class="nl">Next</div>
+      <div class="nt">Week 2 · C++ Performance Foundations →</div>
+      <div class="nd">Now find out what every operation on that hot path actually costs, in nanoseconds.</div></a>
+  </div>
+</section>
+
+
+<footer>Low-Latency Trading Arena · an interactive companion for a course on low-latency trading systems in C++ · <a href="https://github.com/sdonadio/low-latency-trading-arena">Source</a></footer>
+
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════
+   Week 1 — HFT Landscape & Market Microstructure
+   ════════════════════════════════════════════════════════════════ */
+var $ = function (id) { return document.getElementById(id); };
+/* SVG namespace taken from the document so no absolute URL appears in this file */
+var SVGNS = $("pSvg").namespaceURI;
+function mk(tag, attrs) {
+  var e = document.createElementNS(SVGNS, tag);
+  for (var k in attrs) { if (attrs.hasOwnProperty(k)) e.setAttribute(k, attrs[k]); }
+  return e;
+}
+function txt(x, y, s, size, fill, anchor, weight) {
+  var t = mk("text", { x: x, y: y, "font-size": size || 10, "font-family": "monospace", fill: fill || "#9aa0a6" });
+  if (anchor) t.setAttribute("text-anchor", anchor);
+  if (weight) t.setAttribute("font-weight", weight);
+  t.textContent = s;
+  return t;
+}
+function clear(n) { while (n.firstChild) n.removeChild(n.firstChild); }
+function lcg(seed) { var s = seed >>> 0; return function () { s = (1664525 * s + 1013904223) >>> 0; return s / 4294967296; }; }
+var AC = "#c4b5fd", AC1 = "#7c3aed", GRN = "#3fb950", RED = "#f85149", WRN = "#d29922";
+
+/* ════ 1. PARTICIPANT EXPLORER ════════════════════════════════ */
+var PART = {
+  mm: { name: "Market maker", x: 0.16, y: 0.93,
+    one: "Quotes both sides of the book, all day, and is paid the spread plus the maker rebate for standing there.",
+    objV: "capture the spread, stay flat",
+    obj: "Post a bid and an offer, get filled on both, end the day with no position and a little money from every round trip. The inventory is a by-product, not the trade.",
+    hor: "seconds", horN: 0.12, lat: "extreme", latN: 0.95, msg: "50–500", msgN: 0.9, cap: "low, high turnover", capN: 0.25,
+    opt: ["<b>Queue position</b> — being early in the FIFO at each price is most of the edge.",
+      "<b>Requote latency</b> — the quote must move before the market moves through it.",
+      "<b>Cancel latency</b> — pulling a stale quote is as valuable as posting a fresh one.",
+      "<b>Inventory skew</b> — lean the quotes to bleed the position back to flat."],
+    lose: ["<b>Adverse selection</b> — the fills you get instantly are the ones you should not have wanted.",
+      "<b>Inventory</b> — caught long into a move, the spread you earned is a rounding error.",
+      "<b>Being slow to cancel</b> — one stale quote in a fast market pays for a hundred good round trips."],
+    note: "<b>This is the archetype the course builds toward.</b> A market maker has to quote <em class=\"hi\">and</em> flinch, both inside microseconds — which is exactly why it needs an order book in flat arrays, a pool allocator and a lock-free feed handler." },
+  stat: { name: "Statistical arbitrage", x: 0.62, y: 0.42,
+    one: "Trades a relationship between instruments — a spread, a basket, a lead-lag — that it believes is temporarily mispriced.",
+    objV: "harvest a modelled edge",
+    obj: "Estimate a fair relationship from data, take the side that is cheap relative to it, and hold until the relationship reasserts itself or the model is proved wrong.",
+    hor: "minutes–hours", horN: 0.62, lat: "moderate", latN: 0.45, msg: "1–20", msgN: 0.3, cap: "high", capN: 0.8,
+    opt: ["<b>Signal quality</b> — the edge per trade is bigger, so a microsecond is worth less.",
+      "<b>Execution cost</b> — getting in without paying the spread every time; this is where latency still matters.",
+      "<b>Capacity</b> — how much size the idea absorbs before it moves the price it depends on."],
+    lose: ["<b>Regime change</b> — the relationship stops holding and the model does not know it yet.",
+      "<b>Crowding</b> — everyone else found the same relationship and exits through the same door.",
+      "<b>Execution slippage</b> — a good signal traded badly is a bad strategy."],
+    note: "<b>Where speed stops being the whole story.</b> Stat-arb needs <em class=\"hi\">good</em> execution, not the world's fastest — which makes it the honest counterweight to a course about microseconds, and the reason Week 8 grades P&amp;L net of the latency the signal cost." },
+  lat: { name: "Latency arbitrage", x: 0.03, y: 1.0,
+    one: "Sees a price change on one venue and trades against the not-yet-updated quote on another. Pure reaction speed.",
+    objV: "be first, always",
+    obj: "The signal is trivially simple and public: venue A just printed, venue B's quote is stale for a few microseconds. The only question is whether your message gets there before someone else's.",
+    hor: "microseconds", horN: 0.02, lat: "absolute", latN: 1.0, msg: "1–3", msgN: 0.15, cap: "very low", capN: 0.1,
+    opt: ["<b>Every nanosecond of the path</b> — NIC, bypass, parse, encode, wire. Nothing else.",
+      "<b>Physical distance</b> — colocation, then microwave, then hollow-core fibre.",
+      "<b>Determinism</b> — a tail event is a lost race, so p99.9 <em class=\"hi\">is</em> the strategy."],
+    lose: ["<b>Coming second</b> — there is no partial credit; the second-fastest bot pays the fee and gets nothing.",
+      "<b>Racing into a real move</b> — sometimes the stale quote was stale because the world changed.",
+      "<b>Message budgets</b> — venues charge for order-to-trade ratio, and losing races is expensive."],
+    note: "<b>The extreme case, and the one Week 15 stages as a tournament.</b> Because the signal is free, <em class=\"hi\">the entire strategy is the engineering</em>. If you can explain why your p99.9 is what it is, you can trade this; if you cannot, you cannot." },
+  exch: { name: "The exchange", x: 0.9, y: 0.68,
+    one: "Sells matching, fairness and determinism — and rents the latency it cannot give away for free.",
+    objV: "maximise flow, guarantee the rules",
+    obj: "Run a deterministic matching engine, publish a feed everyone can trust, and price access so that both makers and takers keep coming back.",
+    hor: "quarters", horN: 0.95, lat: "own the clock", latN: 0.7, msg: "n/a", msgN: 0.5, cap: "infrastructure", capN: 0.6,
+    opt: ["<b>Determinism</b> — same inputs, same outputs, every time, or nobody trusts the venue.",
+      "<b>Fair sequencing</b> — one timestamping point, published gateway latencies, equal cable lengths.",
+      "<b>Fee structure</b> — maker rebate against taker fee, tuned to attract the flow it wants.",
+      "<b>Feed quality</b> — sequence numbers, gap recovery, and a documented worst-case."],
+    lose: ["<b>Outages and halts</b> — flow leaves for the venue that stayed up.",
+      "<b>Perceived unfairness</b> — one participant with a structural advantage empties the book.",
+      "<b>Fee mistakes</b> — a rebate that pays for quotes nobody can trade against."],
+    note: "<b>Worth understanding because you are its client.</b> The rules you optimise against — price-time priority, maker/taker fees, circuit breakers, message budgets — are all <em class=\"hi\">policy choices</em> made by somebody with their own objective." }
+};
+var P_ORDER = ["mm", "stat", "lat", "exch"];
+function partDraw(key) {
+  var P = PART[key];
+  P_ORDER.forEach(function (k) { $("tab-" + k).setAttribute("aria-selected", k === key ? "true" : "false"); });
+  $("pPanel").setAttribute("aria-labelledby", "tab-" + key);
+  $("pName").textContent = P.name;
+  $("pOne").textContent = P.one;
+  $("pObjV").textContent = P.objV;
+  $("pObj").textContent = P.obj;
+  [["pHor", "hor", "horN"], ["pLat", "lat", "latN"], ["pMsg", "msg", "msgN"], ["pCap", "cap", "capN"]].forEach(function (t) {
+    $(t[0]).textContent = P[t[1]];
+    $(t[0] + "B").style.width = (100 * P[t[2]]) + "%";
+  });
+  var U = $("pOpt"); clear(U);
+  P.opt.forEach(function (s) { var li = document.createElement("li"); li.innerHTML = s; U.appendChild(li); });
+  var L = $("pLose"); clear(L);
+  P.lose.forEach(function (s) { var li = document.createElement("li"); li.innerHTML = s; L.appendChild(li); });
+  $("pNote").innerHTML = P.note;
+
+  var C = $("pSvg"); clear(C);
+  C.appendChild(mk("rect", { x: 0, y: 0, width: 620, height: 260, fill: "transparent" }));
+  var x0 = 74, y0 = 30, w = 500, h = 172;
+  C.appendChild(mk("rect", { x: x0, y: y0, width: w, height: h, rx: 6, fill: "#0b0e14", stroke: "#272c36" }));
+  for (var g = 1; g < 4; g++) {
+    C.appendChild(mk("path", { d: "M" + (x0 + w * g / 4) + " " + y0 + " L" + (x0 + w * g / 4) + " " + (y0 + h), stroke: "#1c2129", "stroke-width": 1 }));
+    C.appendChild(mk("path", { d: "M" + x0 + " " + (y0 + h * g / 4) + " L" + (x0 + w) + " " + (y0 + h * g / 4), stroke: "#1c2129", "stroke-width": 1 }));
+  }
+  C.appendChild(txt(x0, 20, "latency sensitivity  ↑        holding horizon  →", 10, "#6f757f"));
+  C.appendChild(txt(x0 - 6, y0 + 10, "high", 9, "#5f6673", "end"));
+  C.appendChild(txt(x0 - 6, y0 + h, "low", 9, "#5f6673", "end"));
+  C.appendChild(txt(x0, y0 + h + 16, "µs", 9, "#5f6673"));
+  C.appendChild(txt(x0 + w / 2, y0 + h + 16, "minutes", 9, "#5f6673", "middle"));
+  C.appendChild(txt(x0 + w, y0 + h + 16, "quarters", 9, "#5f6673", "end"));
+  P_ORDER.forEach(function (k) {
+    var Q = PART[k], on = k === key;
+    var cx = x0 + w * Q.x, cy = y0 + h * (1 - Q.y);
+    C.appendChild(mk("circle", { cx: cx, cy: cy, r: on ? 11 : 7,
+      fill: on ? AC : "rgba(var(--accent-rgb),.5)", stroke: on ? "#fff" : "#3a4150", "stroke-width": on ? 2 : 1 }));
+    C.appendChild(txt(Math.min(cx + 16, 560), cy + 4, Q.name, on ? 11 : 10, on ? "#fff" : "#6f757f", cx > 470 ? "end" : "start", on ? 700 : 400));
+  });
+  C.appendChild(txt(x0 + 8, y0 + h - 8, "everything up here is an engineering problem", 9, "#5f6673"));
+  C.appendChild(txt(310, 252, "the further left and the higher up, the more of your P&L is the C++", 9.5, "#5f6673", "middle"));
+}
+P_ORDER.forEach(function (k) { $("tab-" + k).addEventListener("click", function () { partDraw(k); }); });
+partDraw("mm");
+
+/* ════ 2. ORDER TYPES vs CERTAINTY ═══════════════════════════ */
+var OTYPE = {
+  limit: { n: "limit", px: 1.0, fill: 0.35, fee: "maker", q: "joins the queue",
+    d: "Rests at your price until it fills or you cancel it. You know exactly what you will pay; you do not know whether you will trade at all. This is the market maker's only tool and the reason queue position exists.",
+    note: "<b>The default in this course.</b> Everything about latency in the next fourteen topics is ultimately about getting a limit order into a queue earlier, or out of one sooner." },
+  market: { n: "market", px: 0.15, fill: 1.0, fee: "taker", q: "never rests",
+    d: "Crosses the spread and takes whatever is available, level by level, until it is filled. You know you will trade; you do not know at what average price if the book is thin.",
+    note: "<b>Immediacy has a price and it is the spread.</b> On a thin book a market order also walks levels, so your fill can be far worse than the touch you saw — which is why size and depth matter as much as price." },
+  ioc: { n: "limit IOC", px: 1.0, fill: 0.55, fee: "taker", q: "no queue at all",
+    d: "Immediate-or-cancel: cross now for whatever is available at your limit or better, and cancel the remainder rather than resting. Price-capped aggression with no resting risk.",
+    note: "<b>The latency-arb instrument.</b> You are picking off a quote you believe is stale, so you want the fill <em class=\"hi\">now</em> and you emphatically do not want the leftover sitting in a book you no longer understand." },
+  post: { n: "post-only", px: 1.0, fill: 0.3, fee: "maker only", q: "joins, or is rejected",
+    d: "A limit order that the venue rejects (or re-prices) rather than let it cross. It guarantees you are never the taker, so you never pay the taker fee by accident.",
+    note: "<b>A guard rail against your own race conditions.</b> If your book view is one tick stale, an ordinary limit order can cross and turn a rebate into a fee. Post-only makes that a rejection you can see in the log." },
+  cancel: { n: "cancel / replace", px: 1.0, fill: 0.2, fee: "n/a", q: "back of the queue",
+    d: "Pull a resting order, or move it. Two cheap messages — and a new timestamp, which sends the replacement to the back of the FIFO at its price.",
+    note: "<b>The most under-priced action in a beginner's bot.</b> The messages are nearly free; the queue position you throw away is not. Requote on a band, not on every tick." }
+};
+var OT_ORDER = ["limit", "market", "ioc", "post", "cancel"];
+function pct(v) { return Math.round(100 * v) + "%"; }
+function otDraw(key) {
+  var O = OTYPE[key];
+  OT_ORDER.forEach(function (k) {
+    $("otChips").querySelector('[data-o="' + k + '"]').setAttribute("aria-pressed", k === key ? "true" : "false");
+  });
+  $("otName").textContent = O.n;
+  $("otD").textContent = O.d;
+  $("otP").textContent = pct(O.px);
+  var f = $("otF"); f.textContent = pct(O.fill);
+  f.className = "sv " + (O.fill >= 0.9 ? "ok" : (O.fill <= 0.3 ? "bad" : "warn"));
+  $("otFee").textContent = O.fee;
+  $("otQ").textContent = O.q;
+  $("otNote").innerHTML = O.note;
+
+  var C = $("otSvg"); clear(C);
+  C.appendChild(mk("rect", { x: 0, y: 0, width: 620, height: 260, fill: "transparent" }));
+  var x0 = 70, y0 = 26, w = 500, h = 176;
+  C.appendChild(mk("rect", { x: x0, y: y0, width: w, height: h, rx: 6, fill: "#0b0e14", stroke: "#272c36" }));
+  C.appendChild(mk("path", { d: "M" + x0 + " " + (y0 + h) + " L" + (x0 + w) + " " + y0, stroke: "#272c36", "stroke-width": 1.2, "stroke-dasharray": "5 4", fill: "none" }));
+  C.appendChild(txt(x0 + w - 8, y0 + 14, "you cannot be here", 9.5, "#5f6673", "end"));
+  C.appendChild(txt(x0, 18, "price certainty  ↑        fill certainty  →", 10, "#6f757f"));
+  C.appendChild(txt(x0 - 6, y0 + 10, "fixed", 9, "#5f6673", "end"));
+  C.appendChild(txt(x0 - 6, y0 + h, "unknown", 9, "#5f6673", "end"));
+  OT_ORDER.forEach(function (k) {
+    var Q = OTYPE[k], on = k === key;
+    var cx = x0 + w * Q.fill, cy = y0 + h * (1 - Q.px);
+    cy = Math.max(y0 + 14, Math.min(y0 + h - 14, cy + (k === "post" ? 16 : (k === "cancel" ? 32 : 0))));
+    C.appendChild(mk("circle", { cx: cx, cy: cy, r: on ? 10 : 6,
+      fill: on ? AC : "rgba(var(--accent-rgb),.5)", stroke: on ? "#fff" : "#3a4150", "stroke-width": on ? 2 : 1 }));
+    C.appendChild(txt(cx + (cx > 430 ? -14 : 14), cy + 4, Q.n, on ? 11 : 10, on ? "#fff" : "#6f757f", cx > 430 ? "end" : "start", on ? 700 : 400));
+  });
+  C.appendChild(txt(310, 232, "the dashed line is the trade-off: certainty of price against certainty of execution", 9.5, "#5f6673", "middle"));
+  C.appendChild(txt(310, 248, "every order type in every venue is a point under it", 9.5, "#5f6673", "middle"));
+}
+OT_ORDER.forEach(function (k) {
+  $("otChips").querySelector('[data-o="' + k + '"]').addEventListener("click", function () { otDraw(k); });
+});
+otDraw("limit");
+
+/* ════ 3. THE ORDER BOOK ══════════════════════════════════════ */
+var ob = { o: [], seq: 0, fills: 0, side: "buy", log: [] };
+function obSeed() {
+  ob.o = []; ob.seq = 0; ob.fills = 0; ob.log = [];
+  [["buy", 10002, 300], ["buy", 10002, 200], ["buy", 10001, 800], ["buy", 10000, 200],
+   ["sell", 10004, 300], ["sell", 10005, 900], ["sell", 10006, 400]].forEach(function (r) {
+    ob.o.push({ id: ++ob.seq, side: r[0], px: r[1], qty: r[2], mine: false, seq: ob.seq });
+  });
+  obLog("book seeded — 3 bid levels, 3 ask levels, spread 0.02", "");
+}
+function obLog(s, cls) {
+  ob.log.unshift({ s: s, c: cls || "" });
+  if (ob.log.length > 40) ob.log.pop();
+}
+function px2s(p) { return (p / 100).toFixed(2); }
+function side(s) { return ob.o.filter(function (o) { return o.side === s && o.qty > 0; }); }
+function bestBid() { var b = side("buy"); return b.length ? Math.max.apply(null, b.map(function (o) { return o.px; })) : 0; }
+function bestAsk() { var a = side("sell"); return a.length ? Math.min.apply(null, a.map(function (o) { return o.px; })) : 0; }
+function levelQty(s, p) { return side(s).filter(function (o) { return o.px === p; }).reduce(function (a, o) { return a + o.qty; }, 0); }
+function mine() { for (var i = 0; i < ob.o.length; i++) if (ob.o[i].mine && ob.o[i].qty > 0) return ob.o[i]; return null; }
+function queueAhead(m) {
+  return side(m.side).filter(function (o) { return o.px === m.px && o.seq < m.seq; })
+    .reduce(function (a, o) { return a + o.qty; }, 0);
+}
+/* aggressive fill: `taker` is buy/sell; consumes the opposite side best-first, FIFO within a level */
+function aggress(takerSide, qty, label) {
+  var opp = takerSide === "buy" ? "sell" : "buy";
+  var filled = 0, notional = 0;
+  while (qty > 0) {
+    var rest = side(opp);
+    if (!rest.length) break;
+    var best = takerSide === "buy" ? Math.min.apply(null, rest.map(function (o) { return o.px; }))
+                                   : Math.max.apply(null, rest.map(function (o) { return o.px; }));
+    var q = rest.filter(function (o) { return o.px === best; }).sort(function (a, b) { return a.seq - b.seq; });
+    for (var i = 0; i < q.length && qty > 0; i++) {
+      var take = Math.min(q[i].qty, qty);
+      q[i].qty -= take; qty -= take; filled += take; notional += take * best;
+      if (q[i].mine) {
+        ob.fills += take;
+        obLog("★ YOU FILLED " + take + " @ " + px2s(best) + " (maker) — queue reached you", "ok");
+      } else {
+        obLog(label + " took " + take + " @ " + px2s(best) + " from a rival", "");
+      }
+    }
+    ob.o = ob.o.filter(function (o) { return o.qty > 0; });
+  }
+  if (filled > 0) obLog(label + ": " + filled + " done, avg " + (notional / filled / 100).toFixed(4), "hl");
+  else obLog(label + ": no liquidity to trade against", "bad");
+  return filled;
+}
+function obPost(s, p, q) {
+  var bb = bestBid(), ba = bestAsk();
+  var crosses = (s === "buy" && ba > 0 && p >= ba) || (s === "sell" && bb > 0 && p <= bb);
+  if (crosses) {
+    obLog("your " + s + " limit @ " + px2s(p) + " CROSSES — you are the taker, you pay the fee", "bad");
+    var done = aggress(s, q, "your aggressive order");
+    q -= done;
+    if (q <= 0) return;
+    obLog("remainder " + q + " rests at " + px2s(p), "");
+  }
+  var m = mine();
+  if (m) { obLog("cancelled your resting " + m.qty + " @ " + px2s(m.px) + " first", ""); m.qty = 0; }
+  ob.o = ob.o.filter(function (o) { return o.qty > 0; });
+  var o = { id: ++ob.seq, side: s, px: p, qty: q, mine: true, seq: ob.seq };
+  ob.o.push(o);
+  obLog("posted " + s + " " + q + " @ " + px2s(p) + " — seq " + o.seq + ", " + queueAhead(o) + " lots ahead of you", "hl");
+}
+function obDraw() {
+  var bb = bestBid(), ba = bestAsk();
+  var bsz = bb ? levelQty("buy", bb) : 0, asz = ba ? levelQty("sell", ba) : 0;
+  $("obBid").textContent = bb ? px2s(bb) + " × " + bsz : "—";
+  $("obAsk").textContent = ba ? px2s(ba) + " × " + asz : "—";
+  $("obSpr").textContent = (bb && ba) ? ((ba - bb) / 100).toFixed(2) : "—";
+  $("obMid").textContent = (bb && ba) ? ((bb + ba) / 200).toFixed(4) : "—";
+  var mic = (bb && ba && bsz + asz > 0) ? (ba * bsz + bb * asz) / (bsz + asz) / 100 : 0;
+  $("obMic").textContent = mic ? mic.toFixed(4) : "—";
+  var obi = (bsz + asz > 0) ? (bsz - asz) / (bsz + asz) : 0;
+  var oe = $("obObi");
+  oe.textContent = (obi >= 0 ? "+" : "") + obi.toFixed(2);
+  oe.className = "sv " + (obi > 0.15 ? "ok" : (obi < -0.15 ? "bad" : ""));
+  var m = mine();
+  $("obMine").textContent = m ? (m.side + " " + m.qty + " @ " + px2s(m.px)) : "none";
+  $("obQa").textContent = m ? queueAhead(m) + " lots" : "—";
+  $("obLvl").textContent = m ? levelQty(m.side, m.px) + " lots" : "—";
+  $("obFills").textContent = ob.fills;
+
+  /* queue panel */
+  var Q = $("obQueue"); clear(Q);
+  if (m) {
+    var q = side(m.side).filter(function (o) { return o.px === m.px; }).sort(function (a, b) { return a.seq - b.seq; });
+    var maxq = Math.max.apply(null, q.map(function (o) { return o.qty; }));
+    q.forEach(function (o, i) {
+      var row = document.createElement("div"); row.className = "qrow";
+      var bar = document.createElement("div"); bar.className = "qb";
+      var fill = document.createElement("i");
+      fill.style.width = (100 * o.qty / maxq) + "%";
+      fill.style.background = o.mine ? AC : "rgba(var(--accent-rgb),.45)";
+      bar.appendChild(fill);
+      var v = document.createElement("div"); v.className = "qv";
+      v.textContent = (o.mine ? "YOU " : "#" + (i + 1) + " ") + o.qty;
+      if (o.mine) v.style.color = AC;
+      row.appendChild(bar); row.appendChild(v); Q.appendChild(row);
+    });
+    var ahead = queueAhead(m);
+    $("obQNote").innerHTML = "You are position <b>" + (q.filter(function (o) { return o.seq < m.seq; }).length + 1) +
+      " of " + q.length + "</b> at " + px2s(m.px) + ". <b>" + ahead + "</b> lots must trade before you do — " +
+      (ahead === 0 ? "you are at the front of the queue." : "a taker smaller than that fills nobody but the people in front of you.");
+  } else {
+    $("obQNote").textContent = "Post an order to join a queue.";
+  }
+
+  /* log */
+  var L = $("obLog"); clear(L);
+  ob.log.forEach(function (e) {
+    var d = document.createElement("div"); d.className = e.c; d.textContent = e.s; L.appendChild(d);
+  });
+
+  /* ladder */
+  var C = $("obSvg"); clear(C);
+  C.appendChild(mk("rect", { x: 0, y: 0, width: 640, height: 340, fill: "transparent" }));
+  var prices = {}; ob.o.forEach(function (o) { prices[o.px] = true; });
+  var ps = Object.keys(prices).map(Number).sort(function (a, b) { return b - a; });
+  var maxL = 1;
+  ps.forEach(function (p) { maxL = Math.max(maxL, levelQty("buy", p) + levelQty("sell", p)); });
+  var rowH = 26, top = 26, xL = 96, wBar = 470;
+  C.appendChild(txt(xL - 8, 18, "price", 9.5, "#5f6673", "end"));
+  C.appendChild(txt(xL, 18, "resting quantity  (your order is highlighted)", 9.5, "#5f6673"));
+  var prevSide = null;
+  ps.forEach(function (p, i) {
+    var y = top + i * rowH;
+    if (y > 300) return;
+    var bq = levelQty("buy", p), aq = levelQty("sell", p);
+    var sd = bq > 0 ? "buy" : "sell", q = bq > 0 ? bq : aq;
+    if (prevSide === "sell" && sd === "buy") {
+      C.appendChild(mk("path", { d: "M" + (xL - 78) + " " + (y - 4) + " L" + (xL + wBar) + " " + (y - 4),
+        stroke: AC, "stroke-width": 1.3, "stroke-dasharray": "5 4", fill: "none" }));
+      C.appendChild(txt(xL + wBar, y - 8, "mid " + ((bestBid() + bestAsk()) / 200).toFixed(3), 9.5, AC, "end", 700));
+    }
+    prevSide = sd;
+    C.appendChild(txt(xL - 8, y + 15, px2s(p), 11.5, sd === "buy" ? GRN : RED, "end", 700));
+    var w = wBar * q / maxL;
+    C.appendChild(mk("rect", { x: xL, y: y + 4, width: Math.max(2, w), height: 15, rx: 3,
+      fill: sd === "buy" ? "rgba(63,185,80,.32)" : "rgba(248,81,73,.3)" }));
+    /* your slice, drawn at its queue offset */
+    var m2 = mine();
+    if (m2 && m2.px === p && m2.side === sd) {
+      var ah = queueAhead(m2);
+      var xo = xL + wBar * ah / maxL, ww = wBar * m2.qty / maxL;
+      C.appendChild(mk("rect", { x: xo, y: y + 2, width: Math.max(3, ww), height: 19, rx: 3,
+        fill: "rgba(var(--accent-2-rgb),.75)", stroke: "#fff", "stroke-width": 1.2 }));
+      C.appendChild(txt(xo + Math.max(3, ww) / 2, y + 16, "YOU", 9, "#0f1115", "middle", 700));
+    }
+    C.appendChild(txt(xL + Math.max(2, w) + 7, y + 16, String(q), 10.5, "#9aa0a6"));
+  });
+  C.appendChild(txt(xL - 8, 322, "bids ↓", 9.5, GRN, "end"));
+  C.appendChild(txt(xL, 322, "price first, then time — a level is a strict FIFO queue", 9.5, "#5f6673"));
+}
+Array.prototype.forEach.call($("obSide").querySelectorAll("button"), function (b) {
+  b.addEventListener("click", function () {
+    ob.side = b.getAttribute("data-s");
+    Array.prototype.forEach.call($("obSide").querySelectorAll("button"), function (o) {
+      o.setAttribute("aria-pressed", o.getAttribute("data-s") === ob.side ? "true" : "false");
+    });
+  });
+});
+$("obPx").addEventListener("input", function () { $("obPxV").textContent = px2s(+$("obPx").value); });
+$("obQty").addEventListener("input", function () { $("obQtyV").textContent = $("obQty").value; });
+$("obPost").addEventListener("click", function () {
+  obPost(ob.side, +$("obPx").value, +$("obQty").value); obDraw();
+});
+$("obCancel").addEventListener("click", function () {
+  var m = mine();
+  if (!m) { obLog("nothing of yours to cancel", "bad"); }
+  else { obLog("cancelled your " + m.qty + " @ " + px2s(m.px) + " — queue position gone", "hl"); m.qty = 0; ob.o = ob.o.filter(function (o) { return o.qty > 0; }); }
+  obDraw();
+});
+$("obRe").addEventListener("click", function () {
+  var m = mine();
+  if (!m) { obLog("post something before repricing it", "bad"); obDraw(); return; }
+  var was = queueAhead(m), np = m.px + (m.side === "buy" ? 1 : -1), q = m.qty, s = m.side;
+  m.qty = 0; ob.o = ob.o.filter(function (o) { return o.qty > 0; });
+  obLog("reprice: cancelled at " + px2s(m.px) + " where " + was + " lots were ahead of you", "bad");
+  obPost(s, np, q);
+  var m3 = mine(), now = m3 ? queueAhead(m3) : 0;
+  obLog(now > 0
+    ? "new timestamp ⇒ BACK OF QUEUE at " + px2s(np) + ": " + now + " lots ahead of you now (was " + was + ")"
+    : "you are alone at " + px2s(np) + " — but the " + was + " lots of priority you had built at " + px2s(np - (s === "buy" ? 1 : -1)) + " are gone for good",
+    "bad");
+  obDraw();
+});
+$("obMktB").addEventListener("click", function () { aggress("buy", 400, "a taker's market buy"); obDraw(); });
+$("obMktS").addEventListener("click", function () { aggress("sell", 400, "a taker's market sell"); obDraw(); });
+$("obAhead").addEventListener("click", function () {
+  var m = mine();
+  if (!m) { obLog("post an order first — there is no queue to advance in", "bad"); obDraw(); return; }
+  var q = side(m.side).filter(function (o) { return o.px === m.px && o.seq < m.seq; }).sort(function (a, b) { return a.seq - b.seq; });
+  if (!q.length) { obLog("you are already at the front of the queue", "ok"); obDraw(); return; }
+  obLog("a rival cancelled " + q[0].qty + " ahead of you — free queue advance", "ok");
+  q[0].qty = 0; ob.o = ob.o.filter(function (o) { return o.qty > 0; });
+  obDraw();
+});
+$("obReset").addEventListener("click", function () { obSeed(); obDraw(); });
+obSeed(); obDraw();
+
+/* ════ 4. THE QUEUE-POSITION RACE ════════════════════════════ */
+var MYQ = 200, RIVQ = 200, PX = 100.02, REBATE = 0.0010;
+function raceModel() {
+  var you = (+$("rcYou").value) / 10;        /* µs */
+  var riv = (+$("rcRiv").value) / 10;
+  var take = +$("rcTake").value;
+  var rest = +$("rcRest").value;
+  var rnd = lcg(20260904), wins = 0, N = 4000;
+  for (var i = 0; i < N; i++) {
+    var u = rnd(), v = rnd(), a = rnd(), b = rnd();
+    var y = you * (0.92 + 0.16 * u + 0.5 * Math.pow(v, 6));
+    var r = riv * (0.92 + 0.16 * a + 0.5 * Math.pow(b, 6));
+    if (y < r) wins++;
+  }
+  var win = wins / N;
+  var fillWin = Math.max(0, Math.min(MYQ, take - rest));
+  var fillLose = Math.max(0, Math.min(MYQ, take - rest - RIVQ));
+  var expQty = win * fillWin + (1 - win) * fillLose;
+  var prob = win * (fillWin > 0 ? 1 : 0) + (1 - win) * (fillLose > 0 ? 1 : 0);
+  return { you: you, riv: riv, take: take, rest: rest, win: win,
+    fillWin: fillWin, fillLose: fillLose, expQty: expQty, prob: prob };
+}
+function fillProbAt(latUs, m) {
+  var rnd = lcg(777), wins = 0, N = 1200;
+  for (var i = 0; i < N; i++) {
+    var u = rnd(), v = rnd(), a = rnd(), b = rnd();
+    var y = latUs * (0.92 + 0.16 * u + 0.5 * Math.pow(v, 6));
+    var r = m.riv * (0.92 + 0.16 * a + 0.5 * Math.pow(b, 6));
+    if (y < r) wins++;
+  }
+  var w = wins / N;
+  return w * (m.fillWin > 0 ? 1 : 0) + (1 - w) * (m.fillLose > 0 ? 1 : 0);
+}
+function raceDraw() {
+  var m = raceModel();
+  $("rcYouV").textContent = m.you.toFixed(m.you < 10 ? 1 : 0) + " µs";
+  $("rcRivV").textContent = m.riv.toFixed(m.riv < 10 ? 1 : 0) + " µs";
+  $("rcTakeV").textContent = String(m.take);
+  $("rcRestV").textContent = String(m.rest);
+  $("rcWin").textContent = Math.round(100 * m.win) + "%";
+  var fe = $("rcFill");
+  fe.textContent = Math.round(100 * m.prob) + "%";
+  fe.className = "sv " + (m.prob > 0.7 ? "ok" : (m.prob < 0.3 ? "bad" : "warn"));
+  $("rcQty").textContent = m.expQty.toFixed(0) + " / " + MYQ;
+  $("rcPnl").textContent = "$" + Math.round(m.expQty * PX * REBATE * 1000).toLocaleString();
+
+  /* timeline */
+  var C = $("raceSvg"); clear(C);
+  C.appendChild(mk("rect", { x: 0, y: 0, width: 640, height: 250, fill: "transparent" }));
+  var x0 = 60, w = 540, tmax = Math.max(m.you, m.riv) * 1.35;
+  C.appendChild(mk("path", { d: "M" + x0 + " 74 L" + (x0 + w) + " 74", stroke: "#272c36", "stroke-width": 1.4 }));
+  C.appendChild(txt(x0, 22, "t = 0 · the same book update reaches both of you", 10, "#9aa0a6"));
+  C.appendChild(mk("path", { d: "M" + x0 + " 40 L" + x0 + " 96", stroke: AC, "stroke-width": 2 }));
+  [["you", m.you, m.you <= m.riv], ["rival", m.riv, m.riv < m.you]].forEach(function (r, i) {
+    var x = x0 + w * r[1] / tmax;
+    var y = 46 + i * 44;
+    C.appendChild(mk("path", { d: "M" + x0 + " " + y + " L" + x + " " + y, stroke: r[2] ? GRN : WRN, "stroke-width": 2.4 }));
+    C.appendChild(mk("path", { d: "M" + x + " " + y + " l-7 -4.5 v9 z", fill: r[2] ? GRN : WRN }));
+    C.appendChild(txt(x0 - 6, y + 4, r[0], 10.5, r[2] ? GRN : WRN, "end", 700));
+    C.appendChild(txt(Math.min(x + 10, 596), y + 4, r[1].toFixed(r[1] < 10 ? 1 : 0) + " µs arrives " + (r[2] ? "FIRST" : "second"), 10, r[2] ? GRN : WRN, x > 470 ? "end" : "start"));
+  });
+  C.appendChild(txt(x0 + w, 90, "later ⟶", 9.5, "#5f6673", "end"));
+  /* resulting queue */
+  var qy = 140, qw = 540;
+  var totalQ = m.rest + MYQ + RIVQ;
+  var segs = m.you <= m.riv
+    ? [{ n: "already resting", q: m.rest, c: "rgba(154,160,166,.35)" }, { n: "YOU", q: MYQ, c: AC }, { n: "rival", q: RIVQ, c: "rgba(var(--accent-rgb),.6)" }]
+    : [{ n: "already resting", q: m.rest, c: "rgba(154,160,166,.35)" }, { n: "rival", q: RIVQ, c: "rgba(var(--accent-rgb),.6)" }, { n: "YOU", q: MYQ, c: AC }];
+  C.appendChild(txt(x0, qy - 8, "the FIFO queue at 100.02 that results, front on the left", 10, "#9aa0a6"));
+  var acc = 0;
+  segs.forEach(function (s) {
+    if (s.q <= 0) return;
+    var sw = qw * s.q / totalQ;
+    C.appendChild(mk("rect", { x: x0 + acc, y: qy, width: sw, height: 30, rx: 3, fill: s.c, stroke: s.n === "YOU" ? "#fff" : "none", "stroke-width": 1.2 }));
+    if (sw > 42) C.appendChild(txt(x0 + acc + sw / 2, qy + 19, s.n + " " + s.q, 9.5, s.n === "YOU" ? "#0f1115" : "#c6c3bf", "middle", s.n === "YOU" ? 700 : 400));
+    acc += sw;
+  });
+  var tx = x0 + qw * Math.min(m.take, totalQ) / totalQ;
+  C.appendChild(mk("path", { d: "M" + tx.toFixed(1) + " " + (qy - 6) + " L" + tx.toFixed(1) + " " + (qy + 38), stroke: RED, "stroke-width": 2 }));
+  C.appendChild(txt(Math.min(tx + 6, 600), qy + 52, "a taker arrives with " + m.take + " — everything left of this line trades", 9.5, RED, tx > 400 ? "end" : "start"));
+  var got = m.you <= m.riv ? m.fillWin : m.fillLose;
+  C.appendChild(txt(x0, 218, m.you <= m.riv ? "You are in front: you fill " + m.fillWin + " of " + MYQ + " on this tick."
+    : "You are behind: you fill " + m.fillLose + " of " + MYQ + " on this tick.", 11, got > 0 ? GRN : RED, "start", 700));
+  C.appendChild(txt(x0, 236, "Same price. Same quantity. Same idea. The only difference is when the message landed.", 9.5, "#5f6673"));
+
+  /* fill-probability curve */
+  var D = $("fillSvg"); clear(D);
+  D.appendChild(mk("rect", { x: 0, y: 0, width: 640, height: 250, fill: "transparent" }));
+  var gx = 62, gy = 24, gw = 540, gh = 168;
+  D.appendChild(mk("rect", { x: gx, y: gy, width: gw, height: gh, rx: 6, fill: "#0b0e14", stroke: "#272c36" }));
+  var lo = Math.log10(1), hi = Math.log10(300);
+  function LX(us) { return gx + gw * (Math.log10(Math.max(1, us)) - lo) / (hi - lo); }
+  function LY(p) { return gy + gh * (1 - p); }
+  [0, 0.25, 0.5, 0.75, 1].forEach(function (p) {
+    D.appendChild(mk("path", { d: "M" + gx + " " + LY(p) + " L" + (gx + gw) + " " + LY(p), stroke: "#1c2129", "stroke-width": 1 }));
+    D.appendChild(txt(gx - 6, LY(p) + 4, Math.round(100 * p) + "%", 9, "#5f6673", "end"));
+  });
+  [1, 3, 10, 30, 100, 300].forEach(function (u) {
+    D.appendChild(mk("path", { d: "M" + LX(u) + " " + gy + " L" + LX(u) + " " + (gy + gh), stroke: "#1c2129", "stroke-width": 1 }));
+    D.appendChild(txt(LX(u), gy + gh + 15, u + " µs", 9, "#5f6673", "middle"));
+  });
+  var d = "", pts = [];
+  for (var e = 0; e <= 60; e++) {
+    var us = Math.pow(10, lo + (hi - lo) * e / 60);
+    var pr = fillProbAt(us, m);
+    pts.push([LX(us), LY(pr)]);
+    d += (e ? " L" : "M") + LX(us).toFixed(1) + " " + LY(pr).toFixed(1);
+  }
+  D.appendChild(mk("path", { d: d, stroke: AC, "stroke-width": 2.2, fill: "none" }));
+  [[10, "10 µs"], [100, "100 µs"]].forEach(function (mk2) {
+    D.appendChild(mk("path", { d: "M" + LX(mk2[0]) + " " + gy + " L" + LX(mk2[0]) + " " + (gy + gh), stroke: WRN, "stroke-width": 1.4, "stroke-dasharray": "4 3" }));
+    D.appendChild(txt(LX(mk2[0]) + 4, gy + 13, mk2[1], 9.5, WRN));
+  });
+  var yx = LX(m.you), yy = LY(m.prob);
+  D.appendChild(mk("circle", { cx: yx, cy: yy, r: 6, fill: AC, stroke: "#fff", "stroke-width": 2 }));
+  D.appendChild(txt(Math.min(yx + 12, 590), yy - 8, "you: " + Math.round(100 * m.prob) + "% fill", 10, "#fff", yx > 470 ? "end" : "start", 700));
+  D.appendChild(txt(gx, 18, "probability you fill at all on a tick, against your tick-to-trade latency", 10, "#9aa0a6"));
+  D.appendChild(txt(gx, 240, "the cliff is where you stop beating the rival to the queue — its position is set by the rival, not by you", 9.5, "#5f6673"));
+
+  var note = "<b>You are at " + m.you.toFixed(m.you < 10 ? 1 : 0) + " µs against a " + m.riv.toFixed(0) +
+    " µs rival, so you win the race " + Math.round(100 * m.win) + "% of the time.</b> ";
+  if (m.fillWin === 0) {
+    note += "But look at the taker: " + m.take + " lots do not even clear the " + m.rest +
+      " already resting, so <em class=\"hi\">nobody in this race gets paid</em>. Queue position only matters when the taker is big enough to reach you — this is why depth and flow, not just latency, decide whether speed is worth buying.";
+  } else if (m.fillLose === 0) {
+    note += "This is the interesting regime: the taker's " + m.take + " lots reach the front of the queue but not through it, so the winner fills " +
+      m.fillWin + " and the loser fills nothing. Your expected fill is therefore almost exactly your win rate — <em class=\"hi\">latency converts one-for-one into P&amp;L</em>.";
+  } else {
+    note += "Here the taker is big enough (" + m.take + " lots) to reach both of you, so the loser still fills " +
+      m.fillLose + ". Latency still pays, but less: it is worth the difference between " + m.fillWin + " and " + m.fillLose +
+      " lots, not the whole fill. <em class=\"hi\">Speed is worth most when liquidity is scarce.</em>";
+  }
+  $("rcNote").innerHTML = note;
+}
+["rcYou", "rcRiv", "rcTake", "rcRest"].forEach(function (id) { $(id).addEventListener("input", raceDraw); });
+$("rcColo").addEventListener("click", function () { $("rcYou").value = 100; raceDraw(); });
+$("rcSlow").addEventListener("click", function () { $("rcYou").value = 1000; raceDraw(); });
+raceDraw();
+
+/* ════ 5. THE LATENCY BOARD ══════════════════════════════════ */
+var lb = { alloc: false };
+function lbDraw() {
+  var med = +$("lbMed").value, jit = (+$("lbJit").value) / 100;
+  $("lbMedV").textContent = med + " µs";
+  $("lbJitV").textContent = Math.round(jit * 100) + "%";
+  var rnd = lcg(20260904), N = 4000, s = [];
+  for (var i = 0; i < N; i++) {
+    var u = rnd(), v = rnd(), w = rnd();
+    var x = med * (1 + jit * (0.3 * (u - 0.5) + 1.1 * Math.pow(v, 5)));
+    if (lb.alloc) {
+      if (w < 0.004) x += 400 + 3600 * rnd();      /* a lock or a page fault */
+      else if (w < 0.05) x += med * (0.6 + 2.4 * rnd());
+      else x += 0.05 * med;
+    }
+    s.push(Math.max(1, x));
+  }
+  s.sort(function (a, b) { return a - b; });
+  function P(q) { return s[Math.min(N - 1, Math.floor(q * N))]; }
+  function f(v) { return v >= 1000 ? (v / 1000).toFixed(2) + " ms" : v.toFixed(v < 10 ? 1 : 0) + " µs"; }
+  var p50 = P(0.5), p99 = P(0.99), p999 = P(0.999), mx = s[N - 1];
+  $("lbP50").textContent = f(p50);
+  $("lbP99").textContent = f(p99);
+  $("lbP99").className = "sv " + (p99 > 4 * p50 ? "warn" : "ok");
+  $("lbP999").textContent = f(p999);
+  $("lbP999").className = "sv " + (p999 > 10 * p50 ? "bad" : (p999 > 4 * p50 ? "warn" : "ok"));
+  $("lbMax").textContent = f(mx);
+
+  var L = $("lbLog"); clear(L);
+  [["p99.9 / p50 ratio  = " + (p999 / p50).toFixed(1) + "×", p999 / p50 > 10 ? "bad" : (p999 / p50 > 4 ? "" : "ok")],
+   ["ticks over 1 ms    = " + s.filter(function (x) { return x > 1000; }).length + " of " + N, s.filter(function (x) { return x > 1000; }).length ? "bad" : "ok"],
+   ["board rank basis   = p99.9, not the mean", "hl"],
+   ["mean               = " + f(s.reduce(function (a, b) { return a + b; }, 0) / N) + "   (not scored)", ""],
+   [lb.alloc ? "verdict: the tail is allocator noise, and it is your grade" : "verdict: tail is jitter only — this is what a clean hot path looks like",
+    lb.alloc ? "bad" : "ok"]].forEach(function (r) {
+    var d = document.createElement("div"); d.className = r[1]; d.textContent = r[0]; L.appendChild(d);
+  });
+
+  /* histogram, log x */
+  var C = $("lbSvg"); clear(C);
+  C.appendChild(mk("rect", { x: 0, y: 0, width: 640, height: 230, fill: "transparent" }));
+  var gx = 46, gy = 22, gw = 560, gh = 150, NB = 56;
+  var lo = Math.log10(1), hi = Math.log10(Math.max(2000, mx * 1.2));
+  C.appendChild(mk("rect", { x: gx, y: gy, width: gw, height: gh, rx: 5, fill: "#0b0e14", stroke: "#272c36" }));
+  var bins = new Array(NB); for (var k = 0; k < NB; k++) bins[k] = 0;
+  s.forEach(function (x) {
+    var b = Math.floor(NB * (Math.log10(x) - lo) / (hi - lo));
+    if (b >= 0 && b < NB) bins[b]++;
+  });
+  var mxb = Math.max.apply(null, bins) || 1;
+  function LX(v) { return gx + gw * (Math.log10(Math.max(1, v)) - lo) / (hi - lo); }
+  for (var k2 = 0; k2 < NB; k2++) {
+    if (!bins[k2]) continue;
+    var h = gh * bins[k2] / mxb;
+    C.appendChild(mk("rect", { x: gx + gw * k2 / NB + 0.5, y: gy + gh - h, width: gw / NB - 1, height: h,
+      fill: "rgba(var(--accent-rgb),.7)" }));
+  }
+  [[p50, "p50", AC], [p99, "p99", WRN], [p999, "p99.9", RED]].forEach(function (m2, i) {
+    C.appendChild(mk("path", { d: "M" + LX(m2[0]) + " " + (gy - 4) + " L" + LX(m2[0]) + " " + (gy + gh), stroke: m2[2], "stroke-width": 1.8 }));
+    C.appendChild(txt(LX(m2[0]) + 4, gy + 12 + i * 13, m2[1] + " " + f(m2[0]), 9.5, m2[2]));
+  });
+  [1, 10, 100, 1000].forEach(function (v) {
+    if (v > Math.pow(10, hi)) return;
+    C.appendChild(txt(LX(v), gy + gh + 15, v >= 1000 ? (v / 1000) + " ms" : v + " µs", 9, "#5f6673", "middle"));
+  });
+  C.appendChild(txt(gx, 16, "tick-to-trade, log scale — " + N.toLocaleString() + " ticks", 10, "#9aa0a6"));
+  C.appendChild(txt(gx, 222, "the histogram is the honest picture; a single mean is the picture that loses you races", 9.5, "#5f6673"));
+}
+["lbMed", "lbJit"].forEach(function (id) { $(id).addEventListener("input", lbDraw); });
+Array.prototype.forEach.call($("lbSw").querySelectorAll("button"), function (b) {
+  b.addEventListener("click", function () {
+    lb.alloc = b.getAttribute("data-a") === "alloc";
+    Array.prototype.forEach.call($("lbSw").querySelectorAll("button"), function (o) {
+      o.setAttribute("aria-pressed", (o.getAttribute("data-a") === "alloc") === lb.alloc ? "true" : "false");
+    });
+    lbDraw();
+  });
+});
+lbDraw();
+
+/* ── MCQ engine (shared across week pages) ───────────────────── */
+Array.prototype.forEach.call(document.querySelectorAll(".mcq"), function (q) {
+  var answer = parseInt(q.getAttribute("data-a"), 10);
+  var opts = Array.prototype.slice.call(q.querySelectorAll(".opt"));
+  var fb = q.querySelector(".fb");
+  opts.forEach(function (o, i) {
+    o.addEventListener("click", function () {
+      if (q.dataset.done === "1") return;
+      q.dataset.done = "1";
+      var right = i === answer;
+      opts.forEach(function (b, j) {
+        b.disabled = true;
+        if (j === answer) b.classList.add("right");
+        else if (j === i) b.classList.add("wrong");
+        else b.classList.add("dim");
+      });
+      fb.innerHTML = (right ? "<b>Correct.</b> " : "<b>Not quite.</b> ") + q.getAttribute("data-exp");
+      fb.className = "fb show " + (right ? "good" : "poor");
+    });
+  });
+});
+</script>
+</body>
+</html>
