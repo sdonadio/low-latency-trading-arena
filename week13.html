@@ -227,6 +227,9 @@
   .kv b{font-family:var(--mono);font-size:11.5px;color:var(--ink-dim);font-weight:600;white-space:nowrap}
 
 
+  /* keep a long code line from stretching a grid column at any width */
+  .split>*,.split-r>*,.grid2>*,.grid3>*,.board>*,.toggles>*,.codepair>*,.stack>*{min-width:0}
+  pre.code{max-width:100%}
   /* ── week-13 specific ───────────────────────────── */
   .chk{display:grid;gap:8px}
   .chkrow{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:11px;align-items:start;
@@ -435,9 +438,9 @@
           <input type="range" id="bpIter" min="64" max="4096" step="64" value="512" aria-label="Loop iterations per tick" /></div>
         <div class="row" role="group" aria-label="Choose the code shape">
           <div class="sw" id="bpMode">
-            <button type="button" data-m="branch" aria-pressed="true">Branchy <code>if</code></button>
+            <button type="button" data-m="branch" aria-pressed="false">Branchy <code>if</code></button>
             <button type="button" data-m="less" aria-pressed="false">Branchless blend</button>
-            <button type="button" data-m="both" aria-pressed="false">Both, side by side</button>
+            <button type="button" data-m="both" aria-pressed="true">Both, side by side</button>
           </div>
         </div>
       </div>
@@ -844,6 +847,7 @@ function loDraw() {
     if (BW >= 30) svg.appendChild(txt(cx + BW / 2, cy + BH - 4, r.lines[i] + "B", 8.5, "#e8e6e3", "middle"));
   }
   var yTail = Y0 + Math.ceil(shown / COLS) * (BH + GY) + 14;
+  svg.setAttribute("viewBox", "0 0 640 " + (yTail + 26));
   if (r.lines.length > shown) {
     svg.appendChild(txt(X0, yTail, "… showing the first " + shown + " of " + r.lines.length + " lines", 10, "#6f757f"));
     yTail += 16;
@@ -936,6 +940,7 @@ function vlDraw() {
   var yB = Y0 + 2 * (BH + 8) + 22;
   svg.appendChild(txt(X0, yB, "one register", 9.5, "#c4b5fd"));
   svg.appendChild(mk("rect", { x: X0, y: yB + 6, width: win * (BW + 2) - 2, height: 8, rx: 2, fill: "#7c3aed" }));
+  svg.setAttribute("viewBox", "0 0 640 " + (yB + 50));
   svg.appendChild(txt(X0, yB + 34, m.sh.ok ? "consumed left to right, " + win + " cell" + (win === 1 ? "" : "s") + " per frame"
     : "the compiler fell back — watch the window shrink", 10, m.sh.ok ? "#9aa0a6" : "#d29922"));
   stats($("vlStats"), [
@@ -969,7 +974,7 @@ $("vlN").addEventListener("input", function () { VL.n = +this.value; $("vlNv").t
 vlDraw();
 
 /* ════ 3. Mispredict cost ═════════════════════════════════════ */
-var BP = { pred: 95, iter: 512, mode: "branch" };
+var BP = { pred: 95, iter: 512, mode: "both" };
 var MISPREDICT_NS = 5.0;   /* ~17 cycles at 3.4 GHz */
 function bpBranchy(p) { return 0.294 + (1 - p / 100) * MISPREDICT_NS; }
 function bpLess() { return 0.588; }              /* two extra ALU ops, never flushes */
