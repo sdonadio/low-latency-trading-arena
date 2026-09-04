@@ -1,0 +1,1579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" href="data:," />
+<title>Week 3 · Memory Management &amp; Smart Pointers — Low-Latency Trading Arena</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    /* ── Low-Latency Trading Arena · shared palette (identical on every page) ── */
+    --accent:       #7c3aed;
+    --accent-2:     #c4b5fd;
+    --accent-3:     #ede9fe;
+    --accent-rgb:   124,58,237;
+    --accent-2-rgb: 196,181,253;
+    --bg:           #0f1115;
+    --panel:        #181b22;
+    --panel2:       #1e222b;
+    --panel-2:      #13161b;
+    --ink:          #e8e6e3;
+    --ink-dim:      #c6c3bf;
+    --ink-mute:     #6f757f;
+    --muted:        #9aa0a6;
+    --dim:          #5f6673;
+    --line:         #272c36;
+    --line-2:       #333a47;
+    --border:       #272c36;
+    --ok:           #3fb950;
+    --warn:         #d29922;
+    --bad:          #f85149;
+    --info:         #6cb6ff;
+    --sky:          #58a6ff;
+    --violet:       #a78bfa;
+    --teal:         #2dd4bf;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.62;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent-2);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  /* ── nav / footer ─────────────────────────────────────────── */
+  nav.top{position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+    padding:11px 22px;background:rgba(15,17,21,.94);border-bottom:1px solid var(--line)}
+  nav.top>a:first-child{font-weight:800;letter-spacing:-.2px;color:var(--ink);font-size:14.5px;
+    border-left:3px solid var(--accent);padding-left:10px}
+  nav.top .crumbs{font-size:12px;color:var(--muted)}
+  nav.top .crumbs b{color:var(--ink);font-weight:700}
+  footer{border-top:1px solid var(--line);background:var(--panel);
+    padding:26px 22px 34px;text-align:center;font-size:11.5px;color:var(--dim);letter-spacing:.3px}
+
+  /* ── sections & typography ────────────────────────────────── */
+  section{max-width:1180px;margin:0 auto;padding:36px 22px 42px;border-top:1px solid var(--line)}
+  section#hero{border-top:none}
+  .kicker{font-size:10.5px;font-weight:800;letter-spacing:1.9px;text-transform:uppercase;color:var(--accent-2)}
+  h1{font-size:clamp(26px,4.2vw,40px);font-weight:800;letter-spacing:-.9px;line-height:1.13;margin:10px 0 6px}
+  h2{font-size:21px;font-weight:700;letter-spacing:-.3px;margin:4px 0 4px}
+  h3{font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);margin-bottom:11px}
+  h4{font-size:13.5px;font-weight:700;margin-bottom:5px}
+  p{margin:9px 0;max-width:82ch}
+  .lead{color:var(--muted);font-size:15px;max-width:84ch}
+  .sub{color:var(--muted);font-size:12.5px}
+  strong{color:#fff;font-weight:650}
+  em.hi{color:var(--accent-2);font-style:normal;font-weight:600}
+  code,.mono{font-family:var(--mono);font-size:12.5px}
+  code{background:rgba(var(--accent-2-rgb),.13);color:#ddd4fb;padding:1px 5px;border-radius:4px}
+  ul.you{list-style:none;margin:16px 0 0;display:grid;gap:8px}
+  ul.you li{position:relative;padding-left:26px;font-size:13.5px;color:var(--ink);max-width:78ch}
+  ul.you li::before{content:"";position:absolute;left:4px;top:8px;width:8px;height:8px;border-radius:2px;
+    background:var(--accent);box-shadow:0 0 0 3px rgba(var(--accent-rgb),.22)}
+  ul.plain{list-style:none;display:grid;gap:7px;font-size:13px;color:var(--muted)}
+  ul.plain li{padding-left:16px;position:relative}
+  ul.plain li::before{content:"\2022";position:absolute;left:2px;color:var(--accent-2)}
+
+  /* ── panels & layout ──────────────────────────────────────── */
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .panel.tight{padding:13px 14px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;align-items:start}
+  .split{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:18px;align-items:start}
+  .split-r{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:18px;align-items:start}
+  .stack{display:grid;gap:14px}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+
+  /* ── controls ─────────────────────────────────────────────── */
+  .btn{font-family:inherit;font-size:12px;font-weight:650;cursor:pointer;color:var(--ink);
+    background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:7px 14px;transition:.15s}
+  .btn:hover:not(:disabled){border-color:var(--accent-2);color:#fff}
+  .btn:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .btn:disabled{opacity:.35;cursor:not-allowed}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.primary:hover:not(:disabled){filter:brightness(1.25)}
+  .btn.on{background:rgba(var(--accent-rgb),.28);border-color:var(--accent-2);color:#fff}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+  .tab{font-family:inherit;font-size:12px;font-weight:650;cursor:pointer;color:var(--muted);
+    background:transparent;border:1px solid var(--line);border-radius:20px;padding:6px 14px;transition:.15s}
+  .tab:hover{color:var(--ink)}
+  .tab[aria-selected="true"]{background:rgba(var(--accent-rgb),.3);border-color:var(--accent-2);color:#fff}
+  .tab:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .ctl{display:grid;gap:4px;margin-bottom:12px}
+  .ctl label{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);
+    display:flex;justify-content:space-between;gap:10px}
+  .ctl label b{font-family:var(--mono);color:var(--accent-2);font-size:12px;text-transform:none;letter-spacing:0}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:3px;
+    background:#2b313d;outline:none;cursor:pointer}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;
+    background:var(--accent-2);border:2px solid var(--bg);cursor:pointer}
+  input[type=range]::-moz-range-thumb{width:15px;height:15px;border-radius:50%;background:var(--accent-2);
+    border:2px solid var(--bg);cursor:pointer}
+  input[type=range]:focus-visible{box-shadow:0 0 0 3px rgba(var(--accent-2-rgb),.4)}
+  select,textarea,input[type=text]{font-family:var(--mono);font-size:12.5px;color:var(--ink);
+    background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:7px 9px;width:100%}
+  select:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px solid var(--accent-2);outline-offset:1px}
+  textarea{line-height:1.55;resize:vertical}
+
+  /* ── stats / pills / code ─────────────────────────────────── */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:1px;
+    background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .stat{background:var(--panel);padding:10px 12px}
+  .stat .sl{font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--dim)}
+  .stat .sv{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--ink);margin-top:3px}
+  .stat .sv.ok{color:var(--ok)} .stat .sv.bad{color:var(--bad)} .stat .sv.warn{color:var(--warn)}
+  .stat .sv.acc{color:var(--accent-2)}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;letter-spacing:.5px;
+    padding:3px 9px;border-radius:20px;border:1px solid var(--line);color:var(--muted)}
+  .pill.ok{color:var(--ok);border-color:rgba(63,185,80,.5);background:rgba(63,185,80,.1)}
+  .pill.bad{color:var(--bad);border-color:rgba(248,81,73,.5);background:rgba(248,81,73,.1)}
+  .pill.warn{color:var(--warn);border-color:rgba(210,153,34,.5);background:rgba(210,153,34,.1)}
+  .pill.acc{color:var(--accent-2);border-color:rgba(var(--accent-2-rgb),.5);background:rgba(var(--accent-rgb),.18)}
+  pre.code{font-family:var(--mono);font-size:11.8px;line-height:1.62;background:#0b0e14;color:#dbe3ea;
+    border:1px solid var(--line);border-radius:10px;padding:13px 14px;overflow-x:auto;white-space:pre}
+  pre.code .k{color:#6cb6ff} pre.code .s{color:#8ddb8c} pre.code .c{color:#6b7484;font-style:italic}
+  pre.code .n{color:#e0b070} pre.code .b{color:#ddd4fb;font-weight:700}
+  .note{border-left:3px solid var(--accent);background:rgba(var(--accent-rgb),.12);border-radius:0 8px 8px 0;
+    padding:10px 13px;font-size:12.5px;color:var(--muted)}
+  .note b{color:var(--ink)}
+  .log{font-family:var(--mono);font-size:11.5px;max-height:230px;overflow-y:auto;display:grid;gap:5px}
+  .log div{background:var(--panel2);border-left:3px solid var(--line);border-radius:0 6px 6px 0;padding:6px 9px;color:var(--muted)}
+  .log div.hl{border-left-color:var(--accent-2);color:var(--ink);background:rgba(var(--accent-rgb),.15)}
+  .log div.ok{border-left-color:var(--ok)} .log div.bad{border-left-color:var(--bad)}
+  svg{display:block;max-width:100%;height:auto}
+  .svgwrap{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px;overflow-x:auto}
+  table.t{width:100%;border-collapse:collapse;font-size:12px}
+  table.t th{font-size:9.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--dim);
+    text-align:left;padding:0 8px 7px;border-bottom:1px solid var(--line)}
+  table.t td{padding:7px 8px;border-bottom:1px solid rgba(39,44,54,.6);color:var(--muted);font-family:var(--mono);font-size:11.8px}
+  table.t td.n{color:var(--ink);font-weight:600}
+
+  /* ── pitfalls ─────────────────────────────────────────────── */
+  details.pit{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:10px;overflow:hidden}
+  details.pit>summary{cursor:pointer;padding:12px 15px;font-size:13.5px;font-weight:650;color:var(--ink);
+    list-style:none;display:flex;gap:11px;align-items:flex-start}
+  details.pit>summary::-webkit-details-marker{display:none}
+  details.pit>summary::before{content:"\25B8";color:var(--accent-2);font-size:12px;line-height:1.5;transition:.2s}
+  details.pit[open]>summary::before{transform:rotate(90deg)}
+  details.pit>summary:focus-visible{outline:2px solid var(--accent-2);outline-offset:-2px}
+  details.pit .body{padding:0 15px 15px 39px;font-size:13px;color:var(--muted);display:grid;gap:9px}
+  details.pit .body .fix{color:var(--ok);font-weight:600}
+
+  /* ── MCQ ──────────────────────────────────────────────────── */
+  .mcq{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 17px;margin-bottom:13px}
+  .mcq .q{font-size:13.8px;font-weight:650;color:var(--ink);margin:0 0 11px;max-width:84ch}
+  .mcq .q span{color:var(--accent-2);font-family:var(--mono);margin-right:7px}
+  .opts{display:grid;gap:7px}
+  .opt{text-align:left;font-family:inherit;font-size:13px;cursor:pointer;color:var(--muted);
+    background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:9px 12px;transition:.15s}
+  .opt:hover:not(:disabled){border-color:var(--accent-2);color:var(--ink)}
+  .opt:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .opt.right{border-color:var(--ok);background:rgba(63,185,80,.13);color:#bce8c4}
+  .opt.wrong{border-color:var(--bad);background:rgba(248,81,73,.12);color:#f4b6b1}
+  .opt.dim{opacity:.5}
+  .fb{margin-top:11px;font-size:12.5px;line-height:1.6;color:var(--muted);display:none;
+    border-left:3px solid var(--line);padding-left:11px}
+  .fb.show{display:block}
+  .fb.show.good{border-left-color:var(--ok)} .fb.show.poor{border-left-color:var(--bad)}
+  .fb b{color:var(--ink)}
+
+  /* ── next ─────────────────────────────────────────────────── */
+  .nextgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+  .nextcard{display:block;background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:15px 17px;transition:.18s;color:inherit}
+  .nextcard:hover{border-color:var(--accent-2);transform:translateY(-2px);text-decoration:none}
+  .nextcard .nl{font-size:10px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--accent-2)}
+  .nextcard .nt{font-size:14.5px;font-weight:700;color:var(--ink);margin-top:5px}
+  .nextcard .nd{font-size:12px;color:var(--muted);margin-top:5px}
+
+  @media (max-width:720px){
+    .grid2,.grid3,.split,.split-r{grid-template-columns:1fr}
+    section{padding:26px 15px 32px}
+    nav.top{padding:10px 15px;gap:8px}
+    nav.top .crumbs{font-size:11px}
+    p,.lead{max-width:none}
+  }
+
+  /* ── week-page shared ─────────────────────────────────────── */
+  #hero{padding:52px 22px 40px;
+    background:radial-gradient(ellipse 820px 340px at 22% -14%,rgba(var(--accent-rgb),.3),transparent 66%)}
+  #hero .wk{font-family:var(--mono);font-size:12px;letter-spacing:2px;color:var(--accent-2);font-weight:700}
+  #hero h1{max-width:24ch}
+  #hero .promise{font-size:16.5px;color:var(--ink);max-width:74ch;margin-top:10px;line-height:1.55}
+  .secnum{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;
+    background:rgba(var(--accent-rgb),.35);border:1px solid var(--accent-2);color:#fff;font-family:var(--mono);
+    font-size:11px;font-weight:700;margin-right:9px;vertical-align:2px}
+  .sw{display:inline-flex;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex-wrap:wrap}
+  .sw button{font-family:inherit;font-size:11.5px;font-weight:650;cursor:pointer;color:var(--muted);
+    background:var(--panel2);border:none;padding:7px 13px;transition:.15s}
+  .sw button[aria-pressed="true"]{background:rgba(var(--accent-rgb),.32);color:#fff}
+  .sw button:focus-visible{outline:2px solid var(--accent-2);outline-offset:-2px}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-top:10px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
+
+
+  /* ── week-3 specific ──────────────────────────────────────── */
+  .codepair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+  .tablewrap{overflow-x:auto}
+  .steps{display:grid;gap:5px;font-family:var(--mono);font-size:11.5px}
+  .steps div{background:var(--panel2);border-left:3px solid var(--line);border-radius:0 6px 6px 0;
+    padding:6px 10px;color:var(--dim);white-space:pre-wrap;overflow-wrap:anywhere}
+  .steps div.on{border-left-color:var(--accent-2);color:var(--ink);background:rgba(var(--accent-rgb),.16)}
+  .steps div.past{color:var(--muted)}
+  .steps div.bad{border-left-color:var(--bad)}
+  .steps div.ok{border-left-color:var(--ok)}
+  .flds{display:grid;gap:5px}
+  .fld{display:grid;grid-template-columns:20px minmax(0,1fr) 62px 54px 66px;gap:8px;align-items:center;
+    background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:5px 9px}
+  .fld .fi{font-family:var(--mono);font-size:10px;color:var(--dim)}
+  .fld .fn{font-family:var(--mono);font-size:11.5px;color:var(--ink);overflow-wrap:anywhere}
+  .fld .fs{font-family:var(--mono);font-size:10.5px;color:var(--muted);text-align:right}
+  .fld .fo{font-family:var(--mono);font-size:10.5px;color:var(--accent-2);text-align:right}
+  .fld .fb{display:flex;gap:3px;justify-content:flex-end}
+  .fld .fb button{font-family:inherit;font-size:11px;line-height:1;cursor:pointer;color:var(--muted);
+    background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:3px 6px}
+  .fld .fb button:hover:not(:disabled){border-color:var(--accent-2);color:#fff}
+  .fld .fb button:disabled{opacity:.3;cursor:not-allowed}
+  .fld .fb button:focus-visible{outline:2px solid var(--accent-2);outline-offset:1px}
+  .fld.pad{background:rgba(248,81,73,.09);border-color:rgba(248,81,73,.35)}
+  .fld.pad .fn{color:#f4b6b1}
+  .verdict{margin-top:14px;font-family:var(--mono);font-size:13px;font-weight:700;letter-spacing:.6px}
+  .verdict.met{color:var(--ok)} .verdict.miss{color:var(--bad)}
+  .big{font-family:var(--mono);font-size:26px;font-weight:700;color:var(--accent-2);letter-spacing:-.5px}
+  .bigsub{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--dim);margin-top:2px}
+
+  /* ── mobile guard (identical on every page): single column under 720px,
+        no horizontal overflow. Must stay last in the sheet. ───────────── */
+  @media (max-width:720px){
+    .grid2,.grid3,.grid2.narrow-right,.split,.split-r,.codepair,
+    .nextgrid,.dash,.toggles,.lanes,.weeknav,.weeks,.roles,.stack{
+      grid-template-columns:minmax(0,1fr)}
+    [class*="grid"]>*,.stack>*,.wrap>*,.panel,.panel.tight,.nextcard,.wk,.row>*{min-width:0}
+    pre,pre.code,.svgwrap,svg,canvas,table,select,input,textarea,.mono{max-width:100%}
+    pre,pre.code,.svgwrap,.tablewrap{overflow-x:auto}
+    code,.mono{overflow-wrap:anywhere}
+    .ctl,.ctl>*,.controls>*,.row,.legend>*{min-width:0}
+    .ctl{flex-wrap:wrap} .ctl select,.ctl input[type=range]{flex:1 1 100%;width:100%}
+    p,.lead,.sub,.promise{max-width:none}
+  }
+</style>
+</head>
+<body>
+
+<nav class="top"><a href="index.html">Low-Latency Trading Arena</a><span class="crumbs"><a href="week2.html">← Week 2</a> · <b>Week 3 · Memory Management &amp; Smart Pointers</b> · <a href="week4.html">Week 4 →</a></span></nav>
+
+
+<!-- ══════════════ HERO ══════════════ -->
+<section id="hero">
+  <div class="wk">WEEK 3 · 15-WEEK TRACK  ·  SESSION 2 · 9-SESSION TRACK</div>
+  <h1>Memory Management &amp; Smart Pointers</h1>
+  <p class="promise">There is no garbage collector coming to help you, and that is the point: in C++ you
+  decide <strong>who owns each object and exactly when it dies</strong>. Get that right and cleanup is
+  free, deterministic and invisible in your latency histogram. Get it wrong and you have a leak that grows
+  all session, or a pointer into memory somebody else now owns.</p>
+  <ul class="you">
+    <li>Use <em class="hi">RAII</em> as an ownership contract: acquire in the constructor, release in the destructor, and let the compiler run it on every exit path — including the one an exception takes.</li>
+    <li>Choose deliberately between a raw non-owning pointer, <code>unique_ptr</code>, <code>shared_ptr</code> and <code>weak_ptr</code>, and price the choice in nanoseconds.</li>
+    <li>Read a move as “steal three pointers”, not “copy quickly”, and know which functions give you one for free.</li>
+    <li>Lay out a struct so that the fields <code>on_book</code> reads share a cache line — and so that two threads' counters do not.</li>
+  </ul>
+  <div class="row" style="margin-top:22px">
+    <span class="pill acc">Lab: raw → <code>unique_ptr</code>, an RAII guard, ASan, the refcount tax</span>
+    <span class="pill">Audit <code>on_book</code>: flag every allocation on the hot path</span>
+    <span class="pill warn">No <code>shared_ptr</code> on the tick-to-trade path</span>
+  </div>
+</section>
+
+<!-- ══════════════ WHAT ══════════════ -->
+<section id="what">
+  <div class="kicker">Part 1</div>
+  <h2><span class="secnum">1</span>What is it? A destructor you cannot forget to call</h2>
+  <p class="lead">RAII is one sentence: <strong>acquire the resource in the constructor, release it in the
+  destructor</strong>. What makes it powerful is not tidiness — it is that the compiler emits the
+  destructor call on <em class="hi">every</em> path out of the scope, including the path an exception
+  takes while unwinding the stack. Step through the same function twice, once with a raw
+  <code>new</code> and once with <code>unique_ptr</code>, and throw the risk veto.</p>
+
+  <div class="split" style="margin-top:18px">
+    <div class="stack">
+      <div class="row" role="group" aria-label="Choose how the order object is owned">
+        <div class="sw" id="ltSw">
+          <button type="button" data-m="raw" aria-pressed="true">owning raw pointer</button>
+          <button type="button" data-m="uniq" aria-pressed="false"><code>unique_ptr</code></button>
+        </div>
+        <div class="sw" id="ltThrow" role="group" aria-label="Choose whether the risk check throws">
+          <button type="button" data-t="no" aria-pressed="true">risk passes</button>
+          <button type="button" data-t="yes" aria-pressed="false">risk vetoes (throws)</button>
+        </div>
+      </div>
+      <div class="panel tight" style="margin-top:12px"><h3>Execution</h3>
+        <div class="steps" id="ltSteps"></div>
+        <div class="row" style="margin-top:12px">
+          <button class="btn primary" type="button" id="ltStep">Step →</button>
+          <button class="btn" type="button" id="ltBack">← Back</button>
+          <button class="btn" type="button" id="ltRun">Run all</button>
+          <button class="btn" type="button" id="ltReset">Reset</button>
+        </div>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="sl">Scope depth</div><div class="sv acc" id="ltDepth">0</div></div>
+        <div class="stat"><div class="sl">Destructors run</div><div class="sv ok" id="ltDtor">0</div></div>
+        <div class="stat"><div class="sl">Live heap objects</div><div class="sv" id="ltLive">0</div></div>
+        <div class="stat"><div class="sl">Leaked</div><div class="sv" id="ltLeak">0</div></div>
+      </div>
+      <div class="note" id="ltNote"></div>
+    </div>
+    <div class="stack">
+      <div class="svgwrap">
+        <svg id="ltSvg" viewBox="0 0 620 280" role="img" aria-label="A stack of nested scopes with the objects each one owns, showing which destructors have already run and which heap object has been leaked"></svg>
+      </div>
+      <pre class="code" id="ltCode"></pre>
+    </div>
+  </div>
+
+  <h3 style="margin-top:30px">Four ways to point at an object, and what each one claims</h3>
+  <div class="split-r">
+    <div class="tablewrap"><table class="t">
+      <thead><tr><th>Type</th><th>Claim</th><th>Size</th><th>Copy cost</th><th>Use it when</th></tr></thead>
+      <tbody>
+        <tr><td class="n">T&amp; / const T&amp;</td><td>I observe, I do not own, I do not outlive you</td><td>8 B</td><td>free</td><td>always, on the hot path</td></tr>
+        <tr><td class="n">T* (non-owning)</td><td>same, but may be null</td><td>8 B</td><td>free</td><td>optional observer</td></tr>
+        <tr><td class="n">unique_ptr&lt;T&gt;</td><td>I am the one owner; it dies with me</td><td>8 B</td><td>move-only</td><td>the default for ownership</td></tr>
+        <tr><td class="n">shared_ptr&lt;T&gt;</td><td>we jointly own it; last one out frees it</td><td>16 B</td><td>atomic ++ / −−</td><td>genuinely shared lifetime</td></tr>
+        <tr><td class="n">weak_ptr&lt;T&gt;</td><td>I watch it; tell me if it is gone</td><td>16 B</td><td>atomic ++ / −−</td><td>breaking a cycle</td></tr>
+      </tbody>
+    </table></div>
+    <div class="stack">
+      <div class="note"><b><code>unique_ptr</code> is not a compromise.</b> It is exactly the size of a
+      raw pointer, its <code>operator*</code> compiles to the same load, and with the default deleter
+      there is nothing extra stored at all. The only thing you give up is the ability to
+      <em class="hi">copy</em> it — which was never a feature, since two owners of one object is the bug
+      the type exists to prevent.</div>
+      <pre class="code">#include &lt;memory&gt;
+
+struct Level { double px; int qty; };
+
+// unique_ptr is a pointer, with a destructor attached
+static_assert(sizeof(std::unique_ptr&lt;Level&gt;) == sizeof(Level*));
+
+// shared_ptr is two pointers: the object and the control block
+static_assert(sizeof(std::shared_ptr&lt;Level&gt;) == 2 * sizeof(Level*));</pre>
+    </div>
+  </div>
+
+  <h3 style="margin-top:30px"><code>make_shared</code>, <code>new</code>, and custom deleters</h3>
+  <div class="codepair">
+    <div class="stack">
+      <pre class="code">// Two allocations: one for the Level, one for the
+// control block — and they land far apart in memory,
+// so touching the refcount misses the cache.
+std::shared_ptr&lt;Level&gt; a(new Level{100.02, 500});
+
+// One allocation: object and control block fused into
+// a single block, adjacent in memory. Also
+// exception-safe, which the line above is not.
+auto b = std::make_shared&lt;Level&gt;(100.02, 500);
+
+// unique_ptr's equivalent, for the same reasons
+auto c = std::make_unique&lt;Level&gt;(100.02, 500);</pre>
+      <p class="sub">Prefer the factory. The one case where <code>make_shared</code> loses: it keeps the
+      whole fused block alive as long as any <code>weak_ptr</code> exists, so a huge object watched by a
+      long-lived <code>weak_ptr</code> is better built with <code>new</code>.</p>
+    </div>
+    <div class="stack">
+      <pre class="code">// A custom deleter turns unique_ptr into RAII for
+// anything with a paired acquire/release — not just
+// memory. This is the pattern for every C API you
+// will meet in weeks 11–13.
+#include &lt;cstdio&gt;
+#include &lt;memory&gt;
+
+struct FileCloser {
+    void operator()(std::FILE* f) const noexcept {
+        if (f) std::fclose(f);
+    }
+};
+using FilePtr = std::unique_ptr&lt;std::FILE, FileCloser&gt;;
+
+FilePtr open_tape(const char* path) {
+    return FilePtr{std::fopen(path, "rb")};   // closed on every path out
+}
+
+// A stateless deleter costs nothing: still one pointer.
+static_assert(sizeof(FilePtr) == sizeof(std::FILE*));</pre>
+      <p class="sub">A <em class="hi">stateless</em> deleter is stored in no bytes at all thanks to empty
+      base optimisation. A capturing lambda or a <code>std::function</code> deleter is not — it doubles
+      the pointer's size and can cost you an indirect call.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ HOW ══════════════ -->
+<section id="how">
+  <div class="kicker">Part 2</div>
+  <h2><span class="secnum">2</span>How it works: build an ownership graph and watch the refcount</h2>
+  <p class="lead">Add owners and observers to one <code>Level</code> object and watch what the machine
+  actually does. In <code>unique_ptr</code> mode a second owner is a <em class="hi">compile error</em> —
+  which is the whole point. In <code>shared_ptr</code> mode it is an atomic increment on a control block
+  that lives somewhere else in memory, and you pay for it on every copy and every destruction.</p>
+
+  <div class="split" style="margin-top:18px">
+    <div class="stack">
+      <div class="svgwrap">
+        <svg id="ogSvg" viewBox="0 0 640 300" role="img" aria-label="An ownership graph: owner and observer nodes on the left pointing at a Level object and, in shared mode, at a separate control block holding the strong and weak reference counts"></svg>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="sl">Strong count</div><div class="sv acc" id="ogStrong">1</div></div>
+        <div class="stat"><div class="sl">Weak count</div><div class="sv" id="ogWeak">0</div></div>
+        <div class="stat"><div class="sl">Object</div><div class="sv ok" id="ogAlive">alive</div></div>
+        <div class="stat"><div class="sl">Control block</div><div class="sv" id="ogCb">—</div></div>
+        <div class="stat"><div class="sl">Atomic ops</div><div class="sv" id="ogAtomic">0</div></div>
+        <div class="stat"><div class="sl">Spent so far</div><div class="sv" id="ogNs">0 ns</div></div>
+      </div>
+    </div>
+    <div class="stack">
+      <div class="panel">
+        <h3>Ownership model</h3>
+        <div class="row" role="group" aria-label="Choose the ownership model">
+          <div class="sw" id="ogSw">
+            <button type="button" data-m="uniq" aria-pressed="true"><code>unique_ptr</code></button>
+            <button type="button" data-m="shared" aria-pressed="false"><code>shared_ptr</code></button>
+          </div>
+        </div>
+        <div class="row" style="margin-top:14px">
+          <button class="btn primary" type="button" id="ogCopy">Copy the owner</button>
+          <button class="btn" type="button" id="ogMove">Move the owner</button>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn" type="button" id="ogWeakAdd">Add a <code>weak_ptr</code></button>
+          <button class="btn" type="button" id="ogRawAdd">Add a raw observer</button>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn" type="button" id="ogDrop">Drop the newest owner</button>
+          <button class="btn" type="button" id="ogReset">Reset</button>
+        </div>
+      </div>
+      <div class="panel tight"><h3>What the machine did</h3><div class="log" id="ogLog"></div></div>
+      <div class="note" id="ogNote"></div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:30px">Find the bug: a pointer into a container that reallocated</h3>
+  <p class="lead">This one compiles, passes a unit test, and runs correctly for the first few hundred
+  ticks. Step through it and watch where <code>p</code> is pointing after the second
+  <code>push_back</code>.</p>
+
+  <div class="split-r" style="margin-top:16px">
+    <div class="stack">
+      <div class="row" role="group" aria-label="Choose whether the book reserves capacity up front">
+        <div class="sw" id="fbSw">
+          <button type="button" data-f="bug" aria-pressed="true">as written</button>
+          <button type="button" data-f="reserve" aria-pressed="false">with <code>reserve(4096)</code></button>
+          <button type="button" data-f="index" aria-pressed="false">return an index</button>
+        </div>
+      </div>
+      <div class="panel tight" style="margin-top:12px"><h3>Execution</h3>
+        <div class="steps" id="fbSteps"></div>
+        <div class="row" style="margin-top:12px">
+          <button class="btn primary" type="button" id="fbStep">Step →</button>
+          <button class="btn" type="button" id="fbBack">← Back</button>
+          <button class="btn" type="button" id="fbRun">Run all</button>
+          <button class="btn" type="button" id="fbReset">Reset</button>
+        </div>
+      </div>
+      <div class="svgwrap">
+        <svg id="fbSvg" viewBox="0 0 620 190" role="img" aria-label="Two heap buffers, the old freed one and the new one, with the cached pointer still aimed at the freed buffer"></svg>
+      </div>
+      <div class="note" id="fbNote"></div>
+    </div>
+    <div class="stack">
+      <pre class="code" id="fbCode"></pre>
+      <div class="note"><b>Why a sanitizer is not optional.</b> A use-after-free usually
+      <em class="hi">works</em> — the freed bytes still hold the old value until the allocator reuses
+      them, so your test passes and the failure arrives three weeks later under load. Build the same code
+      with <code>-fsanitize=address</code> and the read becomes a loud, immediate,
+      stack-traced error at the exact line.</div>
+      <pre class="code">$ clang++ -std=c++20 -O1 -g -fsanitize=address book.cpp -o book
+$ ./book
+==1==ERROR: AddressSanitizer: heap-use-after-free
+    READ of size 8 at 0x50e000000040 thread T0
+    #0 0x… in hot() book.cpp:24
+  freed by thread T0 here:
+    #1 0x… in std::vector&lt;Order&gt;::push_back  book.cpp:22</pre>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ WHY ══════════════ -->
+<section id="why">
+  <div class="kicker">Part 3</div>
+  <h2><span class="secnum">3</span>Why it matters: moves, refcounts and the 64-byte line</h2>
+  <p class="lead">Ownership is not only about correctness. Every choice here shows up in the tick-to-trade
+  histogram: a copy is bytes plus an allocation, a <code>shared_ptr</code> copy is an atomic on a line
+  another core may own, and a badly ordered struct turns one cache line into two. Start with the cheapest
+  of the three to get right.</p>
+
+  <div class="split" style="margin-top:18px">
+    <div class="stack">
+      <div class="svgwrap">
+        <svg id="mvSvg" viewBox="0 0 640 210" role="img" aria-label="Two bars comparing the cost of copying a buffer against moving it, with the move bar essentially flat regardless of size"></svg>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="sl">Copy</div><div class="sv bad" id="mvCopy">—</div></div>
+        <div class="stat"><div class="sl">Move</div><div class="sv ok" id="mvMove">—</div></div>
+        <div class="stat"><div class="sl">Ratio</div><div class="sv acc" id="mvRatio">—</div></div>
+        <div class="stat"><div class="sl">Per tick, copying</div><div class="sv" id="mvTick">—</div></div>
+      </div>
+    </div>
+    <div class="stack">
+      <div class="panel">
+        <h3>Move versus copy</h3>
+        <div class="ctl"><label for="mvSz">Buffer size <b id="mvSzV">32 KB</b></label>
+          <input type="range" id="mvSz" min="4" max="24" value="15" aria-label="Buffer size, as a power of two in bytes"/></div>
+        <div class="ctl"><label for="mvN">Transfers per tick <b id="mvNV">1</b></label>
+          <input type="range" id="mvN" min="1" max="16" value="1" aria-label="Number of transfers per tick"/></div>
+        <div class="ctl"><label for="mvBud">Per-tick budget <b id="mvBudV">1.0 µs</b></label>
+          <input type="range" id="mvBud" min="2" max="100" value="10" aria-label="Per-tick budget in tenths of a microsecond"/></div>
+        <div class="verdict" id="mvVerdict">—</div>
+      </div>
+      <div class="note" id="mvNote"></div>
+      <pre class="code">std::vector&lt;Order&gt; pending;
+Order o = decode(msg);
+
+pending.push_back(o);              // copy: o survives, bytes duplicated
+pending.push_back(std::move(o));   // move: o's buffer is stolen
+// o is now valid but unspecified — do not read it, only reassign or destroy
+
+// std::move moves nothing. It is a cast to Order&amp;&amp; that says
+// "you may plunder this". The moving is done by the move constructor.</pre>
+    </div>
+  </div>
+
+  <h3 style="margin-top:30px">The memory-layout inspector</h3>
+  <p class="lead">Here is the <code>Order</code> your book stores a few thousand of. Reorder the fields
+  and watch three numbers move: <code>sizeof</code>, the padding the compiler silently inserts, and how
+  many 64-byte cache lines a scan of eight orders has to touch. Same fields, same data — the only
+  variable is the order you declared them in.</p>
+
+  <div class="split" style="margin-top:18px">
+    <div class="stack">
+      <div class="panel">
+        <h3>Fields, in declaration order</h3>
+        <div class="flds" id="mlFlds"></div>
+        <div class="row" style="margin-top:13px">
+          <button class="btn" type="button" id="mlBest">Sort largest first</button>
+          <button class="btn" type="button" id="mlWorst">Worst case</button>
+          <button class="btn" type="button" id="mlReset">Reset</button>
+          <div class="sw" id="mlPack" role="group" aria-label="Toggle cache-line alignment of the struct">
+            <button type="button" data-p="off" aria-pressed="true">natural align</button>
+            <button type="button" data-p="on" aria-pressed="false"><code>alignas(64)</code></button>
+          </div>
+        </div>
+      </div>
+      <div class="svgwrap">
+        <svg id="mlSvg" viewBox="0 0 640 250" role="img" aria-label="A byte map of four consecutive Order objects laid out across 64-byte cache lines, with padding bytes and objects that straddle a line boundary marked"></svg>
+      </div>
+    </div>
+    <div class="stack">
+      <div class="stats">
+        <div class="stat"><div class="sl">sizeof(Order)</div><div class="sv acc" id="mlSize">—</div></div>
+        <div class="stat"><div class="sl">Payload</div><div class="sv" id="mlPay">—</div></div>
+        <div class="stat"><div class="sl">Padding</div><div class="sv" id="mlPad">—</div></div>
+        <div class="stat"><div class="sl">alignof</div><div class="sv" id="mlAlign">—</div></div>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="sl">Lines for 8 orders</div><div class="sv" id="mlLines">—</div></div>
+        <div class="stat"><div class="sl">Straddling a line</div><div class="sv" id="mlStrad">—</div></div>
+        <div class="stat"><div class="sl">Orders per line</div><div class="sv" id="mlPer">—</div></div>
+        <div class="stat"><div class="sl">4,096 orders</div><div class="sv" id="mlTot">—</div></div>
+      </div>
+      <div class="note" id="mlNote"></div>
+      <pre class="code" id="mlCode"></pre>
+    </div>
+  </div>
+
+  <div class="note" style="margin-top:18px"><b>And the same 64 bytes, from the other direction.</b>
+  Padding you did not want costs you cache lines; padding you <em class="hi">did</em> want buys you
+  isolation. Two counters written by two different threads must not share a line, or every write
+  invalidates the other core's copy — <code>alignas(64)</code> on each is the fix, and it is why
+  <code>sizeof</code> going <strong>up</strong> is sometimes the optimisation. Week 9 explains the
+  coherency traffic; Week 10 depends on the fix.</div>
+</section>
+
+<!-- ══════════════ PITFALLS ══════════════ -->
+<section id="pitfalls">
+  <div class="kicker">Part 4</div>
+  <h2><span class="secnum">4</span>Five ways this goes wrong</h2>
+  <p class="lead">Every one of these has shipped in a submission. Open them.</p>
+
+  <details class="pit"><summary>An early return, or a <code>throw</code>, between <code>new</code> and <code>delete</code></summary>
+    <div class="body">
+      <p>The code is correct on the happy path and leaks on every other one. A risk check that returns
+      early, a <code>break</code> added six months later, an exception from a constructor two frames
+      down — each of them skips your <code>delete</code>, and in a process that runs all session the leak
+      is unbounded.</p>
+      <p>It survives review because the <code>delete</code> is visibly <em class="hi">right there</em>, a
+      few lines below the <code>new</code>.</p>
+      <p class="fix">Fix: never own through a raw pointer. <code>std::make_unique</code> puts the
+      <code>delete</code> in a destructor, and the compiler emits that destructor on every exit path
+      whether you thought of it or not.</p>
+    </div></details>
+
+  <details class="pit"><summary><code>shared_ptr</code> everywhere, because it always compiles</summary>
+    <div class="body">
+      <p><code>shared_ptr</code> is the path of least resistance: it copies, so nothing ever fights you.
+      What you have bought is a second allocation, sixteen bytes per handle, an
+      <em class="hi">atomic</em> increment on every copy and an atomic decrement on every destruction —
+      and a control block that lives somewhere else in memory, so touching the refcount is frequently a
+      cache miss on top.</p>
+      <p>Worse, it makes the ownership question unanswerable. When everything is shared, nothing has a
+      lifetime you can reason about, and “when is this object destroyed?” becomes a runtime mystery.</p>
+      <p class="fix">Fix: <code>unique_ptr</code> for ownership, raw references for observation, and
+      <code>shared_ptr</code> only when two owners genuinely both extend the lifetime. On the
+      tick-to-trade path, none.</p>
+    </div></details>
+
+  <details class="pit"><summary>A pointer or reference into a container that can reallocate</summary>
+    <div class="body">
+      <p><code>std::vector::push_back</code> may move the entire buffer, which invalidates every pointer,
+      reference and iterator into it. Caching <code>&amp;book.bids().front()</code> across an insertion is
+      a use-after-free that reads the right value until the allocator reuses the bytes.</p>
+      <p>The same trap with <code>std::string</code>, and with a <code>std::string_view</code> that
+      outlives the string it viewed.</p>
+      <p class="fix">Fix: store an <em class="hi">index</em>, not an address, when the container can grow.
+      If you need stable addresses, <code>reserve()</code> the maximum up front — which you should be
+      doing anyway, since Week 2 said no allocation on the hot path — or use a container with stable
+      references such as <code>std::deque</code>, or Week 4's pool.</p>
+    </div></details>
+
+  <details class="pit"><summary>A <code>shared_ptr</code> cycle, and a leak with no <code>new</code> in sight</summary>
+    <div class="body">
+      <p>Two objects holding <code>shared_ptr</code>s to each other keep each other's strong count at one
+      forever. Neither destructor ever runs, and no tool that looks for missing <code>delete</code>s will
+      say a word — the refcounts are perfectly consistent, just never zero.</p>
+      <p>This appears the moment your order objects point back at the book, or a subscriber list holds the
+      subscribers that hold the list.</p>
+      <p class="fix">Fix: exactly one direction of a cycle owns. The other holds a
+      <code>weak_ptr</code> and calls <code>lock()</code> when it needs access — which also, usefully,
+      forces you to handle the case where the object is already gone.</p>
+    </div></details>
+
+  <details class="pit"><summary>Reading a moved-from object</summary>
+    <div class="body">
+      <p>After <code>std::move(o)</code>, <code>o</code> is <em class="hi">valid but
+      unspecified</em>. For a <code>std::vector</code> that means empty in practice; for a user-defined
+      type it means whatever that type's move constructor chose to leave behind, which the standard does
+      not tell you. Code that reads <code>o.size()</code> afterwards is relying on a coincidence.</p>
+      <p>The subtle version: <code>f(std::move(x), g(x))</code> — the argument evaluation order is
+      unspecified, so <code>g</code> may see <code>x</code> before or after it was plundered.</p>
+      <p class="fix">Fix: after moving from an object, only destroy it or assign a fresh value to it.
+      Never move the same object twice, and never move from something you use later in the same
+      expression.</p>
+    </div></details>
+</section>
+
+<!-- ══════════════ CHECK ══════════════ -->
+<section id="check">
+  <div class="kicker">Part 5</div>
+  <h2><span class="secnum">5</span>Check yourself</h2>
+  <p class="lead">Three questions, instant feedback, nothing recorded.</p>
+
+  <div class="mcq" data-a="1" data-exp="<b>The destructor still runs.</b> That is the whole value of RAII: during stack unwinding the compiler destroys every fully-constructed automatic object in reverse order of construction, so a unique_ptr member releases its object on the exception path exactly as it does on the normal one. This is why an owning raw pointer is not merely untidy but wrong — a throw between new and delete leaks, and there is no finally block in C++ to save you. Note the corollary: destructors must not throw, because a second exception during unwinding terminates the process.">
+    <p class="q"><span>Q1</span>A function holds a <code>std::unique_ptr&lt;Order&gt;</code> as a local. Halfway through, a risk check throws. What happens to the <code>Order</code>?</p>
+    <div class="opts">
+      <button class="opt" type="button">It leaks — destructors do not run while an exception is propagating</button>
+      <button class="opt" type="button">The <code>unique_ptr</code>'s destructor runs during unwinding and frees it</button>
+      <button class="opt" type="button">It is freed only if you wrap the body in <code>try</code>/<code>catch</code></button>
+      <button class="opt" type="button">Undefined behaviour — you must not throw while a smart pointer is live</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+
+  <div class="mcq" data-a="2" data-exp="<b>An atomic read-modify-write on the control block, roughly 20 ns each way.</b> A shared_ptr copy increments a std::atomic refcount and its destruction decrements it — a locked RMW, uncontended, on a control block that usually lives in a different cache line from the object. Two cores copying the same shared_ptr contend for that line and it gets far worse. sizeof is 16 bytes and the copy touches no payload at all, so neither of those is the cost; and it is emphatically not a syscall. The rule that follows: unique_ptr off the hot path, raw references on it.">
+    <p class="q"><span>Q2</span>What does copying a <code>shared_ptr&lt;Level&gt;</code> actually cost, and why does that matter inside <code>on_book</code>?</p>
+    <div class="opts">
+      <button class="opt" type="button">A 16-byte copy — negligible, and safe on the hot path</button>
+      <button class="opt" type="button">A deep copy of the <code>Level</code>, so it depends on <code>sizeof(Level)</code></button>
+      <button class="opt" type="button">An atomic increment on a control block elsewhere in memory — and a decrement later</button>
+      <button class="opt" type="button">A system call into the allocator to register the new owner</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+
+  <div class="mcq" data-a="3" data-exp="<b>48 bytes — 28 of payload and 20 of padding.</b> Fields go in declaration order, each at the next offset satisfying its own alignment: side at 0, then 7 bytes of padding so px can sit at 8; flags at 16, then 7 more bytes of padding so id can sit at 24; venue at 32, qty at 36, seq at 40 — 44 bytes used, rounded up to 48 because the struct's alignment is 8. Declare the same seven fields largest-first and you get 32 bytes with 4 of padding. That is two orders per cache line instead of one, for zero effort: use the inspector above and watch sizeof move as you reorder.">
+    <p class="q"><span>Q3</span><code>Order</code> declares, in this order: <code>char side</code>, <code>double px</code>, <code>std::uint8_t flags</code>, <code>std::uint64_t id</code>, <code>std::uint16_t venue</code>, <code>std::uint32_t qty</code>, <code>std::uint32_t seq</code>. The payload is 28 bytes. What is <code>sizeof(Order)</code>?</p>
+    <div class="opts">
+      <button class="opt" type="button">28 bytes — the compiler packs fields tightly unless you say otherwise</button>
+      <button class="opt" type="button">32 bytes — declaration order does not affect layout, only alignment does</button>
+      <button class="opt" type="button">40 bytes</button>
+      <button class="opt" type="button">48 bytes — two 7-byte holes so the 8-byte members land on multiples of 8</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+</section>
+
+<!-- ══════════════ NEXT ══════════════ -->
+<section id="next">
+  <div class="kicker">Part 6</div>
+  <h2><span class="secnum">6</span>Do the work</h2>
+  <div class="grid2" style="margin-top:14px">
+    <div class="panel"><h4>In the lab (~60 min)</h4><ul class="plain">
+      <li>Reproduce the leaking early return, prove it under
+      <code>-fsanitize=address</code>, then fix it twice — once with <code>unique_ptr</code>, once with a
+      hand-written RAII guard.</li>
+      <li>Write a <code>ScopedTimer</code> whose destructor prints the elapsed nanoseconds, and use it to
+      time a scope. That is RAII for something that is not memory.</li>
+      <li>Benchmark a raw pointer dereference, <code>unique_ptr::operator*</code>, and a
+      <code>shared_ptr</code> copy. Explain the ordering, and report ns/op with your machine.</li>
+      <li>Audit your <code>on_book</code> line by line and flag every allocation on the hot path.</li>
+    </ul></div>
+    <div class="panel"><h4>After the session</h4><ul class="plain">
+      <li>Convert one owning raw-pointer member in your bot to <code>unique_ptr</code> and delete the
+      destructor you no longer need.</li>
+      <li>Reorder one hot struct largest-field-first, record <code>sizeof</code> before and after, and say
+      how many more of them now fit in a cache line.</li>
+      <li>Re-run the latency harness and show a tighter p99.9 than last week.</li>
+      <li>Sketch how you would replace one <code>make_shared</code> in a hot loop with a pre-allocated
+      slot — this is the seed of Week 4's pool.</li>
+    </ul></div>
+  </div>
+  <div class="nextgrid" style="margin-top:18px">
+    <a class="nextcard" href="https://github.com/sdonadio/hft-cpp-starter-columbia"><div class="nl">Get the code</div>
+      <div class="nt">15-week track starter</div>
+      <div class="nd">Header stubs, the autograder and the C++ arena client, one topic per session.</div></a>
+    <a class="nextcard" href="https://github.com/sdonadio/hft-cpp-starter-uchicago"><div class="nl">Get the code</div>
+      <div class="nt">9-session track starter</div>
+      <div class="nd">The same stubs and the same grader, packaged for the condensed nine-session schedule.</div></a>
+    <a class="nextcard" href="week2.html"><div class="nl">Back</div>
+      <div class="nt">← Week 2 · C++ Performance Foundations</div>
+      <div class="nd">What every operation costs, and how to measure it without lying to yourself.</div></a>
+    <a class="nextcard" href="week4.html"><div class="nl">Next</div>
+      <div class="nt">Week 4 · Custom Allocators &amp; Memory Pools →</div>
+      <div class="nd">This week said never allocate on the hot path. Next week builds the machinery that makes that livable.</div></a>
+  </div>
+</section>
+
+
+<footer>Low-Latency Trading Arena · an interactive companion for a course on low-latency trading systems in C++ · <a href="https://github.com/sdonadio/low-latency-trading-arena">Source</a></footer>
+
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════
+   Week 3 — Memory Management & Smart Pointers
+   ════════════════════════════════════════════════════════════════ */
+var $ = function (id) { return document.getElementById(id); };
+/* SVG namespace taken from the document so no absolute URL appears in this file */
+var SVGNS = $("ltSvg").namespaceURI;
+function mk(tag, attrs) {
+  var e = document.createElementNS(SVGNS, tag);
+  for (var k in attrs) { if (attrs.hasOwnProperty(k)) e.setAttribute(k, attrs[k]); }
+  return e;
+}
+function txt(x, y, s, size, fill, anchor, weight) {
+  var t = mk("text", { x: x, y: y, "font-size": size || 10, "font-family": "monospace", fill: fill || "#9aa0a6" });
+  if (anchor) t.setAttribute("text-anchor", anchor);
+  if (weight) t.setAttribute("font-weight", weight);
+  t.textContent = s;
+  return t;
+}
+function clear(n) { while (n.firstChild) n.removeChild(n.firstChild); }
+var AC = "#c4b5fd", AC1 = "#7c3aed", GRN = "#3fb950", RED = "#f85149", WRN = "#d29922";
+function fmtNs(v) {
+  if (v >= 1000000) return (v / 1000000).toFixed(2) + " ms";
+  if (v >= 1000) return (v / 1000).toFixed(v >= 10000 ? 1 : 2) + " µs";
+  if (v >= 10) return Math.round(v) + " ns";
+  return v.toFixed(1) + " ns";
+}
+function fmtB(b) {
+  if (b >= 1048576) return (b / 1048576).toFixed(b >= 10485760 ? 0 : 1) + " MB";
+  if (b >= 1024) return (b / 1024).toFixed(b >= 10240 ? 0 : 1) + " KB";
+  return b + " B";
+}
+
+/* ════ 1. OBJECT-LIFETIME TIMELINE ═══════════════════════════ */
+var LT_CODE = {
+  raw:
+'#include &lt;memory&gt;\n' +
+'#include &lt;stdexcept&gt;\n' +
+'\n' +
+'struct Guard {                       // RAII, by hand\n' +
+'    const char* name;\n' +
+'    explicit Guard(const char* n) : name(n) { acquire(name); }\n' +
+'    ~Guard() { release(name); }      // runs on EVERY exit path\n' +
+'};\n' +
+'\n' +
+'void on_book(bool risky) {\n' +
+'    Guard outer{"session lock"};     // 1\n' +
+'    {\n' +
+'        Guard inner{"scoped timer"}; // 2\n' +
+'        Order* raw = new Order{7, 100.02};        // 3  OWNING RAW\n' +
+'        if (risky) throw std::runtime_error("risk veto");  // 4\n' +
+'        send(*raw);                                       // 5\n' +
+'        delete raw;                                       // 6\n' +
+'    }                                // 7  ~inner\n' +
+'}                                    // 8  ~outer',
+  uniq:
+'#include &lt;memory&gt;\n' +
+'#include &lt;stdexcept&gt;\n' +
+'\n' +
+'struct Guard {                       // RAII, by hand\n' +
+'    const char* name;\n' +
+'    explicit Guard(const char* n) : name(n) { acquire(name); }\n' +
+'    ~Guard() { release(name); }      // runs on EVERY exit path\n' +
+'};\n' +
+'\n' +
+'void on_book(bool risky) {\n' +
+'    Guard outer{"session lock"};     // 1\n' +
+'    {\n' +
+'        Guard inner{"scoped timer"}; // 2\n' +
+'        auto o = std::make_unique&lt;Order&gt;(7, 100.02);      // 3\n' +
+'        if (risky) throw std::runtime_error("risk veto");  // 4\n' +
+'        send(*o);                                         // 5\n' +
+'    }                                // 6,7  ~o then ~inner\n' +
+'}                                    // 8  ~outer'
+};
+var lt = { mode: "raw", thr: false, i: 0 };
+function ltSteps() {
+  var raw = lt.mode === "raw", thr = lt.thr;
+  var S = [
+    { t: "Guard outer{\"session lock\"}  — acquire", d: 1, dt: 0, live: 0, lk: 0, c: "" },
+    { t: "  Guard inner{\"scoped timer\"}  — acquire", d: 2, dt: 0, live: 0, lk: 0, c: "" },
+    { t: raw ? "  Order* raw = new Order{...}  — heap object, owned by a bare pointer"
+             : "  auto o = std::make_unique<Order>(...)  — heap object, owned by o",
+      d: 2, dt: 0, live: 1, lk: 0, c: raw ? "bad" : "ok" }
+  ];
+  if (thr) {
+    S.push({ t: "  throw std::runtime_error(\"risk veto\")  — stack unwinding begins", d: 2, dt: 0, live: 1, lk: 0, c: "bad" });
+    if (raw) {
+      S.push({ t: "  ~inner runs (release \"scoped timer\") — but nothing owns the Order", d: 1, dt: 1, live: 1, lk: 1, c: "bad" });
+      S.push({ t: "~outer runs (release \"session lock\") — the Order is now unreachable: LEAKED", d: 0, dt: 2, live: 1, lk: 1, c: "bad" });
+    } else {
+      S.push({ t: "  ~o runs — the Order is destroyed, on the exception path", d: 2, dt: 1, live: 0, lk: 0, c: "ok" });
+      S.push({ t: "  ~inner runs (release \"scoped timer\")", d: 1, dt: 2, live: 0, lk: 0, c: "ok" });
+      S.push({ t: "~outer runs (release \"session lock\") — nothing leaked", d: 0, dt: 3, live: 0, lk: 0, c: "ok" });
+    }
+    S.push({ t: "the exception reaches the caller; every destructor already ran", d: 0, dt: raw ? 2 : 3, live: raw ? 1 : 0, lk: raw ? 1 : 0, c: raw ? "bad" : "ok" });
+  } else {
+    S.push({ t: "  risk check passes", d: 2, dt: 0, live: 1, lk: 0, c: "" });
+    S.push({ t: raw ? "  send(*raw)" : "  send(*o)", d: 2, dt: 0, live: 1, lk: 0, c: "" });
+    if (raw) {
+      S.push({ t: "  delete raw  — you remembered, this time", d: 2, dt: 1, live: 0, lk: 0, c: "" });
+      S.push({ t: "  ~inner runs (release \"scoped timer\")", d: 1, dt: 2, live: 0, lk: 0, c: "ok" });
+    } else {
+      S.push({ t: "  ~o runs — the Order is destroyed at the closing brace", d: 2, dt: 1, live: 0, lk: 0, c: "ok" });
+      S.push({ t: "  ~inner runs (release \"scoped timer\")", d: 1, dt: 2, live: 0, lk: 0, c: "ok" });
+    }
+    S.push({ t: "~outer runs (release \"session lock\")", d: 0, dt: 3, live: 0, lk: 0, c: "ok" });
+  }
+  return S;
+}
+function ltDraw() {
+  var S = ltSteps();
+  if (lt.i > S.length) lt.i = S.length;
+  $("ltCode").innerHTML = LT_CODE[lt.mode];
+  var host = $("ltSteps"); clear(host);
+  S.forEach(function (s, i) {
+    var d = document.createElement("div");
+    var cls = i === lt.i - 1 ? "on" : (i < lt.i ? "past" : "");
+    if (i < lt.i && s.c) cls = cls + " " + s.c;
+    d.className = cls;
+    d.textContent = s.t;
+    host.appendChild(d);
+  });
+  var cur = lt.i > 0 ? S[lt.i - 1] : { d: 0, dt: 0, live: 0, lk: 0 };
+  $("ltDepth").textContent = String(cur.d);
+  $("ltDtor").textContent = String(cur.dt);
+  $("ltLive").textContent = String(cur.live);
+  var le = $("ltLeak");
+  le.textContent = String(cur.lk);
+  le.className = "sv " + (cur.lk ? "bad" : "ok");
+
+  var C = $("ltSvg"); clear(C);
+  C.appendChild(mk("rect", { x: 0, y: 0, width: 620, height: 280, fill: "transparent" }));
+  C.appendChild(txt(16, 18, "the stack, growing downward", 10, "#9aa0a6"));
+  C.appendChild(txt(400, 18, "the heap", 10, "#9aa0a6"));
+  var frames = [
+    { n: "on_book(risky)", need: 1 },
+    { n: "Guard outer", need: 1 },
+    { n: "inner scope", need: 2 },
+    { n: "Guard inner", need: 2 },
+    { n: lt.mode === "raw" ? "Order* raw" : "unique_ptr o", need: 2 }
+  ];
+  frames.forEach(function (f, i) {
+    var y = 32 + i * 40;
+    var live = cur.d >= f.need && lt.i > 0;
+    var gone = lt.i > 0 && cur.d < f.need;
+    C.appendChild(mk("rect", { x: 16 + i * 8, y: y, width: 300 - i * 8, height: 30, rx: 5,
+      fill: live ? "rgba(var(--accent-rgb),.24)" : "rgba(39,44,54,.5)",
+      stroke: live ? AC : "#2b313d", "stroke-width": 1.3,
+      "stroke-dasharray": gone ? "4 3" : "none" }));
+    C.appendChild(txt(28 + i * 8, y + 20, f.n, 10.5, live ? "#fff" : (gone ? "#5f6673" : "#6f757f")));
+    if (gone) C.appendChild(txt(310, y + 20, "destroyed", 9.5, GRN, "end"));
+  });
+  /* heap object */
+  var hx = 400, hy = 92;
+  if (lt.i >= 3) {
+    var leaked = cur.lk > 0, alive = cur.live > 0;
+    C.appendChild(mk("rect", { x: hx, y: hy, width: 190, height: 52, rx: 6,
+      fill: leaked ? "rgba(248,81,73,.2)" : (alive ? "rgba(var(--accent-rgb),.24)" : "rgba(39,44,54,.5)"),
+      stroke: leaked ? RED : (alive ? AC : "#2b313d"), "stroke-width": 1.5,
+      "stroke-dasharray": (!alive && !leaked) ? "4 3" : "none" }));
+    C.appendChild(txt(hx + 95, hy + 22, "Order{7, 100.02}", 11, leaked ? "#f4b6b1" : (alive ? "#fff" : "#5f6673"), "middle", 700));
+    C.appendChild(txt(hx + 95, hy + 40, leaked ? "unreachable — LEAKED" : (alive ? "owned" : "freed"),
+      9.5, leaked ? RED : (alive ? AC : GRN), "middle"));
+    if (alive && !leaked) {
+      C.appendChild(mk("path", { d: "M320 " + (32 + 4 * 40 + 15) + " L" + hx + " " + (hy + 40),
+        stroke: AC, "stroke-width": 1.4, fill: "none" }));
+    }
+  }
+  C.appendChild(txt(16, 268, lt.mode === "raw"
+    ? "an owning raw pointer is a promise you make to yourself; the compiler does not help you keep it"
+    : "unique_ptr moves that promise into the type system, where the compiler enforces it", 9.5, "#5f6673"));
+
+  var note;
+  if (lt.i === 0) {
+    note = "<b>Nothing has run yet.</b> Press <em class=\"hi\">Step</em>. Then switch the risk check to " +
+      "<em class=\"hi\">vetoes</em> and run it again in both ownership modes — that is the whole lesson of RAII in four clicks.";
+  } else if (lt.thr && lt.mode === "raw") {
+    note = "<b>The <code>Guard</code>s cleaned themselves up and the <code>Order</code> did not.</b> " +
+      "Unwinding destroys every fully-constructed automatic object — but <code>raw</code> <em class=\"hi\">is</em> " +
+      "the automatic object, and destroying an <code>Order*</code> does nothing at all. The <code>delete</code> " +
+      "on line 6 is unreachable. In a process that runs all session, this leak is unbounded.";
+  } else if (lt.thr) {
+    note = "<b>Same exception, no leak.</b> <code>~unique_ptr</code> ran during unwinding, before " +
+      "<code>~inner</code> and <code>~outer</code>, in exact reverse order of construction. You wrote no " +
+      "<code>try</code>, no <code>catch</code> and no <code>delete</code> — the ownership was in the type, " +
+      "so the compiler emitted the cleanup on a path you never thought about.";
+  } else if (lt.mode === "raw") {
+    note = "<b>On the happy path the raw pointer is fine</b> — which is exactly why this bug ships. " +
+      "The <code>delete</code> is visibly right there, four lines below the <code>new</code>, and the code " +
+      "is correct until somebody adds an early <code>return</code>. Switch the risk check to " +
+      "<em class=\"hi\">vetoes</em>.";
+  } else {
+    note = "<b>Note the order: <code>~o</code>, then <code>~inner</code>, then <code>~outer</code>.</b> " +
+      "Destruction is always reverse order of construction, which is what makes nested resources safe: " +
+      "the timer that measures the scope is released after the object it was measuring, and the session " +
+      "lock outlives both.";
+  }
+  $("ltNote").innerHTML = note;
+}
+Array.prototype.forEach.call($("ltSw").querySelectorAll("button"), function (b) {
+  b.addEventListener("click", function () {
+    lt.mode = b.getAttribute("data-m"); lt.i = 0;
+    Array.prototype.forEach.call($("ltSw").querySelectorAll("button"), function (o) {
+      o.setAttribute("aria-pressed", o.getAttribute("data-m") === lt.mode ? "true" : "false");
+    });
+    ltDraw();
+  });
+});
+Array.prototype.forEach.call($("ltThrow").querySelectorAll("button"), function (b) {
+  b.addEventListener("click", function () {
+    lt.thr = b.getAttribute("data-t") === "yes"; lt.i = 0;
+    Array.prototype.forEach.call($("ltThrow").querySelectorAll("button"), function (o) {
+      o.setAttribute("aria-pressed", (o.getAttribute("data-t") === "yes") === lt.thr ? "true" : "false");
+    });
+    ltDraw();
+  });
+});
+$("ltStep").addEventListener("click", function () { if (lt.i < ltSteps().length) lt.i++; ltDraw(); });
+$("ltBack").addEventListener("click", function () { if (lt.i > 0) lt.i--; ltDraw(); });
+$("ltRun").addEventListener("click", function () { lt.i = ltSteps().length; ltDraw(); });
+$("ltReset").addEventListener("click", function () { lt.i = 0; ltDraw(); });
+ltDraw();
+
+/* ════ 2. THE OWNERSHIP GRAPH ════════════════════════════════ */
+var og = { mode: "uniq", owners: [], weaks: 0, raws: 0, atomic: 0, log: [], alive: true };
+function ogLog(s, c) { og.log.unshift({ s: s, c: c || "" }); if (og.log.length > 30) og.log.pop(); }
+function ogReset() {
+  og.owners = [og.mode === "uniq" ? "unique_ptr o" : "shared_ptr s0"];
+  og.weaks = 0; og.raws = 0; og.atomic = 0; og.alive = true; og.log = [];
+  ogLog(og.mode === "uniq"
+    ? "auto o = std::make_unique<Level>(100.02, 500);   // 1 alloc, 8 bytes of handle"
+    : "auto s0 = std::make_shared<Level>(100.02, 500);  // 1 alloc (fused), strong = 1", "hl");
+}
+function ogDraw() {
+  var shared = og.mode === "shared";
+  var strong = og.alive ? og.owners.length : 0;
+  $("ogStrong").textContent = String(strong);
+  $("ogWeak").textContent = String(og.weaks);
+  var ae = $("ogAlive");
+  ae.textContent = og.alive ? "alive" : "destroyed";
+  ae.className = "sv " + (og.alive ? "ok" : "bad");
+  $("ogCb").textContent = shared ? "24 B, fused" : "none";
+  $("ogAtomic").textContent = String(og.atomic);
+  var ns = og.atomic * 20;
+  $("ogNs").textContent = fmtNs(ns);
+  $("ogNs").className = "sv " + (ns > 200 ? "bad" : (ns > 0 ? "warn" : "ok"));
+
+  var L = $("ogLog"); clear(L);
+  og.log.forEach(function (e) {
+    var d = document.createElement("div"); d.className = e.c; d.textContent = e.s; L.appendChild(d);
+  });
+
+  var C = $("ogSvg"); clear(C);
+  C.appendChild(mk("rect", { x: 0, y: 0, width: 640, height: 300, fill: "transparent" }));
+  var nodes = [];
+  og.owners.forEach(function (n) { nodes.push({ n: n, k: "own" }); });
+  for (var i = 0; i < og.weaks; i++) nodes.push({ n: "weak_ptr w" + i, k: "weak" });
+  for (var j = 0; j < og.raws; j++) nodes.push({ n: "const Level& r" + j, k: "raw" });
+  var oy = 26, step = Math.min(38, 250 / Math.max(1, nodes.length));
+  nodes.slice(0, 7).forEach(function (nd, i) {
+    var y = oy + i * step;
+    var col = nd.k === "own" ? AC : (nd.k === "weak" ? WRN : "#6cb6ff");
+    C.appendChild(mk("rect", { x: 14, y: y, width: 186, height: Math.min(28, step - 6), rx: 5,
+      fill: nd.k === "own" ? "rgba(var(--accent-rgb),.24)" : "transparent",
+      stroke: col, "stroke-width": 1.3, "stroke-dasharray": nd.k === "own" ? "none" : "4 3" }));
+    C.appendChild(txt(24, y + Math.min(28, step - 6) / 2 + 4, nd.n, 10, col));
+    var tgtX = (shared && nd.k !== "raw") ? 300 : 448;
+    C.appendChild(mk("path", { d: "M200 " + (y + Math.min(28, step - 6) / 2) + " L" + tgtX + " " + 130,
+      stroke: col, "stroke-width": 1.1, fill: "none", "stroke-dasharray": nd.k === "own" ? "none" : "3 3" }));
+  });
+  if (nodes.length > 7) C.appendChild(txt(24, oy + 7 * step + 12, "+ " + (nodes.length - 7) + " more", 10, "#5f6673"));
+  if (shared) {
+    C.appendChild(mk("rect", { x: 300, y: 100, width: 118, height: 62, rx: 6,
+      fill: "rgba(210,153,34,.14)", stroke: WRN, "stroke-width": 1.4 }));
+    C.appendChild(txt(359, 120, "control block", 10, WRN, "middle", 700));
+    C.appendChild(txt(359, 136, "strong = " + strong, 10, "#c6c3bf", "middle"));
+    C.appendChild(txt(359, 150, "weak   = " + og.weaks, 10, "#c6c3bf", "middle"));
+    C.appendChild(mk("path", { d: "M418 131 L448 131", stroke: WRN, "stroke-width": 1.3, fill: "none" }));
+    C.appendChild(mk("path", { d: "M452 131 l-7 -4 v8 z", fill: WRN }));
+  }
+  C.appendChild(mk("rect", { x: 452, y: 100, width: 172, height: 62, rx: 6,
+    fill: og.alive ? "rgba(63,185,80,.14)" : "rgba(248,81,73,.14)",
+    stroke: og.alive ? GRN : RED, "stroke-width": 1.5, "stroke-dasharray": og.alive ? "none" : "5 4" }));
+  C.appendChild(txt(538, 124, "Level{100.02, 500}", 10.5, og.alive ? "#fff" : "#f4b6b1", "middle", 700));
+  C.appendChild(txt(538, 142, og.alive ? "16 B on the heap" : "destroyed", 9.5, og.alive ? GRN : RED, "middle"));
+  C.appendChild(txt(14, 288, shared
+    ? "solid = owns (strong).  dashed amber = weak_ptr (watches).  dashed blue = raw reference (no claim at all)."
+    : "solid = the one owner.  dashed blue = raw reference: no claim, no cost, and must not outlive the owner.",
+    9.5, "#5f6673"));
+
+  var note;
+  if (shared) {
+    note = "<b>Strong " + strong + ", weak " + og.weaks + ", " + og.atomic + " atomic operations so far — about " +
+      fmtNs(ns) + ".</b> Each copy is a locked read-modify-write on the control block, and each destruction is " +
+      "another one. Twenty nanoseconds is cheap in isolation; it is not cheap when two cores are copying the " +
+      "same handle, because then they are fighting over one cache line and you are paying " +
+      "<em class=\"hi\">140&#8239;ns</em> a time instead. Also note where the refcount lives: not in the " +
+      "<code>Level</code>, but in a separate block, so touching it is a second cache line at best.";
+  } else {
+    note = "<b>One owner, zero atomic operations, zero overhead.</b> <code>unique_ptr</code> is exactly the " +
+      "size of a pointer and its dereference compiles to the same load a raw pointer would. Every observer " +
+      "here is a plain reference: no claim on the lifetime, nothing to increment. This is the shape the " +
+      "tick-to-trade path should have — and note that <em class=\"hi\">Copy the owner does not compile</em>, " +
+      "which is the type system doing your code review for you.";
+  }
+  $("ogNote").innerHTML = note;
+}
+Array.prototype.forEach.call($("ogSw").querySelectorAll("button"), function (b) {
+  b.addEventListener("click", function () {
+    og.mode = b.getAttribute("data-m");
+    Array.prototype.forEach.call($("ogSw").querySelectorAll("button"), function (o) {
+      o.setAttribute("aria-pressed", o.getAttribute("data-m") === og.mode ? "true" : "false");
+    });
+    ogReset(); ogDraw();
+  });
+});
+$("ogCopy").addEventListener("click", function () {
+  if (og.mode === "uniq") {
+    ogLog("error: use of deleted function 'unique_ptr(const unique_ptr&)'", "bad");
+    ogLog("  auto o2 = o;   // <-- will not compile, and that is the feature", "bad");
+  } else if (!og.alive) {
+    ogLog("nothing left to copy — the object is already destroyed", "bad");
+  } else {
+    og.owners.push("shared_ptr s" + og.owners.length);
+    og.atomic += 1;
+    ogLog("auto s" + (og.owners.length - 1) + " = s0;   // atomic ++strong -> " + og.owners.length + "  (~20 ns)", "hl");
+  }
+  ogDraw();
+});
+$("ogMove").addEventListener("click", function () {
+  if (!og.owners.length) { ogLog("no owner to move from", "bad"); ogDraw(); return; }
+  if (og.mode === "uniq") {
+    ogLog("auto o2 = std::move(o);   // 8-byte pointer swap, o is now null, 0 atomics", "ok");
+    og.owners[og.owners.length - 1] = "unique_ptr o" + og.owners.length;
+  } else {
+    ogLog("auto s = std::move(s0);   // ownership transferred, strong unchanged, 0 atomics", "ok");
+  }
+  ogDraw();
+});
+$("ogWeakAdd").addEventListener("click", function () {
+  if (og.mode === "uniq") {
+    ogLog("weak_ptr needs a shared_ptr — there is no weak reference to a unique_ptr", "bad");
+    ogLog("  observe a unique_ptr with a raw reference instead: no cost, no claim", "");
+  } else {
+    og.weaks++; og.atomic += 1;
+    ogLog("std::weak_ptr<Level> w" + (og.weaks - 1) + " = s0;   // atomic ++weak, strong unchanged", "");
+  }
+  ogDraw();
+});
+$("ogRawAdd").addEventListener("click", function () {
+  og.raws++;
+  ogLog("const Level& r" + (og.raws - 1) + " = *" + (og.mode === "uniq" ? "o" : "s0") + ";   // 0 allocations, 0 atomics, 0 ns", "ok");
+  ogDraw();
+});
+$("ogDrop").addEventListener("click", function () {
+  if (!og.owners.length) { ogLog("no owners left", "bad"); ogDraw(); return; }
+  var gone = og.owners.pop();
+  if (og.mode === "shared") {
+    og.atomic += 1;
+    ogLog("~" + gone + "   // atomic --strong -> " + og.owners.length + "  (~20 ns)", "");
+  } else {
+    ogLog("~" + gone + "   // delete the Level, no atomics at all", "");
+  }
+  if (!og.owners.length) {
+    og.alive = false;
+    ogLog(og.mode === "shared"
+      ? "strong reached 0 -> ~Level runs. The control block survives while " + og.weaks + " weak_ptr(s) remain."
+      : "the one owner is gone -> ~Level runs, deterministically, right here", "bad");
+  }
+  ogDraw();
+});
+$("ogReset").addEventListener("click", function () { ogReset(); ogDraw(); });
+ogReset(); ogDraw();
+
+/* ════ 3. FIND THE BUG ═══════════════════════════════════════ */
+var FB_CODE = {
+  bug:
+'#include &lt;cstdint&gt;\n' +
+'#include &lt;vector&gt;\n' +
+'\n' +
+'struct Order { std::uint64_t id; double px; };\n' +
+'\n' +
+'class Book {\n' +
+'    std::vector&lt;Order&gt; bids_;\n' +
+'public:\n' +
+'    void add(Order o) { bids_.push_back(o); }   // MAY REALLOCATE\n' +
+'\n' +
+'    // a pointer INTO the vector\'s buffer\n' +
+'    const Order* best() const {\n' +
+'        return bids_.empty() ? nullptr : &amp;bids_.front();\n' +
+'    }\n' +
+'};\n' +
+'\n' +
+'double hot(Book&amp; b) {\n' +
+'    b.add({1, 100.02});\n' +
+'    const Order* p = b.best();   // p -&gt; buffer A\n' +
+'    b.add({2, 100.03});          // grow: buffer B, buffer A FREED\n' +
+'    return p-&gt;px;                // use-after-free\n' +
+'}',
+  reserve:
+'#include &lt;cstdint&gt;\n' +
+'#include &lt;vector&gt;\n' +
+'\n' +
+'struct Order { std::uint64_t id; double px; };\n' +
+'\n' +
+'class Book {\n' +
+'    std::vector&lt;Order&gt; bids_;\n' +
+'public:\n' +
+'    Book() { bids_.reserve(4096); }   // one allocation, at start-up\n' +
+'\n' +
+'    void add(Order o) { bids_.push_back(o); }   // never reallocates\n' +
+'\n' +
+'    const Order* best() const {\n' +
+'        return bids_.empty() ? nullptr : &amp;bids_.front();\n' +
+'    }\n' +
+'};\n' +
+'\n' +
+'double hot(Book&amp; b) {\n' +
+'    b.add({1, 100.02});\n' +
+'    const Order* p = b.best();   // p -&gt; buffer A\n' +
+'    b.add({2, 100.03});          // capacity 4096: no reallocation\n' +
+'    return p-&gt;px;                // fine — while size() &lt;= 4096\n' +
+'}',
+  index:
+'#include &lt;cstdint&gt;\n' +
+'#include &lt;vector&gt;\n' +
+'\n' +
+'struct Order { std::uint64_t id; double px; };\n' +
+'\n' +
+'class Book {\n' +
+'    std::vector&lt;Order&gt; bids_;\n' +
+'public:\n' +
+'    static constexpr std::size_t kNone = static_cast&lt;std::size_t&gt;(-1);\n' +
+'\n' +
+'    void add(Order o) { bids_.push_back(o); }\n' +
+'\n' +
+'    // an INDEX survives reallocation; an address does not\n' +
+'    std::size_t best() const {\n' +
+'        return bids_.empty() ? kNone : 0;\n' +
+'    }\n' +
+'    const Order&amp; at(std::size_t i) const { return bids_[i]; }\n' +
+'};\n' +
+'\n' +
+'double hot(Book&amp; b) {\n' +
+'    b.add({1, 100.02});\n' +
+'    const std::size_t i = b.best();   // an offset, not an address\n' +
+'    b.add({2, 100.03});               // realloc all you like\n' +
+'    return i == Book::kNone ? 0.0 : b.at(i).px;   // always correct\n' +
+'}'
+};
+var fb = { mode: "bug", i: 0 };
+function fbSteps() {
+  var m = fb.mode;
+  if (m === "reserve") {
+    return [
+      { t: "Book b;  —  bids_.reserve(4096): one allocation, buffer A, capacity 4096", buf: "A", cap: 4096, sz: 0, p: null, c: "ok" },
+      { t: "b.add({1, 100.02});  —  size 1, capacity 4096, no reallocation", buf: "A", cap: 4096, sz: 1, p: null, c: "" },
+      { t: "const Order* p = b.best();  —  p points at buffer A, offset 0", buf: "A", cap: 4096, sz: 1, p: "A", c: "" },
+      { t: "b.add({2, 100.03});  —  size 2 <= capacity 4096: buffer A is untouched", buf: "A", cap: 4096, sz: 2, p: "A", c: "ok" },
+      { t: "return p->px;  —  reads 100.02 from live memory. Correct.", buf: "A", cap: 4096, sz: 2, p: "A", c: "ok" }
+    ];
+  }
+  if (m === "index") {
+    return [
+      { t: "Book b;  —  empty, no buffer yet", buf: null, cap: 0, sz: 0, p: null, c: "" },
+      { t: "b.add({1, 100.02});  —  allocate buffer A, capacity 1, size 1", buf: "A", cap: 1, sz: 1, p: null, c: "" },
+      { t: "const std::size_t i = b.best();  —  i = 0. An offset, not an address.", buf: "A", cap: 1, sz: 1, p: "IDX", c: "" },
+      { t: "b.add({2, 100.03});  —  grow to buffer B; i is still just the number 0", buf: "B", cap: 2, sz: 2, p: "IDX", c: "ok" },
+      { t: "return b.at(i).px;  —  bids_[0] resolved against the CURRENT buffer. Correct.", buf: "B", cap: 2, sz: 2, p: "IDX", c: "ok" }
+    ];
+  }
+  return [
+    { t: "Book b;  —  empty, no buffer yet", buf: null, cap: 0, sz: 0, p: null, c: "" },
+    { t: "b.add({1, 100.02});  —  allocate buffer A, capacity 1, size 1", buf: "A", cap: 1, sz: 1, p: null, c: "" },
+    { t: "const Order* p = b.best();  —  p = &bids_[0], an address inside buffer A", buf: "A", cap: 1, sz: 1, p: "A", c: "" },
+    { t: "b.add({2, 100.03});  —  size 2 > capacity 1: allocate buffer B, move, FREE buffer A", buf: "B", cap: 2, sz: 2, p: "A", c: "bad" },
+    { t: "return p->px;  —  p still points into freed buffer A: HEAP-USE-AFTER-FREE", buf: "B", cap: 2, sz: 2, p: "A", c: "bad" },
+    { t: "...and it returns 100.02 anyway, because nothing has reused those bytes yet", buf: "B", cap: 2, sz: 2, p: "A", c: "bad" }
+  ];
+}
+function fbDraw() {
+  var S = fbSteps();
+  if (fb.i > S.length) fb.i = S.length;
+  $("fbCode").innerHTML = FB_CODE[fb.mode];
+  var host = $("fbSteps"); clear(host);
+  S.forEach(function (s, i) {
+    var d = document.createElement("div");
+    var cls = i === fb.i - 1 ? "on" : (i < fb.i ? "past" : "");
+    if (i < fb.i && s.c) cls = cls + " " + s.c;
+    d.className = cls; d.textContent = (i + 1) + "  " + s.t;
+    host.appendChild(d);
+  });
+  var cur = fb.i > 0 ? S[fb.i - 1] : { buf: null, cap: 0, sz: 0, p: null };
+
+  var C = $("fbSvg"); clear(C);
+  C.appendChild(mk("rect", { x: 0, y: 0, width: 620, height: 190, fill: "transparent" }));
+  C.appendChild(txt(14, 18, "the heap", 10, "#9aa0a6"));
+  var bufs = [{ id: "A", x: 40 }, { id: "B", x: 330 }];
+  bufs.forEach(function (bu) {
+    var exists = cur.buf === bu.id || (bu.id === "A" && cur.buf === "B");
+    var freed = bu.id === "A" && cur.buf === "B" && fb.mode !== "reserve";
+    var current = cur.buf === bu.id;
+    if (!exists) return;
+    C.appendChild(mk("rect", { x: bu.x, y: 46, width: 200, height: 54, rx: 6,
+      fill: freed ? "rgba(248,81,73,.14)" : "rgba(var(--accent-rgb),.2)",
+      stroke: freed ? RED : (current ? AC : "#2b313d"), "stroke-width": 1.5,
+      "stroke-dasharray": freed ? "5 4" : "none" }));
+    C.appendChild(txt(bu.x + 100, 66, "buffer " + bu.id + (freed ? " — FREED" : (current ? " — live" : "")),
+      10.5, freed ? "#f4b6b1" : "#fff", "middle", 700));
+    C.appendChild(txt(bu.x + 100, 84, freed ? "the bytes still read 100.02" : ("size " + cur.sz + " / capacity " + cur.cap),
+      9.5, freed ? RED : AC, "middle"));
+  });
+  if (cur.p === "A" || cur.p === "B") {
+    var px2 = cur.p === "A" ? 140 : 430;
+    var dangling = cur.p === "A" && cur.buf === "B" && fb.mode !== "reserve";
+    C.appendChild(mk("rect", { x: px2 - 50, y: 132, width: 100, height: 28, rx: 5,
+      fill: "transparent", stroke: dangling ? RED : "#6cb6ff", "stroke-width": 1.3 }));
+    C.appendChild(txt(px2, 150, "const Order* p", 10, dangling ? RED : "#6cb6ff", "middle"));
+    C.appendChild(mk("path", { d: "M" + px2 + " 132 L" + px2 + " 104", stroke: dangling ? RED : "#6cb6ff", "stroke-width": 1.4, fill: "none" }));
+    C.appendChild(mk("path", { d: "M" + px2 + " 100 l-4 8 h8 z", fill: dangling ? RED : "#6cb6ff" }));
+    if (dangling) C.appendChild(txt(px2 + 58, 150, "→ dangling", 10, RED));
+  } else if (cur.p === "IDX") {
+    C.appendChild(mk("rect", { x: 250, y: 132, width: 130, height: 28, rx: 5, fill: "transparent", stroke: GRN, "stroke-width": 1.3 }));
+    C.appendChild(txt(315, 150, "std::size_t i = 0", 10, GRN, "middle"));
+    C.appendChild(txt(392, 150, "→ survives realloc", 10, GRN));
+  }
+  C.appendChild(txt(14, 182, "an address is only valid while the allocation under it is; an index is valid as long as the container is", 9.5, "#5f6673"));
+
+  var note;
+  if (fb.i === 0) note = "<b>Press Step.</b> Four lines, one of which frees the memory the previous line took an address of.";
+  else if (fb.mode === "bug" && fb.i >= 4) {
+    note = "<b><code>push_back</code> is the free.</b> When size would exceed capacity, <code>std::vector</code> " +
+      "allocates a new buffer, moves the elements, and releases the old one — which invalidates every pointer, " +
+      "reference and iterator into it. The read still returns 100.02, so your test passes; the crash arrives " +
+      "under load, three weeks later, in a stack trace that has nothing to do with this function. " +
+      "<em class=\"hi\">Build with <code>-fsanitize=address</code> and it becomes a loud error at line 22.</em>";
+  } else if (fb.mode === "bug") {
+    note = "<b>So far so good.</b> <code>p</code> points inside buffer A and buffer A is alive. Keep stepping — " +
+      "the next line is the one that frees it.";
+  } else if (fb.mode === "reserve") {
+    note = "<b><code>reserve</code> fixes it, conditionally.</b> With capacity fixed at 4,096 there is no " +
+      "reallocation and the addresses are stable — and you also get the Week 2 rule for free, since the single " +
+      "allocation happens in the constructor rather than on a tick. The condition is real, though: at 4,097 " +
+      "orders the bug is back. Prefer this <em class=\"hi\">plus</em> an assertion on capacity.";
+  } else {
+    note = "<b>Returning an index removes the class of bug, not just this instance.</b> An offset cannot dangle: " +
+      "it is resolved against whatever buffer is current at the moment you use it. The cost is one extra " +
+      "indirection through <code>at()</code>, which inlines to the same address arithmetic the pointer version " +
+      "did — so this is free. Week 7's order book stores indices for exactly this reason.";
+  }
+  $("fbNote").innerHTML = note;
+}
+Array.prototype.forEach.call($("fbSw").querySelectorAll("button"), function (b) {
+  b.addEventListener("click", function () {
+    fb.mode = b.getAttribute("data-f"); fb.i = 0;
+    Array.prototype.forEach.call($("fbSw").querySelectorAll("button"), function (o) {
+      o.setAttribute("aria-pressed", o.getAttribute("data-f") === fb.mode ? "true" : "false");
+    });
+    fbDraw();
+  });
+});
+$("fbStep").addEventListener("click", function () { if (fb.i < fbSteps().length) fb.i++; fbDraw(); });
+$("fbBack").addEventListener("click", function () { if (fb.i > 0) fb.i--; fbDraw(); });
+$("fbRun").addEventListener("click", function () { fb.i = fbSteps().length; fbDraw(); });
+$("fbReset").addEventListener("click", function () { fb.i = 0; fbDraw(); });
+fbDraw();
+
+/* ════ 4. MOVE VERSUS COPY ═══════════════════════════════════ */
+function mvDraw() {
+  var sz = Math.pow(2, +$("mvSz").value);
+  var n = +$("mvN").value;
+  var bud = (+$("mvBud").value) * 100;
+  $("mvSzV").textContent = fmtB(sz);
+  $("mvNV").textContent = String(n);
+  $("mvBudV").textContent = fmtNs(bud);
+  /* copy: one allocation + a memcpy whose rate degrades once we leave cache */
+  var perByte = sz <= 32768 ? 0.055 : (sz <= 1048576 ? 0.085 : 0.13);
+  var copy = 60 + sz * perByte + (sz > 262144 ? sz / 4096 * 0.9 : 0);   /* + first-touch page faults */
+  var move = 2.1;                                                       /* three pointer stores */
+  $("mvCopy").textContent = fmtNs(copy);
+  $("mvMove").textContent = fmtNs(move);
+  $("mvRatio").textContent = Math.round(copy / move).toLocaleString() + "×";
+  $("mvTick").textContent = fmtNs(copy * n);
+  var V = $("mvVerdict");
+  if (copy * n > bud) {
+    V.className = "verdict miss";
+    V.textContent = "COPYING BLOWS THE BUDGET — " + fmtNs(copy * n) + " against " + fmtNs(bud);
+  } else {
+    V.className = "verdict met";
+    V.textContent = "both fit — but copying uses " + Math.round(100 * copy * n / bud) + "% of the budget, moving " +
+      (100 * move * n / bud).toFixed(1) + "%";
+  }
+
+  var C = $("mvSvg"); clear(C);
+  C.appendChild(mk("rect", { x: 0, y: 0, width: 640, height: 210, fill: "transparent" }));
+  var gx = 92, gw = 500, top = Math.max(copy * n, bud) * 1.08;
+  [["copy × " + n, copy * n, RED], ["move × " + n, move * n, GRN]].forEach(function (r, i) {
+    var y = 34 + i * 52;
+    C.appendChild(txt(gx - 10, y + 20, r[0], 10.5, r[2], "end", 700));
+    C.appendChild(mk("rect", { x: gx, y: y, width: gw, height: 30, rx: 5, fill: "#0b0e14", stroke: "#272c36" }));
+    var w = Math.max(2, (gw - 2) * Math.min(1, r[1] / top));
+    C.appendChild(mk("rect", { x: gx + 1, y: y + 1, width: w, height: 28, rx: 4,
+      fill: i ? "rgba(63,185,80,.6)" : "rgba(248,81,73,.6)" }));
+    C.appendChild(txt(Math.min(gx + w + 8, 630), y + 20, fmtNs(r[1]), 10.5, "#c6c3bf", gx + w > 500 ? "end" : "start"));
+  });
+  var bx = gx + gw * bud / top;
+  C.appendChild(mk("path", { d: "M" + bx.toFixed(1) + " 24 L" + bx.toFixed(1) + " 128", stroke: WRN, "stroke-width": 1.8, "stroke-dasharray": "5 4" }));
+  C.appendChild(txt(Math.min(bx + 6, 630), 20, "budget " + fmtNs(bud), 9.5, WRN, bx > 500 ? "end" : "start"));
+  C.appendChild(txt(gx, 158, "the move bar does not move when you drag the size slider — that is the point", 9.5, "#5f6673"));
+  C.appendChild(txt(gx, 176, "a move steals three pointers; the payload never leaves the address it was written to", 9.5, "#5f6673"));
+  C.appendChild(txt(gx, 194, "copy = 1 allocation + " + fmtB(sz) + " of memcpy" + (sz > 262144 ? " + first-touch page faults" : ""), 9.5, "#5f6673"));
+
+  var note = "<b>" + fmtB(sz) + ", " + n + " transfer" + (n === 1 ? "" : "s") + " per tick: copying is " +
+    Math.round(copy / move).toLocaleString() + "× the cost of moving.</b> ";
+  if (sz <= 32768) {
+    note += "At this size the buffer still fits in L1, so the copy is close to memory-bandwidth-free and " +
+      "the allocation dominates — which is Week 2's lesson again, and Week 4's fix.";
+  } else if (sz <= 1048576) {
+    note += "This is past L1 and heading for L3, so the copy now costs real bandwidth <em class=\"hi\">and</em> " +
+      "evicts whatever else you had warm. The second cost does not show up in this bar and is often the larger one.";
+  } else {
+    note += "Beyond last-level cache the copy is pure DRAM bandwidth plus a page fault every 4&#8239;KB of fresh " +
+      "memory — hundreds of microseconds of unbounded, kernel-mediated work. Nothing of this size may be copied " +
+      "anywhere near a tick.";
+  }
+  note += " The move is " + fmtNs(move) + " regardless, because it is three stores.";
+  $("mvNote").innerHTML = note;
+}
+["mvSz", "mvN", "mvBud"].forEach(function (id) { $(id).addEventListener("input", mvDraw); });
+mvDraw();
+
+/* ════ 5. THE MEMORY-LAYOUT INSPECTOR ════════════════════════ */
+var FIELDS0 = [
+  { n: "std::uint64_t id", s: 8, a: 8 },
+  { n: "double px", s: 8, a: 8 },
+  { n: "std::uint32_t qty", s: 4, a: 4 },
+  { n: "std::uint32_t seq", s: 4, a: 4 },
+  { n: "std::uint16_t venue", s: 2, a: 2 },
+  { n: "char side", s: 1, a: 1 },
+  { n: "std::uint8_t flags", s: 1, a: 1 }
+];
+var ml = { f: FIELDS0.slice(), pack: false };
+function mlLayout() {
+  var off = 0, maxA = 1, rows = [], pad = 0;
+  ml.f.forEach(function (fd) {
+    var slack = (fd.a - (off % fd.a)) % fd.a;
+    if (slack) { rows.push({ pad: true, s: slack, off: off }); pad += slack; off += slack; }
+    rows.push({ pad: false, n: fd.n, s: fd.s, a: fd.a, off: off });
+    off += fd.s;
+    if (fd.a > maxA) maxA = fd.a;
+  });
+  var align = ml.pack ? 64 : maxA;
+  var tail = (align - (off % align)) % align;
+  if (tail) { rows.push({ pad: true, s: tail, off: off }); pad += tail; off += tail; }
+  return { rows: rows, size: off, pad: pad, align: align, payload: 28 };
+}
+function mlDraw() {
+  var L = mlLayout();
+  var host = $("mlFlds"); clear(host);
+  var fi = 0;
+  L.rows.forEach(function (r) {
+    var d = document.createElement("div");
+    d.className = "fld" + (r.pad ? " pad" : "");
+    var idx = document.createElement("div"); idx.className = "fi"; idx.textContent = r.pad ? "" : String(fi + 1);
+    var nm = document.createElement("div"); nm.className = "fn";
+    nm.textContent = r.pad ? ("— " + r.s + " byte" + (r.s === 1 ? "" : "s") + " of padding —") : r.n;
+    var sz = document.createElement("div"); sz.className = "fs"; sz.textContent = r.s + " B";
+    var of = document.createElement("div"); of.className = "fo"; of.textContent = "@" + r.off;
+    var bt = document.createElement("div"); bt.className = "fb";
+    if (!r.pad) {
+      var myI = fi;
+      var up = document.createElement("button");
+      up.type = "button"; up.textContent = "↑"; up.disabled = myI === 0;
+      up.setAttribute("aria-label", "Move " + r.n + " earlier in the declaration");
+      up.addEventListener("click", function () {
+        var t = ml.f[myI - 1]; ml.f[myI - 1] = ml.f[myI]; ml.f[myI] = t; mlDraw();
+      });
+      var dn = document.createElement("button");
+      dn.type = "button"; dn.textContent = "↓"; dn.disabled = myI === ml.f.length - 1;
+      dn.setAttribute("aria-label", "Move " + r.n + " later in the declaration");
+      dn.addEventListener("click", function () {
+        var t = ml.f[myI + 1]; ml.f[myI + 1] = ml.f[myI]; ml.f[myI] = t; mlDraw();
+      });
+      bt.appendChild(up); bt.appendChild(dn);
+      fi++;
+    }
+    d.appendChild(idx); d.appendChild(nm); d.appendChild(sz); d.appendChild(of); d.appendChild(bt);
+    host.appendChild(d);
+  });
+
+  var per = Math.floor(64 / L.size);
+  $("mlSize").textContent = L.size + " B";
+  $("mlPay").textContent = L.payload + " B";
+  var pe = $("mlPad");
+  pe.textContent = L.pad + " B";
+  pe.className = "sv " + (L.pad === 0 ? "ok" : (L.pad > 8 ? "bad" : "warn"));
+  $("mlAlign").textContent = L.align + " B";
+  var lines8 = Math.ceil(8 * L.size / 64);
+  $("mlLines").textContent = String(lines8);
+  var strad = 0;
+  for (var i = 0; i < 8; i++) {
+    var a = i * L.size, b = a + L.size - 1;
+    if (Math.floor(a / 64) !== Math.floor(b / 64)) strad++;
+  }
+  var se = $("mlStrad");
+  se.textContent = strad + " of 8";
+  se.className = "sv " + (strad === 0 ? "ok" : "warn");
+  $("mlPer").textContent = per >= 1 ? String(per) : "<1";
+  $("mlTot").textContent = fmtB(4096 * L.size);
+
+  /* byte map */
+  var C = $("mlSvg"); clear(C);
+  C.appendChild(mk("rect", { x: 0, y: 0, width: 640, height: 250, fill: "transparent" }));
+  var bw = 8.6, bh = 22, x0 = 52;
+  var totalBytes = Math.min(4 * L.size, 256);
+  var nLines = Math.ceil(totalBytes / 64);
+  C.appendChild(txt(x0, 16, "four consecutive Order objects, one 64-byte cache line per row", 10, "#9aa0a6"));
+  var offs = [];
+  for (var k = 0; k < 4; k++) L.rows.forEach(function (r) { offs.push({ o: k * L.size + r.off, s: r.s, pad: r.pad, obj: k, n: r.n }); });
+  for (var ln = 0; ln < nLines; ln++) {
+    var y = 32 + ln * (bh + 16);
+    C.appendChild(txt(x0 - 8, y + 15, "line " + ln, 9, "#5f6673", "end"));
+    C.appendChild(mk("rect", { x: x0, y: y, width: 64 * bw, height: bh, rx: 3, fill: "#0b0e14", stroke: "#272c36" }));
+    offs.forEach(function (r) {
+      var s = Math.max(r.o, ln * 64), e = Math.min(r.o + r.s, (ln + 1) * 64);
+      if (e <= s) return;
+      var col = r.pad ? "rgba(248,81,73,.42)"
+        : (r.obj % 2 ? "rgba(var(--accent-2-rgb),.4)" : "rgba(var(--accent-rgb),.62)");
+      C.appendChild(mk("rect", { x: x0 + (s - ln * 64) * bw, y: y + 1, width: (e - s) * bw - 0.6, height: bh - 2, rx: 2, fill: col }));
+    });
+    for (var o = 0; o < 4; o++) {
+      var st = o * L.size;
+      if (st >= ln * 64 && st < (ln + 1) * 64) {
+        C.appendChild(mk("path", { d: "M" + (x0 + (st - ln * 64) * bw) + " " + (y - 3) + " L" + (x0 + (st - ln * 64) * bw) + " " + (y + bh + 3),
+          stroke: "#fff", "stroke-width": 1.2 }));
+        C.appendChild(txt(x0 + (st - ln * 64) * bw + 3, y + bh + 13, "order " + o, 8.5, "#9aa0a6"));
+      }
+    }
+  }
+  var lgy = 32 + nLines * (bh + 16) + 14;
+  C.appendChild(mk("rect", { x: x0, y: lgy - 9, width: 11, height: 11, rx: 2, fill: "rgba(var(--accent-rgb),.62)" }));
+  C.appendChild(txt(x0 + 17, lgy, "field bytes", 9.5, "#6f757f"));
+  C.appendChild(mk("rect", { x: x0 + 96, y: lgy - 9, width: 11, height: 11, rx: 2, fill: "rgba(248,81,73,.42)" }));
+  C.appendChild(txt(x0 + 113, lgy, "padding — bytes you paid for and cannot read", 9.5, "#6f757f"));
+
+  $("mlCode").textContent = "struct " + (ml.pack ? "alignas(64) " : "") + "Order {\n" +
+    ml.f.map(function (f) { return "    " + f.n + ";"; }).join("\n") +
+    "\n};\nstatic_assert(sizeof(Order) == " + L.size + ");\nstatic_assert(alignof(Order) == " + L.align + ");";
+
+  var note;
+  if (ml.pack) {
+    note = "<b><code>alignas(64)</code>: " + L.size + " bytes, one order per cache line, on purpose.</b> " +
+      "You have thrown away " + L.pad + " bytes per order and " + fmtB(4096 * L.size) + " across the book — " +
+      "and if two threads write to different orders, that waste is exactly what stops them fighting over a line. " +
+      "<em class=\"hi\">This is the right answer for per-thread counters and the wrong one for a book you scan.</em>";
+  } else if (L.pad === 0) {
+    note = "<b>Zero padding: " + L.size + " bytes, " + per + " orders per cache line.</b> Largest fields first is " +
+      "the whole rule, and it is worth " + per + "× fewer lines on a scan than a struct twice this size. " +
+      "Note this is <em class=\"hi\">free</em> — same fields, same code, one edit to the declaration.";
+  } else if (L.pad <= 8) {
+    note = "<b>" + L.pad + " bytes of padding, " + L.size + " bytes total, " + per + " per cache line.</b> " +
+      "Close to optimal — the remaining hole is the tail padding needed to keep every element of an array " +
+      "aligned to " + L.align + " bytes, which you cannot remove without reducing the largest alignment.";
+  } else {
+    note = "<b>" + L.pad + " bytes of padding for " + L.payload + " bytes of data.</b> Two-fifths of every " +
+      "cache line you fetch is holes. The compiler will not reorder your fields — the standard requires " +
+      "declaration order — so this is entirely yours to fix: press <em class=\"hi\">Sort largest first</em> " +
+      "and watch " + fmtB(4096 * L.size) + " become " + fmtB(4096 * 32) + ".";
+  }
+  $("mlNote").innerHTML = note;
+}
+$("mlBest").addEventListener("click", function () {
+  ml.f.sort(function (a, b) { return b.a - a.a || b.s - a.s; }); mlDraw();
+});
+$("mlWorst").addEventListener("click", function () {
+  ml.f = [FIELDS0[5], FIELDS0[1], FIELDS0[6], FIELDS0[0], FIELDS0[4], FIELDS0[2], FIELDS0[3]]; mlDraw();
+});
+$("mlReset").addEventListener("click", function () { ml.f = FIELDS0.slice(); ml.pack = false;
+  Array.prototype.forEach.call($("mlPack").querySelectorAll("button"), function (o) {
+    o.setAttribute("aria-pressed", o.getAttribute("data-p") === "off" ? "true" : "false");
+  });
+  mlDraw();
+});
+Array.prototype.forEach.call($("mlPack").querySelectorAll("button"), function (b) {
+  b.addEventListener("click", function () {
+    ml.pack = b.getAttribute("data-p") === "on";
+    Array.prototype.forEach.call($("mlPack").querySelectorAll("button"), function (o) {
+      o.setAttribute("aria-pressed", (o.getAttribute("data-p") === "on") === ml.pack ? "true" : "false");
+    });
+    mlDraw();
+  });
+});
+mlDraw();
+
+/* ── MCQ engine (shared across week pages) ───────────────────── */
+Array.prototype.forEach.call(document.querySelectorAll(".mcq"), function (q) {
+  var answer = parseInt(q.getAttribute("data-a"), 10);
+  var opts = Array.prototype.slice.call(q.querySelectorAll(".opt"));
+  var fb2 = q.querySelector(".fb");
+  opts.forEach(function (o, i) {
+    o.addEventListener("click", function () {
+      if (q.dataset.done === "1") return;
+      q.dataset.done = "1";
+      var right = i === answer;
+      opts.forEach(function (b, j) {
+        b.disabled = true;
+        if (j === answer) b.classList.add("right");
+        else if (j === i) b.classList.add("wrong");
+        else b.classList.add("dim");
+      });
+      fb2.innerHTML = (right ? "<b>Correct.</b> " : "<b>Not quite.</b> ") + q.getAttribute("data-exp");
+      fb2.className = "fb show " + (right ? "good" : "poor");
+    });
+  });
+});
+</script>
+</body>
+</html>
