@@ -246,12 +246,19 @@
 
   /* ── mobile guard (identical on every page): single column under 720px,
         no horizontal overflow. Must stay last in the sheet. ───────────── */
+  @media (prefers-reduced-motion: reduce){
+    *{animation:none !important;transition:none !important}
+    html{scroll-behavior:auto}
+  }
   @media (max-width:720px){
     .grid2,.grid3,.grid2.narrow-right,.split,.split-r,.codepair,
-    .nextgrid,.dash,.toggles,.lanes,.weeknav,.weeks,.roles,.stack{
+    .nextgrid,.dash,.toggles,.lanes,.weeknav,.weeks,.roles,.stack,
+    .board,.dsrow,.loopgrid,.ttgrid{
       grid-template-columns:minmax(0,1fr)}
     [class*="grid"]>*,.stack>*,.wrap>*,.panel,.panel.tight,.nextcard,.wk,.row>*{min-width:0}
+    .split>*,.split-r>*,.grid2>*,.grid3>*,.board>*,.toggles>*,.codepair>*,.stack>*{min-width:0}
     pre,pre.code,.svgwrap,svg,canvas,table,select,input,textarea,.mono{max-width:100%}
+    pre.code{max-width:100%}
     pre,pre.code,.svgwrap,.tablewrap{overflow-x:auto}
     code,.mono{overflow-wrap:anywhere}
     .ctl,.ctl>*,.controls>*,.row,.legend>*{min-width:0}
@@ -731,7 +738,7 @@ perf script | stackcollapse-perf.pl | flamegraph.pl > tail.svg</pre></div>
   <h2><span class="secnum">5</span>Check yourself</h2>
   <p class="lead">Three questions, instant feedback, nothing recorded.</p>
 
-  <div class="mcq" data-a="2" data-exp="<b>About 93%.</b> 0.99<sup>7</sup> = 0.932, so roughly one tick in fifteen has at least one slow stage — even though every individual stage would pass a 99% service level with room to spare. This is the arithmetic behind &ldquo;the tail is the product&rdquo;: per-stage percentiles do not add, they multiply, and a pipeline gets worse simply by being long. It is also why the fix is usually to remove a stage's variance rather than to shave its median.">
+  <div class="mcq" data-a="2" data-exp="<b>About 93%.</b> 0.99<sup>7</sup> = 0.932, so roughly one tick in fifteen has at least one slow stage — even though every individual stage would pass a 99% service level with room to spare. This is the arithmetic behind “the tail is the product”: per-stage percentiles do not add, they multiply, and a pipeline gets worse simply by being long. It is also why the fix is usually to remove a stage's variance rather than to shave its median.">
     <p class="q"><span>Q1</span>Seven stages, and each is "fast" 99% of the time, independently. What fraction of ticks are fast end to end?</p>
     <div class="opts">
       <button class="opt" type="button">99% — the stages are each 99%, so the path is too</button>
@@ -742,7 +749,7 @@ perf script | stackcollapse-perf.pl | flamegraph.pl > tail.svg</pre></div>
     <div class="fb" role="status"></div>
   </div>
 
-  <div class="mcq" data-a="0" data-exp="<b>The allocator, called from the function that &ldquo;just averages numbers&rdquo;.</b> That is the signature of the HW14 starter: a fresh <code>std::vector</code> per tick. Most calls hit the allocator's fast path and cost tens of nanoseconds — which is why p50 stays at 458 ns — but a minority trigger an arena refill, a growth reallocation, or an <code>mmap</code>, and those are the p99.9 and the 178 µs max. A frame you did not write appearing under a frame you did is the single most reliable tell in a flame graph.">
+  <div class="mcq" data-a="0" data-exp="<b>The allocator, called from the function that “just averages numbers”.</b> That is the signature of the HW14 starter: a fresh <code>std::vector</code> per tick. Most calls hit the allocator's fast path and cost tens of nanoseconds — which is why p50 stays at 458 ns — but a minority trigger an arena refill, a growth reallocation, or an <code>mmap</code>, and those are the p99.9 and the 178 µs max. A frame you did not write appearing under a frame you did is the single most reliable tell in a flame graph.">
     <p class="q"><span>Q2</span>Your flame graph shows <code>signal()</code> at 55% total, 9% self, with <code>operator new</code>, <code>_int_malloc</code> and <code>free</code> beneath it. Where is your tail?</p>
     <div class="opts">
       <button class="opt" type="button">In the allocator — a per-tick heap allocation on the hot path</button>

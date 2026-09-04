@@ -242,12 +242,19 @@
 
   /* ── mobile guard (identical on every page): single column under 720px,
         no horizontal overflow. Must stay last in the sheet. ───────────── */
+  @media (prefers-reduced-motion: reduce){
+    *{animation:none !important;transition:none !important}
+    html{scroll-behavior:auto}
+  }
   @media (max-width:720px){
     .grid2,.grid3,.grid2.narrow-right,.split,.split-r,.codepair,
-    .nextgrid,.dash,.toggles,.lanes,.weeknav,.weeks,.roles,.stack,.board{
+    .nextgrid,.dash,.toggles,.lanes,.weeknav,.weeks,.roles,.stack,
+    .board,.dsrow,.loopgrid,.ttgrid{
       grid-template-columns:minmax(0,1fr)}
     [class*="grid"]>*,.stack>*,.wrap>*,.panel,.panel.tight,.nextcard,.wk,.row>*{min-width:0}
+    .split>*,.split-r>*,.grid2>*,.grid3>*,.board>*,.toggles>*,.codepair>*,.stack>*{min-width:0}
     pre,pre.code,.svgwrap,svg,canvas,table,select,input,textarea,.mono{max-width:100%}
+    pre.code{max-width:100%}
     pre,pre.code,.svgwrap,.tablewrap{overflow-x:auto}
     code,.mono{overflow-wrap:anywhere}
     .ctl,.ctl>*,.controls>*,.row,.legend>*{min-width:0}
@@ -683,7 +690,7 @@ score     = risk_adj × max(0, 1 − pen × max_drawdown)
   <h2><span class="secnum">5</span>Check yourself</h2>
   <p class="lead">Three questions, instant feedback, nothing recorded.</p>
 
-  <div class="mcq" data-a="1" data-exp="<b>No trade: the gross edge is one tick and the two taker fees eat it.</b> Buying B's ask at 100.04 and selling A's bid at 100.05 grosses 1.00 ¢ per share. Crossing on both venues pays a taker fee on both legs — at 0.6 ¢ per side that is 1.2 ¢ of cost against 1.0 ¢ of edge, so the &ldquo;free spread&rdquo; is a 0.2 ¢ loss per share, repeatable thousands of times. This is why <code>cross_venue_arb</code> subtracts <code>2 × fee_per_side</code> before it looks at the sign, and why a scarce message budget should require a margin above zero rather than merely a positive number.">
+  <div class="mcq" data-a="1" data-exp="<b>No trade: the gross edge is one tick and the two taker fees eat it.</b> Buying B's ask at 100.04 and selling A's bid at 100.05 grosses 1.00 ¢ per share. Crossing on both venues pays a taker fee on both legs — at 0.6 ¢ per side that is 1.2 ¢ of cost against 1.0 ¢ of edge, so the “free spread” is a 0.2 ¢ loss per share, repeatable thousands of times. This is why <code>cross_venue_arb</code> subtracts <code>2 × fee_per_side</code> before it looks at the sign, and why a scarce message budget should require a margin above zero rather than merely a positive number.">
     <p class="q"><span>Q1</span>A's bid is 100.05, B's ask is 100.04, both with size. Your taker fee is 0.6 ¢ per share per side. What is the trade?</p>
     <div class="opts">
       <button class="opt" type="button">Buy B, sell A — a crossed book is riskless by definition</button>

@@ -65,7 +65,7 @@
   strong{color:#fff;font-weight:650}
   em.hi{color:var(--accent-2);font-style:normal;font-weight:600}
   code,.mono{font-family:var(--mono);font-size:12.5px}
-  code{background:rgba(var(--accent-2-rgb),.13);color:#ddd4fb;padding:1px 5px;border-radius:4px}
+  code{background:rgba(var(--accent-2-rgb),.13);color:#ddd6fe;padding:1px 5px;border-radius:4px}
   ul.you{list-style:none;margin:16px 0 0;display:grid;gap:8px}
   ul.you li{position:relative;padding-left:26px;font-size:13.5px;color:var(--ink);max-width:78ch}
   ul.you li::before{content:"";position:absolute;left:4px;top:8px;width:8px;height:8px;border-radius:2px;
@@ -132,7 +132,7 @@
   pre.code{font-family:var(--mono);font-size:11.8px;line-height:1.62;background:#0b0e14;color:#dbe3ea;
     border:1px solid var(--line);border-radius:10px;padding:13px 14px;overflow-x:auto;white-space:pre}
   pre.code .k{color:#6cb6ff} pre.code .s{color:#8ddb8c} pre.code .c{color:#6b7484;font-style:italic}
-  pre.code .n{color:#e0b070} pre.code .b{color:#ddd4fb;font-weight:700}
+  pre.code .n{color:#e0b070} pre.code .b{color:#ddd6fe;font-weight:700}
   .note{border-left:3px solid var(--accent);background:rgba(var(--accent-rgb),.12);border-radius:0 8px 8px 0;
     padding:10px 13px;font-size:12.5px;color:var(--muted)}
   .note b{color:var(--ink)}
@@ -264,12 +264,19 @@
   .tg .td{font-size:11px;color:var(--muted);margin-top:2px}
   /* ── mobile guard (identical on every page): single column under 720px,
         no horizontal overflow. Must stay last in the sheet. ───────────── */
+  @media (prefers-reduced-motion: reduce){
+    *{animation:none !important;transition:none !important}
+    html{scroll-behavior:auto}
+  }
   @media (max-width:720px){
     .grid2,.grid3,.grid2.narrow-right,.split,.split-r,.codepair,
-    .nextgrid,.dash,.toggles,.lanes,.weeknav,.weeks,.roles,.stack{
+    .nextgrid,.dash,.toggles,.lanes,.weeknav,.weeks,.roles,.stack,
+    .board,.dsrow,.loopgrid,.ttgrid{
       grid-template-columns:minmax(0,1fr)}
     [class*="grid"]>*,.stack>*,.wrap>*,.panel,.panel.tight,.nextcard,.wk,.row>*{min-width:0}
+    .split>*,.split-r>*,.grid2>*,.grid3>*,.board>*,.toggles>*,.codepair>*,.stack>*{min-width:0}
     pre,pre.code,.svgwrap,svg,canvas,table,select,input,textarea,.mono{max-width:100%}
+    pre.code{max-width:100%}
     pre,pre.code,.svgwrap,.tablewrap{overflow-x:auto}
     code,.mono{overflow-wrap:anywhere}
     .ctl,.ctl>*,.controls>*,.row,.legend>*{min-width:0}
@@ -311,8 +318,8 @@
   <h2><span class="secnum">1</span>What is it? One thread, many sockets, never blocked</h2>
   <p class="lead">A blocking <code>recv()</code> parks your thread in the kernel until bytes arrive. That
   is fine for one socket and catastrophic for many: a quiet connection freezes the thread that a busy
-  connection needs. The fix is to invert the question — instead of &ldquo;give me bytes from this
-  socket&rdquo;, ask <strong>&ldquo;which of my sockets has bytes right now?&rdquo;</strong> and do the
+  connection needs. The fix is to invert the question — instead of “give me bytes from this
+  socket”, ask <strong>“which of my sockets has bytes right now?”</strong> and do the
   reads yourself. That is readiness, and it is what <code>select</code>, <code>poll</code> and
   <code>epoll</code> answer.</p>
 
@@ -361,8 +368,8 @@
   activity that is a fiftyfold difference in the wrong direction.</p>
 
   <h3 style="margin-top:32px">Edge versus level triggering</h3>
-  <p>Level-triggered means &ldquo;this socket is <em>still</em> readable&rdquo;; edge-triggered means
-  &ldquo;this socket <em>became</em> readable&rdquo;. Edge gives you fewer wake-ups and one hard
+  <p>Level-triggered means “this socket is <em>still</em> readable”; edge-triggered means
+  “this socket <em>became</em> readable”. Edge gives you fewer wake-ups and one hard
   obligation: <strong>you must drain the socket until <code>EAGAIN</code></strong>, because nothing will
   remind you. Step the two side by side.</p>
 
@@ -693,7 +700,7 @@ std::string_view get_symbol(std::string_view frame) {
   <details class="pit"><summary><code>EAGAIN</code> is treated as an error and the connection is closed</summary>
     <div class="body">
       <p>The mirror-image bug. On a non-blocking socket, <code>recv</code> returning <code>-1</code> with
-      <code>errno == EAGAIN</code> (or <code>EWOULDBLOCK</code>) means &ldquo;nothing right now&rdquo; —
+      <code>errno == EAGAIN</code> (or <code>EWOULDBLOCK</code>) means “nothing right now” —
       the single most common outcome, and completely normal. Code that treats every negative return as
       fatal tears down healthy connections under light load.</p>
       <p>The neighbouring case is <code>EINTR</code>: the call was interrupted by a signal and must

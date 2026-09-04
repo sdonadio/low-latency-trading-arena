@@ -65,7 +65,7 @@
   strong{color:#fff;font-weight:650}
   em.hi{color:var(--accent-2);font-style:normal;font-weight:600}
   code,.mono{font-family:var(--mono);font-size:12.5px}
-  code{background:rgba(var(--accent-2-rgb),.13);color:#ddd4fb;padding:1px 5px;border-radius:4px}
+  code{background:rgba(var(--accent-2-rgb),.13);color:#ddd6fe;padding:1px 5px;border-radius:4px}
   ul.you{list-style:none;margin:16px 0 0;display:grid;gap:8px}
   ul.you li{position:relative;padding-left:26px;font-size:13.5px;color:var(--ink);max-width:78ch}
   ul.you li::before{content:"";position:absolute;left:4px;top:8px;width:8px;height:8px;border-radius:2px;
@@ -132,7 +132,7 @@
   pre.code{font-family:var(--mono);font-size:11.8px;line-height:1.62;background:#0b0e14;color:#dbe3ea;
     border:1px solid var(--line);border-radius:10px;padding:13px 14px;overflow-x:auto;white-space:pre}
   pre.code .k{color:#6cb6ff} pre.code .s{color:#8ddb8c} pre.code .c{color:#6b7484;font-style:italic}
-  pre.code .n{color:#e0b070} pre.code .b{color:#ddd4fb;font-weight:700}
+  pre.code .n{color:#e0b070} pre.code .b{color:#ddd6fe;font-weight:700}
   .note{border-left:3px solid var(--accent);background:rgba(var(--accent-rgb),.12);border-radius:0 8px 8px 0;
     padding:10px 13px;font-size:12.5px;color:var(--muted)}
   .note b{color:var(--ink)}
@@ -199,7 +199,7 @@
     background:radial-gradient(ellipse 900px 380px at 50% -12%,rgba(var(--accent-rgb),.34),transparent 66%),
                radial-gradient(ellipse 620px 260px at 12% 108%,rgba(var(--accent-2-rgb),.1),transparent 62%)}
   #hero h1{margin-left:auto;margin-right:auto;max-width:20ch}
-  #hero h1 .g{background:linear-gradient(92deg,var(--accent-2),#ddd0fe,#7c3aed);
+  #hero h1 .g{background:linear-gradient(92deg,var(--accent-2),#ddd6fe,#7c3aed);
     -webkit-background-clip:text;background-clip:text;color:transparent}
   #hero .lead{margin:16px auto 0;max-width:70ch}
   #hero .cta{margin-top:28px;display:flex;gap:11px;justify-content:center;flex-wrap:wrap}
@@ -313,18 +313,24 @@
     width:24px;height:24px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
   .startlist .t{font-size:13.5px;font-weight:700;color:var(--ink)}
   .startlist .d{font-size:12px;color:var(--muted);margin-top:3px}
-  @media (max-width:720px){ .ttgrid{grid-template-columns:minmax(0,1fr)}
-    .stagerow,.totrow{grid-template-columns:84px minmax(0,1fr) 62px}
+  @media (max-width:720px){ .stagerow,.totrow{grid-template-columns:84px minmax(0,1fr) 62px}
     .stagerow .sn{font-size:9.5px} .stagerow .sw2{font-size:9.5px} }
 
   /* ── mobile guard (identical on every page): single column under 720px,
         no horizontal overflow. Must stay last in the sheet. ───────────── */
+  @media (prefers-reduced-motion: reduce){
+    *{animation:none !important;transition:none !important}
+    html{scroll-behavior:auto}
+  }
   @media (max-width:720px){
     .grid2,.grid3,.grid2.narrow-right,.split,.split-r,.codepair,
-    .nextgrid,.dash,.toggles,.lanes,.weeknav,.weeks,.roles,.stack{
+    .nextgrid,.dash,.toggles,.lanes,.weeknav,.weeks,.roles,.stack,
+    .board,.dsrow,.loopgrid,.ttgrid{
       grid-template-columns:minmax(0,1fr)}
     [class*="grid"]>*,.stack>*,.wrap>*,.panel,.panel.tight,.nextcard,.wk,.row>*{min-width:0}
+    .split>*,.split-r>*,.grid2>*,.grid3>*,.board>*,.toggles>*,.codepair>*,.stack>*{min-width:0}
     pre,pre.code,.svgwrap,svg,canvas,table,select,input,textarea,.mono{max-width:100%}
+    pre.code{max-width:100%}
     pre,pre.code,.svgwrap,.tablewrap{overflow-x:auto}
     code,.mono{overflow-wrap:anywhere}
     .ctl,.ctl>*,.controls>*,.row,.legend>*{min-width:0}
@@ -807,7 +813,7 @@ var SCALES = {
   us10:  { ns: 10000, note: "<b>Ten microseconds.</b> A realistic colocated tick-to-trade budget for a software stack: NIC in, decide, NIC out, with the exchange in the same building. This is the default budget in the waterfall below.",
     l: ["A whole <strong>colocated tick-to-trade path</strong>, NIC to NIC.", "<strong>2&#8239;km</strong> of fibre — or one trip across a campus.", "About <strong>100 DRAM misses</strong>. Spend them carefully.", "Enough for <strong>one</strong> unlucky page fault to ruin the tick."] },
   ms1:   { ns: 1000000, note: "<b>One millisecond.</b> A thousand microseconds — an eternity. If your p99.9 is here and your median is 4&#8239;µs, you have a tail problem, and Week 14 exists to find it.",
-    l: ["<strong>200&#8239;km</strong> of fibre — Chicago to roughly Indianapolis.", "A <strong>minor page fault</strong> plus scheduling noise.", "<strong>1/100th</strong> of a human blink.", "<strong>100×</strong> a healthy tick-to-trade budget."] }
+    l: ["<strong>200&#8239;km</strong> of fibre — two metro areas apart.", "A <strong>minor page fault</strong> plus scheduling noise.", "<strong>1/100th</strong> of a human blink.", "<strong>100×</strong> a healthy tick-to-trade budget."] }
 };
 var SC_ORDER = ["ns1", "ns100", "us1", "us10", "ms1"];
 function fmtM(m) { return m >= 1000 ? (m / 1000).toFixed(m >= 10000 ? 0 : 1) + " km" : (m >= 1 ? m.toFixed(m >= 10 ? 0 : 2) + " m" : (m * 100).toFixed(0) + " cm"); }

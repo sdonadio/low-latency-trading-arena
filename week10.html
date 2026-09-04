@@ -65,7 +65,7 @@
   strong{color:#fff;font-weight:650}
   em.hi{color:var(--accent-2);font-style:normal;font-weight:600}
   code,.mono{font-family:var(--mono);font-size:12.5px}
-  code{background:rgba(var(--accent-2-rgb),.13);color:#ddd4fb;padding:1px 5px;border-radius:4px}
+  code{background:rgba(var(--accent-2-rgb),.13);color:#ddd6fe;padding:1px 5px;border-radius:4px}
   ul.you{list-style:none;margin:16px 0 0;display:grid;gap:8px}
   ul.you li{position:relative;padding-left:26px;font-size:13.5px;color:var(--ink);max-width:78ch}
   ul.you li::before{content:"";position:absolute;left:4px;top:8px;width:8px;height:8px;border-radius:2px;
@@ -132,7 +132,7 @@
   pre.code{font-family:var(--mono);font-size:11.8px;line-height:1.62;background:#0b0e14;color:#dbe3ea;
     border:1px solid var(--line);border-radius:10px;padding:13px 14px;overflow-x:auto;white-space:pre}
   pre.code .k{color:#6cb6ff} pre.code .s{color:#8ddb8c} pre.code .c{color:#6b7484;font-style:italic}
-  pre.code .n{color:#e0b070} pre.code .b{color:#ddd4fb;font-weight:700}
+  pre.code .n{color:#e0b070} pre.code .b{color:#ddd6fe;font-weight:700}
   .note{border-left:3px solid var(--accent);background:rgba(var(--accent-rgb),.12);border-radius:0 8px 8px 0;
     padding:10px 13px;font-size:12.5px;color:var(--muted)}
   .note b{color:var(--ink)}
@@ -262,12 +262,19 @@
   .codepair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
   /* ── mobile guard (identical on every page): single column under 720px,
         no horizontal overflow. Must stay last in the sheet. ───────────── */
+  @media (prefers-reduced-motion: reduce){
+    *{animation:none !important;transition:none !important}
+    html{scroll-behavior:auto}
+  }
   @media (max-width:720px){
     .grid2,.grid3,.grid2.narrow-right,.split,.split-r,.codepair,
-    .nextgrid,.dash,.toggles,.lanes,.weeknav,.weeks,.roles,.stack{
+    .nextgrid,.dash,.toggles,.lanes,.weeknav,.weeks,.roles,.stack,
+    .board,.dsrow,.loopgrid,.ttgrid{
       grid-template-columns:minmax(0,1fr)}
     [class*="grid"]>*,.stack>*,.wrap>*,.panel,.panel.tight,.nextcard,.wk,.row>*{min-width:0}
+    .split>*,.split-r>*,.grid2>*,.grid3>*,.board>*,.toggles>*,.codepair>*,.stack>*{min-width:0}
     pre,pre.code,.svgwrap,svg,canvas,table,select,input,textarea,.mono{max-width:100%}
+    pre.code{max-width:100%}
     pre,pre.code,.svgwrap,.tablewrap{overflow-x:auto}
     code,.mono{overflow-wrap:anywhere}
     .ctl,.ctl>*,.controls>*,.row,.legend>*{min-width:0}
@@ -522,14 +529,14 @@ seq_[t &amp; mask_].store(t + <span class="n">1</span>, mo::release);</pre>
     </div>
   </div>
   <p class="sub" style="margin-top:10px">Notice the second atomic. Once producers can finish out of
-  order, the consumer can no longer trust <code>tail_</code> to mean &ldquo;everything below this is
-  written&rdquo; — it needs a per-slot sequence stamp. MPMC adds the same on the consumer side. That is
+  order, the consumer can no longer trust <code>tail_</code> to mean “everything below this is
+  written” — it needs a per-slot sequence stamp. MPMC adds the same on the consumer side. That is
   the real cost of many writers: not the CAS instruction, but the extra state and the extra cache line
   every message now touches.</p>
 
   <h3 style="margin-top:32px">d · The ABA problem, one step at a time</h3>
-  <p>A CAS only asks &ldquo;is the value still what I read?&rdquo; — never &ldquo;has it been
-  untouched?&rdquo;. If another thread changes A to B and back to A, your CAS succeeds on a world that
+  <p>A CAS only asks “is the value still what I read?” — never “has it been
+  untouched?”. If another thread changes A to B and back to A, your CAS succeeds on a world that
   moved underneath you. Step through the classic lock-free stack pop.</p>
 
   <div class="split" style="margin-top:14px">
@@ -716,7 +723,7 @@ seq_[t &amp; mask_].store(t + <span class="n">1</span>, mo::release);</pre>
       <code>g++ -O1 -g -pthread -fsanitize=thread</code> and require zero ThreadSanitizer warnings.</p>
     </div></details>
 
-  <details class="pit"><summary>Everything is <code>seq_cst</code>, so it is &ldquo;definitely safe&rdquo;</summary>
+  <details class="pit"><summary>Everything is <code>seq_cst</code>, so it is “definitely safe”</summary>
     <div class="body">
       <p>The opposite reflex, and it is correct — just slow. <code>seq_cst</code> demands a single total
       order across all sequentially-consistent operations in the program, which on x86-64 turns your free
@@ -726,7 +733,7 @@ seq_[t &amp; mask_].store(t + <span class="n">1</span>, mo::release);</pre>
       panicked into, so the next person to touch the file has to redo the analysis from scratch.</p>
       <p class="fix">Fix: use the weakest ordering you can <em>justify in a comment</em>. Relaxed for the
       counter you own, acquire/release for the pairing that publishes the payload. The starter's rubric
-      explicitly checks for &ldquo;not all relaxed, not all seq_cst&rdquo;.</p>
+      explicitly checks for “not all relaxed, not all seq_cst”.</p>
     </div></details>
 
   <details class="pit"><summary>Capacity is 1000, and <code>%</code> is on the hot path</summary>
@@ -757,7 +764,7 @@ seq_[t &amp; mask_].store(t + <span class="n">1</span>, mo::release);</pre>
       cached value says you are full or empty.</p>
     </div></details>
 
-  <details class="pit"><summary>The queue is unbounded, so it &ldquo;never drops anything&rdquo;</summary>
+  <details class="pit"><summary>The queue is unbounded, so it “never drops anything”</summary>
     <div class="body">
       <p>It drops nothing and delays everything. A <code>std::deque</code> behind a mutex grows happily
       during a message storm; each push allocates, the consumer falls further behind, and every tick now
@@ -789,7 +796,7 @@ seq_[t &amp; mask_].store(t + <span class="n">1</span>, mo::release);</pre>
     <div class="fb" role="status"></div>
   </div>
 
-  <div class="mcq" data-a="1" data-exp="<b>It never CASes, and it never frees a node.</b> ABA needs two ingredients: a compare-exchange that treats &ldquo;same value&rdquo; as &ldquo;unchanged&rdquo;, and a reclamation scheme that lets a freed node's address be handed out again while another thread still holds it. An SPSC ring has neither — each index has one writer so no retry loop exists, and the backing array is allocated once and never freed. This is the deeper reason to prefer rings over lock-free lists: the genuinely hard part of lock-free programming is memory reclamation (hazard pointers, epochs, tagged pointers), and a ring simply has no nodes to reclaim. Note that alignas(64) is about false sharing, which is a performance issue, not a correctness one.">
+  <div class="mcq" data-a="1" data-exp="<b>It never CASes, and it never frees a node.</b> ABA needs two ingredients: a compare-exchange that treats “same value” as “unchanged”, and a reclamation scheme that lets a freed node's address be handed out again while another thread still holds it. An SPSC ring has neither — each index has one writer so no retry loop exists, and the backing array is allocated once and never freed. This is the deeper reason to prefer rings over lock-free lists: the genuinely hard part of lock-free programming is memory reclamation (hazard pointers, epochs, tagged pointers), and a ring simply has no nodes to reclaim. Note that alignas(64) is about false sharing, which is a performance issue, not a correctness one.">
     <p class="q"><span>Q2</span>Why is the ABA problem irrelevant to an SPSC ring buffer?</p>
     <div class="opts">
       <button class="opt" type="button">Because <code>alignas(64)</code> keeps the two indices in separate cache lines</button>
