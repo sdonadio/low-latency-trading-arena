@@ -1,0 +1,1567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" href="data:," />
+<title>Week 8 · Algorithmic Complexity &amp; Time-Series — Low-Latency Trading Arena</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    /* ── Low-Latency Trading Arena · shared palette (identical on every page) ── */
+    --accent:       #7c3aed;
+    --accent-2:     #c4b5fd;
+    --accent-3:     #ede9fe;
+    --accent-rgb:   124,58,237;
+    --accent-2-rgb: 196,181,253;
+    --bg:           #0f1115;
+    --panel:        #181b22;
+    --panel2:       #1e222b;
+    --panel-2:      #13161b;
+    --ink:          #e8e6e3;
+    --ink-dim:      #c6c3bf;
+    --ink-mute:     #6f757f;
+    --muted:        #9aa0a6;
+    --dim:          #5f6673;
+    --line:         #272c36;
+    --line-2:       #333a47;
+    --border:       #272c36;
+    --ok:           #3fb950;
+    --warn:         #d29922;
+    --bad:          #f85149;
+    --info:         #6cb6ff;
+    --sky:          #58a6ff;
+    --violet:       #a78bfa;
+    --teal:         #2dd4bf;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.62;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent-2);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  /* ── nav / footer ─────────────────────────────────────────── */
+  nav.top{position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+    padding:11px 22px;background:rgba(15,17,21,.94);border-bottom:1px solid var(--line)}
+  nav.top>a:first-child{font-weight:800;letter-spacing:-.2px;color:var(--ink);font-size:14.5px;
+    border-left:3px solid var(--accent);padding-left:10px}
+  nav.top .crumbs{font-size:12px;color:var(--muted)}
+  nav.top .crumbs b{color:var(--ink);font-weight:700}
+  footer{border-top:1px solid var(--line);background:var(--panel);
+    padding:26px 22px 34px;text-align:center;font-size:11.5px;color:var(--dim);letter-spacing:.3px}
+
+  /* ── sections & typography ────────────────────────────────── */
+  section{max-width:1180px;margin:0 auto;padding:36px 22px 42px;border-top:1px solid var(--line)}
+  section#hero{border-top:none}
+  .kicker{font-size:10.5px;font-weight:800;letter-spacing:1.9px;text-transform:uppercase;color:var(--accent-2)}
+  h1{font-size:clamp(26px,4.2vw,40px);font-weight:800;letter-spacing:-.9px;line-height:1.13;margin:10px 0 6px}
+  h2{font-size:21px;font-weight:700;letter-spacing:-.3px;margin:4px 0 4px}
+  h3{font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);margin-bottom:11px}
+  h4{font-size:13.5px;font-weight:700;margin-bottom:5px}
+  p{margin:9px 0;max-width:82ch}
+  .lead{color:var(--muted);font-size:15px;max-width:84ch}
+  .sub{color:var(--muted);font-size:12.5px}
+  strong{color:#fff;font-weight:650}
+  em.hi{color:var(--accent-2);font-style:normal;font-weight:600}
+  code,.mono{font-family:var(--mono);font-size:12.5px}
+  code{background:rgba(var(--accent-2-rgb),.13);color:#ddd4fb;padding:1px 5px;border-radius:4px}
+  ul.you{list-style:none;margin:16px 0 0;display:grid;gap:8px}
+  ul.you li{position:relative;padding-left:26px;font-size:13.5px;color:var(--ink);max-width:78ch}
+  ul.you li::before{content:"";position:absolute;left:4px;top:8px;width:8px;height:8px;border-radius:2px;
+    background:var(--accent);box-shadow:0 0 0 3px rgba(var(--accent-rgb),.22)}
+  ul.plain{list-style:none;display:grid;gap:7px;font-size:13px;color:var(--muted)}
+  ul.plain li{padding-left:16px;position:relative}
+  ul.plain li::before{content:"\2022";position:absolute;left:2px;color:var(--accent-2)}
+
+  /* ── panels & layout ──────────────────────────────────────── */
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .panel.tight{padding:13px 14px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;align-items:start}
+  .split{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:18px;align-items:start}
+  .split-r{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:18px;align-items:start}
+  .stack{display:grid;gap:14px}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+
+  /* ── controls ─────────────────────────────────────────────── */
+  .btn{font-family:inherit;font-size:12px;font-weight:650;cursor:pointer;color:var(--ink);
+    background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:7px 14px;transition:.15s}
+  .btn:hover:not(:disabled){border-color:var(--accent-2);color:#fff}
+  .btn:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .btn:disabled{opacity:.35;cursor:not-allowed}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.primary:hover:not(:disabled){filter:brightness(1.25)}
+  .btn.on{background:rgba(var(--accent-rgb),.28);border-color:var(--accent-2);color:#fff}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+  .tab{font-family:inherit;font-size:12px;font-weight:650;cursor:pointer;color:var(--muted);
+    background:transparent;border:1px solid var(--line);border-radius:20px;padding:6px 14px;transition:.15s}
+  .tab:hover{color:var(--ink)}
+  .tab[aria-selected="true"]{background:rgba(var(--accent-rgb),.3);border-color:var(--accent-2);color:#fff}
+  .tab:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .ctl{display:grid;gap:4px;margin-bottom:12px}
+  .ctl label{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);
+    display:flex;justify-content:space-between;gap:10px}
+  .ctl label b{font-family:var(--mono);color:var(--accent-2);font-size:12px;text-transform:none;letter-spacing:0}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:3px;
+    background:#2b313d;outline:none;cursor:pointer}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;
+    background:var(--accent-2);border:2px solid var(--bg);cursor:pointer}
+  input[type=range]::-moz-range-thumb{width:15px;height:15px;border-radius:50%;background:var(--accent-2);
+    border:2px solid var(--bg);cursor:pointer}
+  input[type=range]:focus-visible{box-shadow:0 0 0 3px rgba(var(--accent-2-rgb),.4)}
+  select,textarea,input[type=text]{font-family:var(--mono);font-size:12.5px;color:var(--ink);
+    background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:7px 9px;width:100%}
+  select:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px solid var(--accent-2);outline-offset:1px}
+  textarea{line-height:1.55;resize:vertical}
+
+  /* ── stats / pills / code ─────────────────────────────────── */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:1px;
+    background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .stat{background:var(--panel);padding:10px 12px}
+  .stat .sl{font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--dim)}
+  .stat .sv{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--ink);margin-top:3px}
+  .stat .sv.ok{color:var(--ok)} .stat .sv.bad{color:var(--bad)} .stat .sv.warn{color:var(--warn)}
+  .stat .sv.acc{color:var(--accent-2)}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;letter-spacing:.5px;
+    padding:3px 9px;border-radius:20px;border:1px solid var(--line);color:var(--muted)}
+  .pill.ok{color:var(--ok);border-color:rgba(63,185,80,.5);background:rgba(63,185,80,.1)}
+  .pill.bad{color:var(--bad);border-color:rgba(248,81,73,.5);background:rgba(248,81,73,.1)}
+  .pill.warn{color:var(--warn);border-color:rgba(210,153,34,.5);background:rgba(210,153,34,.1)}
+  .pill.acc{color:var(--accent-2);border-color:rgba(var(--accent-2-rgb),.5);background:rgba(var(--accent-rgb),.18)}
+  pre.code{font-family:var(--mono);font-size:11.8px;line-height:1.62;background:#0b0e14;color:#dbe3ea;
+    border:1px solid var(--line);border-radius:10px;padding:13px 14px;overflow-x:auto;white-space:pre}
+  pre.code .k{color:#6cb6ff} pre.code .s{color:#8ddb8c} pre.code .c{color:#6b7484;font-style:italic}
+  pre.code .n{color:#e0b070} pre.code .b{color:#ddd4fb;font-weight:700}
+  .note{border-left:3px solid var(--accent);background:rgba(var(--accent-rgb),.12);border-radius:0 8px 8px 0;
+    padding:10px 13px;font-size:12.5px;color:var(--muted)}
+  .note b{color:var(--ink)}
+  .log{font-family:var(--mono);font-size:11.5px;max-height:230px;overflow-y:auto;display:grid;gap:5px}
+  .log div{background:var(--panel2);border-left:3px solid var(--line);border-radius:0 6px 6px 0;padding:6px 9px;color:var(--muted)}
+  .log div.hl{border-left-color:var(--accent-2);color:var(--ink);background:rgba(var(--accent-rgb),.15)}
+  .log div.ok{border-left-color:var(--ok)} .log div.bad{border-left-color:var(--bad)}
+  svg{display:block;max-width:100%;height:auto}
+  .svgwrap{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px;overflow-x:auto}
+  table.t{width:100%;border-collapse:collapse;font-size:12px}
+  table.t th{font-size:9.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--dim);
+    text-align:left;padding:0 8px 7px;border-bottom:1px solid var(--line)}
+  table.t td{padding:7px 8px;border-bottom:1px solid rgba(39,44,54,.6);color:var(--muted);font-family:var(--mono);font-size:11.8px}
+  table.t td.n{color:var(--ink);font-weight:600}
+
+  /* ── pitfalls ─────────────────────────────────────────────── */
+  details.pit{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:10px;overflow:hidden}
+  details.pit>summary{cursor:pointer;padding:12px 15px;font-size:13.5px;font-weight:650;color:var(--ink);
+    list-style:none;display:flex;gap:11px;align-items:flex-start}
+  details.pit>summary::-webkit-details-marker{display:none}
+  details.pit>summary::before{content:"\25B8";color:var(--accent-2);font-size:12px;line-height:1.5;transition:.2s}
+  details.pit[open]>summary::before{transform:rotate(90deg)}
+  details.pit>summary:focus-visible{outline:2px solid var(--accent-2);outline-offset:-2px}
+  details.pit .body{padding:0 15px 15px 39px;font-size:13px;color:var(--muted);display:grid;gap:9px}
+  details.pit .body .fix{color:var(--ok);font-weight:600}
+
+  /* ── MCQ ──────────────────────────────────────────────────── */
+  .mcq{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 17px;margin-bottom:13px}
+  .mcq .q{font-size:13.8px;font-weight:650;color:var(--ink);margin:0 0 11px;max-width:84ch}
+  .mcq .q span{color:var(--accent-2);font-family:var(--mono);margin-right:7px}
+  .opts{display:grid;gap:7px}
+  .opt{text-align:left;font-family:inherit;font-size:13px;cursor:pointer;color:var(--muted);
+    background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:9px 12px;transition:.15s}
+  .opt:hover:not(:disabled){border-color:var(--accent-2);color:var(--ink)}
+  .opt:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .opt.right{border-color:var(--ok);background:rgba(63,185,80,.13);color:#bce8c4}
+  .opt.wrong{border-color:var(--bad);background:rgba(248,81,73,.12);color:#f4b6b1}
+  .opt.dim{opacity:.5}
+  .fb{margin-top:11px;font-size:12.5px;line-height:1.6;color:var(--muted);display:none;
+    border-left:3px solid var(--line);padding-left:11px}
+  .fb.show{display:block}
+  .fb.show.good{border-left-color:var(--ok)} .fb.show.poor{border-left-color:var(--bad)}
+  .fb b{color:var(--ink)}
+
+  /* ── next ─────────────────────────────────────────────────── */
+  .nextgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+  .nextcard{display:block;background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:15px 17px;transition:.18s;color:inherit}
+  .nextcard:hover{border-color:var(--accent-2);transform:translateY(-2px);text-decoration:none}
+  .nextcard .nl{font-size:10px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--accent-2)}
+  .nextcard .nt{font-size:14.5px;font-weight:700;color:var(--ink);margin-top:5px}
+  .nextcard .nd{font-size:12px;color:var(--muted);margin-top:5px}
+
+  @media (max-width:720px){
+    .grid2,.grid3,.split,.split-r{grid-template-columns:1fr}
+    section{padding:26px 15px 32px}
+    nav.top{padding:10px 15px;gap:8px}
+    nav.top .crumbs{font-size:11px}
+    p,.lead{max-width:none}
+  }
+
+
+  /* ── week-page shared ─────────────────────────────────────── */
+  #hero{padding:52px 22px 40px;
+    background:radial-gradient(ellipse 820px 340px at 22% -14%,rgba(var(--accent-rgb),.3),transparent 66%)}
+  #hero .wk{font-family:var(--mono);font-size:12px;letter-spacing:2px;color:var(--accent-2);font-weight:700}
+  #hero h1{max-width:24ch}
+  #hero .promise{font-size:16.5px;color:var(--ink);max-width:74ch;margin-top:10px;line-height:1.55}
+  .secnum{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;
+    background:rgba(var(--accent-rgb),.35);border:1px solid var(--accent-2);color:#fff;font-family:var(--mono);
+    font-size:11px;font-weight:700;margin-right:9px;vertical-align:2px}
+  .sw{display:inline-flex;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex-wrap:wrap}
+  .sw button{font-family:inherit;font-size:11.5px;font-weight:650;cursor:pointer;color:var(--muted);
+    background:var(--panel2);border:none;padding:7px 13px;transition:.15s}
+  .sw button[aria-pressed="true"]{background:rgba(var(--accent-rgb),.32);color:#fff}
+  .sw button:focus-visible{outline:2px solid var(--accent-2);outline-offset:-2px}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-top:10px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
+
+
+
+  /* ── week-8 specifics ─────────────────────────────────────── */
+  canvas{display:block;width:100%;height:auto;border-radius:10px;background:#0b0e14;border:1px solid var(--line)}
+  .lanes{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:12px;color:var(--muted)}
+  .kv b{color:var(--ink);font-weight:600}
+  .dsrow{display:grid;grid-template-columns:minmax(0,168px) minmax(0,1fr);gap:10px;align-items:center;margin-bottom:7px}
+  .dsrow .dsn{font-size:11.5px;font-weight:700;color:var(--ink);line-height:1.3}
+  .dsrow .dsn em{display:block;font-style:normal;font-family:var(--mono);font-size:10px;color:var(--dim)}
+  .bar{height:20px;border-radius:4px;background:var(--panel2);position:relative;overflow:hidden}
+  .bar i{position:absolute;left:0;top:0;bottom:0;border-radius:4px;display:block}
+  .bar span{position:absolute;right:6px;top:1px;font-family:var(--mono);font-size:10.5px;color:var(--ink)}
+  .togs{display:grid;gap:6px}
+  .togs label{display:flex;align-items:flex-start;gap:9px;cursor:pointer;background:var(--panel2);
+    border:1px solid var(--line);border-radius:8px;padding:8px 11px;font-size:12.5px;line-height:1.45}
+  .togs label:hover{border-color:var(--accent-2)}
+  .togs label input{margin-top:3px;flex-shrink:0;width:14px;height:14px;accent-color:var(--accent)}
+  .togs label .sn{font-family:var(--mono);font-size:11.5px;color:var(--accent-2)}
+  .togs label .sd{display:block;color:var(--muted);font-size:11px}
+  @media (max-width:720px){ .dsrow{grid-template-columns:minmax(0,1fr)} }
+  /* ── mobile guard (identical on every page): single column under 720px,
+        no horizontal overflow. Must stay last in the sheet. ───────────── */
+  @media (max-width:720px){
+    .grid2,.grid3,.grid2.narrow-right,.split,.split-r,.codepair,
+    .nextgrid,.dash,.toggles,.lanes,.weeknav,.weeks,.roles,.stack{
+      grid-template-columns:minmax(0,1fr)}
+    [class*="grid"]>*,.stack>*,.wrap>*,.panel,.panel.tight,.nextcard,.wk,.row>*{min-width:0}
+    pre,pre.code,.svgwrap,svg,canvas,table,select,input,textarea,.mono{max-width:100%}
+    pre,pre.code,.svgwrap,.tablewrap{overflow-x:auto}
+    code,.mono{overflow-wrap:anywhere}
+    .ctl,.ctl>*,.controls>*,.row,.legend>*{min-width:0}
+    .ctl{flex-wrap:wrap} .ctl select,.ctl input[type=range]{flex:1 1 100%;width:100%}
+    p,.lead,.sub,.promise{max-width:none}
+  }
+</style>
+</head>
+<body>
+
+<nav class="top"><a href="index.html">Low-Latency Trading Arena</a><span class="crumbs"><a href="week7.html">← Week 7</a> · <b>Week 8 · Algorithmic Complexity &amp; Time-Series</b> · <a href="week9.html">Week 9 →</a></span></nav>
+
+<!-- ══════════════ HERO ══════════════ -->
+<section id="hero">
+  <div class="wk">WEEK 8 · 15-WEEK TRACK  ·  SESSION 5 · 9-SESSION TRACK</div>
+  <h1>Algorithmic Complexity &amp; Time-Series</h1>
+  <p class="promise">Big-O tells you how cost grows. It says nothing about the constant, and at HFT scale the
+  constant <em class="hi">is</em> the answer. This week you learn to count cache misses instead of
+  instructions, and to compute every statistic your strategy needs in O(1) per tick — because a window
+  recompute is not slow on average, it is a tail spike exactly when the market is busy.</p>
+  <ul class="you">
+    <li>Say where the crossover between an O(n) scan and an O(log n) search actually is on your machine, and why it is not where the textbook says.</li>
+    <li>Convert any windowed statistic into an incremental update: running sum, Welford variance, EWMA, and the starter's <code>rolling_counter.hpp</code>.</li>
+    <li>Track a percentile in bounded memory, and know what accuracy you gave up to do it.</li>
+    <li>Compound a tail: turn per-stage p99.9 into an end-to-end number, and align two venues whose clocks disagree.</li>
+  </ul>
+  <div class="row" style="margin-top:22px">
+    <span class="pill acc">HW8 · <code>include/rolling_counter.hpp</code> — amortised O(1) <code>add</code> and <code>count</code></span>
+    <span class="pill">Lab · <code>make rolling</code> green, plus Welford</span>
+    <span class="pill">15-week track: the midterm lands this session</span>
+  </div>
+</section>
+
+<!-- ══════════════ WHAT ══════════════ -->
+<section id="what">
+  <div class="kicker">Part 1</div>
+  <h2><span class="secnum">1</span>What complexity means when n is small and memory is slow</h2>
+  <p class="lead">Asymptotic notation describes behaviour as n goes to infinity. Your order book has sixty-four
+  levels and your rolling window has two hundred samples. You are permanently in the regime big-O was designed
+  to ignore.</p>
+
+  <div class="split">
+    <div>
+      <p>Three ideas do all the work this week. First, <strong>count the right operation</strong>: at
+      one nanosecond per arithmetic instruction and ninety per DRAM miss, the complexity that matters is
+      measured in <em class="hi">memory accesses</em>, not instructions. An algorithm that touches half as
+      much memory and does twice the arithmetic is nearly twice as fast.</p>
+      <p>Second, <strong>amortised is not worst case</strong>. <code>std::vector::push_back</code> is O(1)
+      amortised, which means most calls are a store and an increment and one call in <em>n</em> reallocates
+      and copies everything. Averaged over a million pushes that is constant. Sampled at p99.9 — the number
+      you are graded on — it is a reallocation of the whole buffer while a quote you wanted to send waits.
+      <code>reserve()</code> is not an optimisation, it is the removal of an unbounded tail.</p>
+      <p>Third, <strong>the worst case is your grade</strong>. A latency distribution is not summarised by its
+      mean. The trade you lose is the one where the slow path fired, and slow paths are correlated with
+      exactly the moments you care about — the busy tick, the volatile open, the message burst.</p>
+      <pre class="code"><span class="c">// The same question, two ways of asking it. Only one predicts the winner.</span>
+<span class="c">//   find a price level among n, n = 64</span>
+<span class="c">//</span>
+<span class="c">//   std::map            O(log n)   ~6 dependent pointer hops</span>
+<span class="c">//                                  each a likely miss  ->  ~6 x 90 ns = 540 ns</span>
+<span class="c">//   flat sorted array   O(n)       64 x 12 B = 768 B = 12 cache lines,</span>
+<span class="c">//                                  prefetched, streamed  ->  ~30 ns</span>
+<span class="c">//</span>
+<span class="c">// The "worse" algorithm wins by 18x, and it keeps winning until the array</span>
+<span class="c">// stops fitting in cache. Measure YOUR crossover; do not inherit mine.</span></pre>
+      <div class="note"><b>The one number to internalise.</b> A cache miss to DRAM is roughly ninety times an
+      arithmetic operation. Any time you are choosing between "more maths" and "more memory", the maths is
+      free. This is the same lesson as Week 7's flat book, now stated as a complexity claim.</div>
+    </div>
+    <div class="panel">
+      <h3>What each notation is silent about</h3>
+      <table class="t">
+        <tr><th>Claim</th><th>What it hides</th></tr>
+        <tr><td class="n">O(1)</td><td>the constant — could be 1 ns or 200 ns</td></tr>
+        <tr><td class="n">O(log n)</td><td>whether the hops are dependent loads</td></tr>
+        <tr><td class="n">O(n)</td><td>whether the walk is sequential (prefetchable)</td></tr>
+        <tr><td class="n">amortised O(1)</td><td>the O(n) call that lands on message 4 194 304</td></tr>
+        <tr><td class="n">average case</td><td>everything you are graded on</td></tr>
+      </table>
+      <div class="note" style="margin-top:14px"><b>A useful reflex.</b> When someone quotes a complexity, ask
+      two follow-ups: how many <em>distinct cache lines</em>, and is the worst case bounded? If they cannot
+      answer both, the complexity is decoration.</div>
+      <div class="stats" style="margin-top:14px">
+        <div class="stat"><div class="sl">1 tick budget</div><div class="sv acc">1 µs</div></div>
+        <div class="stat"><div class="sl">arithmetic op</div><div class="sv">~1 ns</div></div>
+        <div class="stat"><div class="sl">DRAM miss</div><div class="sv bad">~90 ns</div></div>
+      </div>
+      <p class="sub" style="margin-top:10px">One microsecond of budget buys you roughly a thousand arithmetic
+      operations, or eleven cache misses. That ratio is the entire design brief for the rest of this page.</p>
+    </div>
+  </div>
+
+  <!-- ── WIDGET 1 ─────────────────────────────────────────── -->
+  <div class="panel" style="margin-top:22px">
+    <h3>Widget 1 · Big-O versus measured, on a log axis</h3>
+    <p class="sub" style="margin-bottom:14px">Four ways to find something among <em>n</em>, priced with the
+    cache ladder rather than an operation count. The dashed line is a 1 µs per-tick budget. Watch where the
+    curves cross — and where each one leaves the budget for good.</p>
+
+    <div class="split">
+      <div>
+        <div class="svgwrap">
+          <svg id="boSvg" viewBox="0 0 720 340" role="img"
+               aria-label="Log-log plot of measured lookup cost against n for four data structures, with a one microsecond budget line"></svg>
+        </div>
+        <div class="legend">
+          <span><i style="background:#c4b5fd"></i>flat array, linear scan</span>
+          <span><i style="background:#58a6ff"></i>sorted array, binary search</span>
+          <span><i style="background:#f85149"></i>std::map</span>
+          <span><i style="background:#3fb950"></i>hash, open addressing</span>
+        </div>
+      </div>
+      <div>
+        <div class="ctl"><label for="boN">n · elements searched<b id="vboN">64</b></label>
+          <input type="range" id="boN" min="2" max="22" step="1" value="6"
+                 aria-label="Number of elements, logarithmic" /></div>
+        <div class="ctl"><label for="boSz">bytes per element<b id="vboSz">12 B</b></label>
+          <input type="range" id="boSz" min="4" max="64" step="4" value="12"
+                 aria-label="Bytes per element" /></div>
+        <div class="ctl" style="margin-bottom:0"><label for="boBud">per-tick budget<b id="vboBud">1.0 µs</b></label>
+          <input type="range" id="boBud" min="1" max="50" step="1" value="10"
+                 aria-label="Per tick latency budget in tenths of a microsecond" /></div>
+        <div class="tablewrap" style="margin-top:14px;overflow-x:auto">
+          <table class="t" id="boTable">
+            <tr><th>structure</th><th>big-O</th><th>lines</th><th>measured</th><th>vs budget</th></tr>
+          </table>
+        </div>
+        <div class="note" id="boVerdict" style="margin-top:12px"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ HOW ══════════════ -->
+<section id="how">
+  <div class="kicker">Part 2</div>
+  <h2><span class="secnum">2</span>How does it work? Update, never recompute</h2>
+  <p class="lead">A rolling window slides one sample at a time: one in, one out. Every statistic you want over
+  it can be maintained by folding those two events into a few scalars — which turns O(k) per tick into O(1)
+  per tick and, more importantly, turns a variable cost into a fixed one.</p>
+
+  <p>The naive version is a loop over the window on every tick. It is correct, it is easy, and its cost is
+  proportional to your window length, so widening the window to get a smoother signal makes the hot path
+  slower in exact proportion. The incremental version keeps a running total and adjusts it by the arriving and
+  departing samples; its cost does not depend on <em>k</em> at all. Welford does the same trick for variance
+  without the catastrophic cancellation you get from subtracting two nearly equal large numbers, and the
+  starter's <code>RollingCounter</code> does it for "how many events in the last window", using the one fact
+  that makes it possible: <strong>the clock only moves forward</strong>, so an expired event stays expired and
+  is dropped exactly once.</p>
+
+  <!-- ── WIDGET 2 ─────────────────────────────────────────── -->
+  <div class="panel" style="margin-top:18px">
+    <h3>Widget 2 · four ways to keep a rolling statistic</h3>
+    <p class="sub" style="margin-bottom:14px">Same window, same tick rate, four implementations. Drag the
+    window and watch three of the four bars stay exactly where they are — that flatness is the whole point.</p>
+
+    <div class="split">
+      <div>
+        <div class="ctl"><label for="rsK">window length k, samples<b id="vrsK">256</b></label>
+          <input type="range" id="rsK" min="8" max="8192" step="8" value="256"
+                 aria-label="Rolling window length in samples" /></div>
+        <div class="ctl"><label for="rsRate">message rate, per second<b id="vrsRate">200 000</b></label>
+          <input type="range" id="rsRate" min="10000" max="1000000" step="10000" value="200000"
+                 aria-label="Market data message rate per second" /></div>
+        <div class="ctl" style="margin-bottom:0"><label for="rsStats">statistics computed per tick<b id="vrsStats">3</b></label>
+          <input type="range" id="rsStats" min="1" max="8" step="1" value="3"
+                 aria-label="Number of independent statistics computed per tick" /></div>
+        <div class="stats" style="margin-top:14px">
+          <div class="stat"><div class="sl">tick period</div><div class="sv acc" id="rsPeriod">5.0 µs</div></div>
+          <div class="stat"><div class="sl">naive uses</div><div class="sv bad" id="rsNaivePct">—</div></div>
+          <div class="stat"><div class="sl">incremental uses</div><div class="sv ok" id="rsIncPct">—</div></div>
+        </div>
+        <div class="note" id="rsVerdict" style="margin-top:12px"></div>
+      </div>
+      <div>
+        <h3>ns per tick, all statistics</h3>
+        <div id="rsBars"></div>
+        <div class="svgwrap" style="margin-top:12px">
+          <svg id="rsScale" viewBox="0 0 720 160" role="img"
+               aria-label="Cost per tick against window length for the naive and incremental implementations"></svg>
+        </div>
+      </div>
+    </div>
+    <pre class="code" style="margin-top:16px"><span class="c">// include/rolling_counter.hpp — amortised O(1) because the clock is monotonic.</span>
+<span class="c">// Each event is added once and expired once, so count() never re-examines one.</span>
+<span class="k">struct</span> <span class="b">RollingCounter</span> {
+    <span class="k">explicit</span> RollingCounter(uint64_t window_ns)
+        : window_(window_ns), buf_(<span class="n">1</span> &lt;&lt; <span class="n">20</span>) {}      <span class="c">// power of two -&gt; mask, not %</span>
+
+    <span class="k">void</span> add(uint64_t ts_ns) {                       <span class="c">// O(1), never allocates</span>
+        buf_[tail_ &amp; (buf_.size() - <span class="n">1</span>)] = ts_ns;
+        ++tail_;
+    }
+    uint64_t count(uint64_t now_ns) {                <span class="c">// amortised O(1)</span>
+        uint64_t cutoff = now_ns &gt; window_ ? now_ns - window_ : <span class="n">0</span>;
+        <span class="k">while</span> (head_ &lt; tail_ &amp;&amp; buf_[head_ &amp; (buf_.size() - <span class="n">1</span>)] &lt;= cutoff)
+            ++head_;                                 <span class="c">// each event dies once</span>
+        <span class="k">return</span> tail_ - head_;                        <span class="c">// live events, O(1)</span>
+    }
+  <span class="k">private</span>:
+    uint64_t window_;
+    std::vector&lt;uint64_t&gt; buf_;
+    uint64_t head_ = <span class="n">0</span>, tail_ = <span class="n">0</span>;                   <span class="c">// indices grow forever</span>
+};</pre>
+    <div class="note" style="margin-top:14px"><b>Read the boundary.</b> The contract is "events with
+    <code>ts &gt; now − window</code>", so an event sitting exactly on <code>cutoff</code> is
+    <em>out</em> — which is why the loop expires <code>&lt;= cutoff</code>. Getting this one comparison
+    backwards is the most common way <code>rc_mixed</code> fails, and it is off by exactly one sample, which
+    is exactly the kind of error a smoke test will not show you.</div>
+  </div>
+
+  <!-- ── WIDGET 3 ─────────────────────────────────────────── -->
+  <div class="panel" style="margin-top:22px">
+    <h3>Widget 3 · EWMA versus SMA — what you buy with a shorter memory</h3>
+    <p class="sub" style="margin-bottom:14px">A price series with a level shift and noise. The simple moving
+    average needs a buffer of k samples and reacts in about k/2 ticks; the exponentially weighted average
+    needs one double and reacts in one half-life. Drag both and watch the lag.</p>
+
+    <div class="split-r">
+      <div>
+        <div class="ctl"><label for="ewK">SMA window k<b id="vewK">64</b></label>
+          <input type="range" id="ewK" min="4" max="256" step="4" value="64"
+                 aria-label="Simple moving average window length" /></div>
+        <div class="ctl"><label for="ewH">EWMA half-life, ticks<b id="vewH">16</b></label>
+          <input type="range" id="ewH" min="2" max="128" step="2" value="16"
+                 aria-label="EWMA half life in ticks" /></div>
+        <div class="ctl"><label for="ewNoise">tick noise, bp<b id="vewNoise">6</b></label>
+          <input type="range" id="ewNoise" min="0" max="30" step="1" value="6"
+                 aria-label="Per tick noise in basis points" /></div>
+        <div class="ctl" style="margin-bottom:0"><label for="ewJump">level shift at tick 200, bp<b id="vewJump">40</b></label>
+          <input type="range" id="ewJump" min="0" max="150" step="5" value="40"
+                 aria-label="Size of the level shift in basis points" /></div>
+        <div class="stats" style="margin-top:14px">
+          <div class="stat"><div class="sl">EWMA alpha</div><div class="sv acc" id="ewAlpha">—</div></div>
+          <div class="stat"><div class="sl">EWMA state</div><div class="sv ok">8 B</div></div>
+          <div class="stat"><div class="sl">SMA state</div><div class="sv" id="ewMem">—</div></div>
+        </div>
+        <div class="stats" style="margin-top:1px">
+          <div class="stat"><div class="sl">ticks to 90 % · SMA</div><div class="sv" id="ewLagS">—</div></div>
+          <div class="stat"><div class="sl">ticks to 90 % · EWMA</div><div class="sv acc" id="ewLagE">—</div></div>
+          <div class="stat"><div class="sl">residual noise</div><div class="sv" id="ewNoiseOut">—</div></div>
+        </div>
+      </div>
+      <div>
+        <canvas id="ewCv" width="1360" height="560"
+                aria-label="Price series with a level shift, overlaid with a simple moving average and an exponentially weighted moving average"></canvas>
+        <div class="note" id="ewVerdict" style="margin-top:12px"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ WHY ══════════════ -->
+<section id="why">
+  <div class="kicker">Part 3</div>
+  <h2><span class="secnum">3</span>Why it is harder than it looks: percentiles, tails, and clocks</h2>
+  <p class="lead">Three places where the O(1) discipline is not enough on its own — because the thing you want
+  to measure is a distribution, the thing you are graded on compounds, and the thing you are measuring
+  against has a different clock.</p>
+
+  <!-- ── WIDGET 4 ─────────────────────────────────────────── -->
+  <div class="panel" style="margin-top:18px">
+    <h3>Widget 4 · tracking a percentile without keeping the data</h3>
+    <p class="sub" style="margin-bottom:14px">You want p99.9 of your own tick-to-trade latency, continuously,
+    over millions of samples. Exact means storing and sorting all of them. Three approximations trade accuracy
+    for bounded memory — and one of them is unusable for a tail.</p>
+
+    <div class="split">
+      <div>
+        <div class="ctl"><label for="pcN">samples observed<b id="vpcN">1 000 000</b></label>
+          <input type="range" id="pcN" min="10" max="28" step="1" value="20"
+                 aria-label="Number of latency samples observed, logarithmic" /></div>
+        <div class="ctl"><label for="pcQ">quantile you want</label>
+          <select id="pcQ" aria-label="Which quantile to estimate">
+            <option value="0.5">p50 — the median</option>
+            <option value="0.99">p99</option>
+            <option value="0.999" selected>p99.9 — the graded one</option>
+            <option value="0.9999">p99.99</option>
+          </select></div>
+        <div class="ctl" style="margin-bottom:0"><label for="pcBud">memory you will spend<b id="vpcBud">16 KB</b></label>
+          <input type="range" id="pcBud" min="6" max="20" step="1" value="14"
+                 aria-label="Memory budget for the estimator, logarithmic in bytes" /></div>
+        <div class="note" id="pcVerdict" style="margin-top:14px"></div>
+      </div>
+      <div>
+        <div id="pcBars"></div>
+        <div class="tablewrap" style="margin-top:12px;overflow-x:auto">
+          <table class="t" id="pcTable">
+            <tr><th>method</th><th>memory</th><th>ns / insert</th><th>ns / query</th><th>tail error</th></tr>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="note" style="margin-top:14px"><b>Why a reservoir cannot see a tail.</b> Uniform reservoir
+    sampling keeps <em>m</em> samples chosen uniformly at random. To have even one sample from the top 0.1 % of
+    the distribution you need <em>m</em> in the thousands, and to <em>estimate</em> that boundary you need
+    dozens of them. The methods that work on tails — histograms with logarithmic buckets, or a t-digest that
+    deliberately keeps its centroids fine near the extremes and coarse in the middle — are the ones that spend
+    their memory where the question is.</div>
+  </div>
+
+  <!-- ── WIDGET 5 ─────────────────────────────────────────── -->
+  <div class="panel" style="margin-top:22px">
+    <h3>Widget 5 · tail arithmetic — why p99.9 per stage is not p99.9 end to end</h3>
+    <p class="sub" style="margin-bottom:14px">A tick-to-trade path is a chain of stages, and a request is slow
+    if <em>any</em> stage is slow. Add stages and the end-to-end tail compounds, even though every stage
+    individually hits its number.</p>
+
+    <div class="split">
+      <div>
+        <div class="ctl"><label for="tcN">stages in the path<b id="vtcN">6</b></label>
+          <input type="range" id="tcN" min="1" max="14" step="1" value="6"
+                 aria-label="Number of stages in the tick to trade path" /></div>
+        <div class="ctl"><label for="tcP">per-stage slow-path probability<b id="vtcP">0.1 %</b></label>
+          <input type="range" id="tcP" min="1" max="200" step="1" value="10"
+                 aria-label="Probability in hundredths of a percent that a stage takes its slow path" /></div>
+        <div class="ctl"><label for="tcMed">per-stage median, ns<b id="vtcMed">400</b></label>
+          <input type="range" id="tcMed" min="50" max="2000" step="50" value="400"
+                 aria-label="Per stage median latency in nanoseconds" /></div>
+        <div class="ctl" style="margin-bottom:0"><label for="tcSlow">slow-path penalty, µs<b id="vtcSlow">25</b></label>
+          <input type="range" id="tcSlow" min="1" max="200" step="1" value="25"
+                 aria-label="Penalty in microseconds when a stage takes its slow path" /></div>
+        <div class="stats" style="margin-top:14px">
+          <div class="stat"><div class="sl">P(all fast)</div><div class="sv ok" id="tcAll">—</div></div>
+          <div class="stat"><div class="sl">P(any slow)</div><div class="sv bad" id="tcAny">—</div></div>
+          <div class="stat"><div class="sl">chain p99.9</div><div class="sv acc" id="tcP999">—</div></div>
+        </div>
+      </div>
+      <div>
+        <div class="svgwrap">
+          <svg id="tcSvg" viewBox="0 0 720 300" role="img"
+               aria-label="Chain of pipeline stages with per-stage slow path probabilities and the compounded end to end latency distribution"></svg>
+        </div>
+        <div class="note" id="tcVerdict" style="margin-top:12px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── WIDGET 6 ─────────────────────────────────────────── -->
+  <div class="panel" style="margin-top:22px">
+    <h3>Widget 6 · aligning two venues whose clocks disagree</h3>
+    <p class="sub" style="margin-bottom:14px">Venue A and venue B quote the same instrument. To compare them
+    you must put both on one time axis — and every choice you make there manufactures or destroys signal.
+    Slide the clock skew until the arbitrage appears out of nothing.</p>
+
+    <div class="split-r">
+      <div>
+        <div class="ctl"><label for="alSkew">clock skew, B relative to A<b id="valSkew">0 µs</b></label>
+          <input type="range" id="alSkew" min="-400" max="400" step="10" value="0"
+                 aria-label="Clock skew of venue B relative to venue A in microseconds" /></div>
+        <div class="ctl"><label for="alGrid">resampling grid, µs<b id="valGrid">100</b></label>
+          <input type="range" id="alGrid" min="10" max="1000" step="10" value="100"
+                 aria-label="Resampling grid size in microseconds" /></div>
+        <div class="ctl"><label for="alMode">alignment rule</label>
+          <select id="alMode" aria-label="How to align the two venue series">
+            <option value="ffill" selected>as-of / forward fill — last value at or before t</option>
+            <option value="nearest">nearest sample in time</option>
+            <option value="interp">linear interpolation between neighbours</option>
+          </select></div>
+        <div class="ctl" style="margin-bottom:0"><label for="alStamp">timestamp source</label>
+          <select id="alStamp" aria-label="Which timestamp to align on">
+            <option value="exch" selected>exchange send time</option>
+            <option value="recv">your NIC receive time</option>
+          </select></div>
+        <div class="stats" style="margin-top:14px">
+          <div class="stat"><div class="sl">phantom edge</div><div class="sv bad" id="alEdge">—</div></div>
+          <div class="stat"><div class="sl">signals seen</div><div class="sv" id="alSig">—</div></div>
+          <div class="stat"><div class="sl">of those, real</div><div class="sv ok" id="alReal">—</div></div>
+        </div>
+      </div>
+      <div>
+        <div class="svgwrap">
+          <svg id="alSvg" viewBox="0 0 720 300" role="img"
+               aria-label="Two venue price series on one time axis, with the alignment rule applied and the resulting apparent spread"></svg>
+        </div>
+        <div class="note" id="alVerdict" style="margin-top:12px"></div>
+      </div>
+    </div>
+    <div class="note" style="margin-top:14px"><b>The rule that saves you.</b> Never forward-fill <em>into</em>
+    the future relative to the timestamp you are making a decision at. An as-of join that takes "the last value
+    at or before t" is honest; one that takes "the nearest value" reaches forward by up to half a grid step and
+    hands your backtest information it did not have. Interpolation is worse still — it is forward-looking by
+    construction, and the resulting strategy will be profitable in every backtest and in no live session.</div>
+  </div>
+</section>
+
+<!-- ══════════════ PITFALLS ══════════════ -->
+<section id="pitfalls">
+  <div class="kicker">Part 4</div>
+  <h2><span class="secnum">4</span>Five ways an O(1) claim turns out to be false</h2>
+  <p class="lead">Every one of these passes its unit tests. Open them.</p>
+
+  <details class="pit"><summary>Recomputing the window because the code reads better</summary>
+    <div class="body">
+      <p><code>std::accumulate(w.begin(), w.end(), 0.0) / w.size()</code> inside <code>on_book</code>. It is
+      one line, it is obviously correct, and it costs O(k) per tick. At k = 4 096 and 200 000 messages a second
+      you are asking for four hundred million loads a second for a number you could have maintained with an
+      add and a subtract.</p>
+      <p>The trap is that it does not fail — it just consumes your budget, so every other decision you make
+      gets less room, and the effect grows the moment you widen the window to smooth the signal.</p>
+      <p class="fix">Fix: keep a running sum and adjust it by the arriving and departing sample. If you need
+      variance, use Welford. If you need min or max, use a monotonic deque — amortised O(1) and bounded. Then
+      widening the window is free, which is the point.</p>
+    </div></details>
+
+  <details class="pit"><summary>Sum of squares minus square of sum</summary>
+    <div class="body">
+      <p><code>var = (sumsq - sum*sum/n) / (n-1)</code> is algebraically correct and numerically hopeless. On a
+      price series around 4 000 with a standard deviation of 0.02, both terms are enormous and nearly equal, so
+      the subtraction cancels away almost every significant digit. You will see variances that are negative,
+      which then produce a NaN standard deviation, which then silently poisons every signal downstream.</p>
+      <p>It is the classic case of a formula that is fine on paper and wrong in floating point, and it appears
+      in production code constantly because it looks like the definition.</p>
+      <p class="fix">Fix: Welford. Same O(1) cost, same three scalars, updates the mean before using it in the
+      M2 term so the differences stay small. Also clamp: a variance estimate below zero is a bug, not a value —
+      assert it rather than <code>sqrt</code> it.</p>
+    </div></details>
+
+  <details class="pit"><summary>Reporting the mean when you are graded on the tail</summary>
+    <div class="body">
+      <p>Your handler averages 380 ns and you write "sub-microsecond" in the report. One tick in a thousand
+      takes 40 µs because that is the tick where the vector reallocated, or the page was not resident, or the
+      counter's ring wrapped into cold memory. Your mean is unchanged. Your p99.9 is a hundred times your
+      median, and the trade you lost was in that tail.</p>
+      <p>Worse, tail events are not independent of what matters: reallocation happens when the message rate is
+      high, and the message rate is high exactly when there is something to trade.</p>
+      <p class="fix">Fix: keep a histogram, not a running mean. Report p50 / p99 / p99.9 / max per stage.
+      Widget 5 is the arithmetic for why the per-stage number is not the end-to-end number — measure both.</p>
+    </div></details>
+
+  <details class="pit"><summary>Assuming <code>count()</code> may be called with a clock that goes backwards</summary>
+    <div class="body">
+      <p>The <code>RollingCounter</code> contract says <code>now_ns</code> is non-decreasing, and that single
+      guarantee is what makes the amortised O(1) argument work: an event expired once stays expired, so the
+      head index only ever advances. Hand it a timestamp from a different clock — or from
+      <code>system_clock</code>, which NTP can step backwards — and the head has already eaten samples that are
+      live again. The count is now wrong and no loop will recover them.</p>
+      <p>The same failure sinks any monotonic-deque min/max: those structures discard information they can
+      prove is dominated, and the proof depends on time moving one way.</p>
+      <p class="fix">Fix: take timestamps from <code>std::chrono::steady_clock</code> (or the NIC's hardware
+      timestamp), never <code>system_clock</code>, on any path that feeds a windowed structure. Assert
+      non-decreasing in a debug build so the violation surfaces where it happens.</p>
+    </div></details>
+
+  <details class="pit"><summary>Aligning two venues on your own receive timestamp</summary>
+    <div class="body">
+      <p>You join venue A and venue B on the time your process saw each message. Venue A is 40 µs closer to you
+      than venue B, so every one of A's prints looks earlier than it was, and A appears to lead B — a beautiful,
+      stable, entirely manufactured signal that will be arbitraged away the moment you colocate differently.</p>
+      <p>Receive time is a fact about your network, not about the market. Exchange send time is a fact about the
+      market, subject to the exchanges' clocks agreeing, which is what the skew slider in Widget 6 is for.</p>
+      <p class="fix">Fix: carry both timestamps end to end and align on exchange time; use receive time only to
+      measure your own latency. Measure the skew between venues explicitly and treat any apparent lead smaller
+      than it as noise.</p>
+    </div></details>
+</section>
+
+<!-- ══════════════ CHECK ══════════════ -->
+<section id="check">
+  <div class="kicker">Part 5</div>
+  <h2><span class="secnum">5</span>Check yourself</h2>
+  <p class="lead">Instant feedback, no grading. Pick the answer you would defend in a design review.</p>
+
+  <div class="mcq" data-a="3" data-exp="<b>Amortised O(1) is an average, and you are not graded on averages.</b> Reserving does not change the asymptotic cost of a million <code>push_back</code>s — it was already O(1) amortised — but it removes the twenty-odd reallocations that each copy the entire buffer. Those are the p99.9. The distinction matters because a deadline is a threshold: a cost distribution with the same mean but a bounded maximum is strictly better for a system that has to answer within a tick, and the reallocation lands on whichever message happens to be number 4 194 304 — statistically, the busy one.">
+    <p class="q"><span>Q1</span><code>push_back</code> is already O(1) amortised. Why does calling
+    <code>reserve()</code> still change your latency numbers?</p>
+    <div class="opts">
+      <button class="opt" type="button">It does not — amortised O(1) already accounts for the reallocations</button>
+      <button class="opt" type="button">It makes each individual <code>push_back</code> cheaper by skipping the size check</button>
+      <button class="opt" type="button">It improves the mean, which is the number that matters for throughput</button>
+      <button class="opt" type="button">It removes the occasional O(n) reallocation — the mean barely moves, the p99.9 collapses</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+
+  <div class="mcq" data-a="1" data-exp="<b>About 0.6 %, and that is the whole lesson.</b> A request is fast only if every stage is fast, so P(all fast) = (1 − 0.001)^6 ≈ 0.9940 and P(at least one slow) ≈ 0.60 %. That is six times the per-stage rate, and it means your end-to-end p99.5 — not p99.9 — is where the slow path starts showing up. Tails compound across a serial chain, which is why the honest way to state a latency SLO is end to end, and why adding a stage to the hot path is never free even when the stage itself is fast.">
+    <p class="q"><span>Q2</span>Six stages in your tick-to-trade path. Each takes its slow path 0.1 % of the
+    time, independently. What fraction of ticks hits at least one slow path?</p>
+    <div class="opts">
+      <button class="opt" type="button">0.1 % — the stages are independent so the probability does not change</button>
+      <button class="opt" type="button">About 0.6 % — roughly six times the per-stage rate, because any one stage being slow is enough</button>
+      <button class="opt" type="button">0.0001 % — the probabilities multiply</button>
+      <button class="opt" type="button">Impossible to say without the latency distributions</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+
+  <div class="mcq" data-a="2" data-exp="<b>A reservoir is the wrong shape for a tail.</b> Uniform reservoir sampling keeps m samples drawn uniformly at random, so from a million observations the expected number that came from the top 0.1 % is m/1000 — with m = 1 024 that is one sample, and one sample does not estimate a boundary. Welford gives you mean and variance, which say nothing about a quantile unless the distribution is normal, and latency distributions never are. What works is spending your memory where the question lives: logarithmic-bucket histograms, or a t-digest whose centroids are deliberately fine near the extremes and coarse in the middle.">
+    <p class="q"><span>Q3</span>You need a continuously updated p99.9 of your tick-to-trade latency over millions
+    of samples, in a few kilobytes. Which approach works?</p>
+    <div class="opts">
+      <button class="opt" type="button">A 1 024-sample uniform reservoir — unbiased, so the quantile is unbiased too</button>
+      <button class="opt" type="button">Welford's mean and variance, then p99.9 = mean + 3.09 σ</button>
+      <button class="opt" type="button">A log-bucketed histogram or a t-digest — bounded memory, resolution concentrated in the tail</button>
+      <button class="opt" type="button">Keep the last 1 024 samples in a ring and sort them on query</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+</section>
+
+<!-- ══════════════ NEXT ══════════════ -->
+<section id="next">
+  <div class="kicker">Part 6</div>
+  <h2><span class="secnum">6</span>Do the work</h2>
+  <div class="grid2" style="margin-top:14px">
+    <div class="panel"><h4>In class</h4><ul class="plain">
+      <li>Implement <code>include/rolling_counter.hpp</code>: a ring of timestamps, indices that grow forever,
+      mask instead of modulo. Get <code>make rolling</code> green — both <code>rc_window</code> and
+      <code>rc_mixed</code>.</li>
+      <li>Get the boundary right: is an event exactly at <code>now − window</code> in or out? Read the contract,
+      then check it against <code>rc_mixed</code>.</li>
+      <li>Write Welford, feed it a thousand samples, and hand-check the variance on five values.</li>
+      <li>Take one windowed statistic in your bot and convert it to an incremental update. Time both.</li>
+      <li>State the amortised cost of each operation and the reason the monotonic clock makes it so — out loud,
+      in one sentence.</li>
+    </ul></div>
+    <div class="panel"><h4>Before next class</h4><ul class="plain">
+      <li><b>HW8</b> — the rolling counter plus an online statistic, with a short complexity note: cost per
+      operation, and where the worst case is bounded.</li>
+      <li>Add an O(1) signal to <code>on_book</code>: fold <code>microprice</code> and <code>obi</code> into
+      running state, act on a z-score, and confirm nothing on that path allocates.</li>
+      <li>Instrument it with a histogram, not a mean. Report p50 / p99 / p99.9.</li>
+      <li><b>15-week track:</b> the midterm is this session — cumulative over the first seven topics,
+      closed-book, with coding questions.</li>
+    </ul></div>
+  </div>
+  <div class="nextgrid" style="margin-top:18px">
+    <a class="nextcard" href="https://github.com/sdonadio/hft-cpp-starter-columbia"><div class="nl">Code</div>
+      <div class="nt">Get the code · 15-week track starter</div><div class="nd">Header stubs including
+      <code>rolling_counter.hpp</code>, the tests you must pass, and the C++ arena client.
+      <code>cmake -B build</code>, then <code>make rolling</code>.</div></a>
+    <a class="nextcard" href="https://github.com/sdonadio/hft-cpp-starter-uchicago"><div class="nl">Code</div>
+      <div class="nt">Get the code · 9-session track starter</div><div class="nd">The same stubs and the same
+      grader, packaged for the condensed nine-session schedule.</div></a>
+    <a class="nextcard" href="index.html"><div class="nl">Map</div>
+      <div class="nt">Course home</div><div class="nd">Both tracks, and where the complexity block sits in each.</div></a>
+    <a class="nextcard" href="week9.html"><div class="nl">Next</div>
+      <div class="nt">Week 9 · Concurrency I — Atomics &amp; Memory Models →</div><div class="nd">One thread cannot
+      both read the socket and run the strategy. Add a second — and everything you assumed about ordering stops
+      being true.</div></a>
+  </div>
+  <div class="row" style="margin-top:16px">
+    <a class="btn" href="week7.html">← Week 7 · Data Structures for HFT</a>
+    <a class="btn" href="week9.html">Week 9 · Concurrency I — Atomics &amp; Memory Models →</a>
+  </div>
+</section>
+
+<footer>Low-Latency Trading Arena · an interactive companion for a course on low-latency trading systems in C++ · <a href="https://github.com/sdonadio/low-latency-trading-arena">Source</a></footer>
+
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════
+   Week 8 — Algorithmic Complexity & Time-Series
+   Six widgets, no dependencies, no network, everything drawn from data.
+   ════════════════════════════════════════════════════════════════ */
+var $ = function (id) { return document.getElementById(id); };
+
+/* SVG namespace taken from the document so no absolute URL appears in this file */
+var SVGNS = $("boSvg").namespaceURI;
+function mk(tag, attrs) {
+  var e = document.createElementNS(SVGNS, tag);
+  for (var k in attrs) { if (attrs.hasOwnProperty(k)) e.setAttribute(k, attrs[k]); }
+  return e;
+}
+function clear(el) {
+  if (!el) return;
+  if (el.removeChild) { while (el.firstChild) el.removeChild(el.firstChild); }
+  else { el.innerHTML = ""; }
+}
+function tx(p, x, y, s, o) {
+  o = o || {};
+  var e = mk("text", {
+    x: x, y: y, fill: o.fill || "#9aa0a6", "font-size": o.size || 10,
+    "font-family": o.sans ? "system-ui, sans-serif" : "ui-monospace, Menlo, monospace",
+    "font-weight": o.weight || 400, "text-anchor": o.anchor || "start"
+  });
+  e.textContent = s;
+  p.appendChild(e);
+  return e;
+}
+function pathOf(pts) {
+  var d = "", i;
+  for (i = 0; i < pts.length; i++) d += (i ? "L" : "M") + pts[i][0].toFixed(2) + " " + pts[i][1].toFixed(2);
+  return d;
+}
+/* 2D context, or a no-op sink when there is no canvas implementation
+   (headless validation): every widget's maths still runs. */
+function ctx2d(cv) {
+  if (cv && cv.getContext) { var g = cv.getContext("2d"); if (g) return g; }
+  var noop = function () {};
+  var s = {};
+  ["clearRect", "fillRect", "strokeRect", "beginPath", "moveTo", "lineTo", "arc", "closePath",
+    "fill", "stroke", "save", "restore", "translate", "setLineDash", "fillText"].forEach(function (k) { s[k] = noop; });
+  s.measureText = function () { return { width: 0 }; };
+  return s;
+}
+var C = {
+  ink: "#e8e6e3", muted: "#9aa0a6", dim: "#5f6673", line: "#272c36",
+  acc: "#7c3aed", acc2: "#c4b5fd", ok: "#3fb950", warn: "#d29922",
+  bad: "#f85149", sky: "#58a6ff", violet: "#a78bfa", teal: "#2dd4bf"
+};
+function fmtNs(ns) {
+  if (ns < 1000) return ns.toFixed(ns < 10 ? 2 : 1) + " ns";
+  if (ns < 1e6) return (ns / 1000).toFixed(2) + " µs";
+  if (ns < 1e9) return (ns / 1e6).toFixed(2) + " ms";
+  return (ns / 1e9).toFixed(2) + " s";
+}
+function fmtBytes(b) {
+  if (b < 1024) return b.toFixed(0) + " B";
+  if (b < 1048576) return (b / 1024).toFixed(b < 10240 ? 1 : 0) + " KB";
+  if (b < 1073741824) return (b / 1048576).toFixed(1) + " MB";
+  return (b / 1073741824).toFixed(2) + " GB";
+}
+function grp(n) { return Math.round(n).toLocaleString("en-US").replace(/,/g, " "); }
+/* the cache ladder every number on this page is quoted against */
+var LAT = { L1: 1.0, L2: 4.0, LLC: 14.0, DRAM: 90.0 };
+var CAP = { L1: 48 * 1024, L2: 1280 * 1024, LLC: 24 * 1024 * 1024 };
+function residency(bytes) {
+  if (bytes <= CAP.L1) return { nm: "L1", ns: LAT.L1 };
+  if (bytes <= CAP.L2) return { nm: "L2", ns: LAT.L2 };
+  if (bytes <= CAP.LLC) return { nm: "LLC", ns: LAT.LLC };
+  return { nm: "DRAM", ns: LAT.DRAM };
+}
+var LINE = 64;
+
+/* ══════════════════════════════════════════════════════════════
+   WIDGET 1 — Big-O versus measured, on a log axis
+   ══════════════════════════════════════════════════════════════ */
+var BO = [
+  { key: "scan", nm: "flat array, linear scan", bigO: "O(n)", col: C.acc2 },
+  { key: "bsearch", nm: "sorted array, binary search", bigO: "O(log n)", col: C.sky },
+  { key: "map", nm: "std::map", bigO: "O(log n)", col: C.bad },
+  { key: "hash", nm: "hash, open addressing", bigO: "O(1)", col: C.ok }
+];
+function boCost(n, sz) {
+  var out = {};
+  var contigB = n * sz, res = residency(contigB);
+  var lines = Math.ceil(contigB / LINE);
+  /* linear scan: sequential, so the prefetcher streams it — bandwidth-bound
+     after the first two lines, plus one compare per element */
+  out.scan = { lines: lines, ns: Math.min(2, lines) * res.ns + Math.max(0, lines - 2) * 1.6 + n * 0.35 };
+  /* binary search: log2(n) probes, each a random line until the last few land
+     inside one line; nothing is prefetchable because the address depends on the compare */
+  var probes = Math.max(1, Math.ceil(Math.log(n + 1) / Math.LN2));
+  var inLine = Math.max(0, Math.floor(Math.log(Math.max(1, LINE / sz)) / Math.LN2));
+  out.bsearch = { lines: Math.max(1, probes - inLine), ns: Math.max(1, probes - inLine) * res.ns + probes * 1.2 };
+  /* std::map: one heap node per element, allocator overhead, dependent hops */
+  var nodeB = n * (sz + 32 + 24), nres = residency(nodeB);
+  out.map = { lines: probes, ns: probes * nres.ns + 3 };
+  /* open addressing: one hash, ~1.3 probes at a 0.7 load factor, contiguous */
+  var tabB = n * (sz + 8) / 0.7, hres = residency(tabB);
+  out.hash = { lines: 1.3, ns: 1.3 * hres.ns + 4 };
+  BO.forEach(function (b) { out[b.key].res = b.key === "map" ? nres : (b.key === "hash" ? hres : res); });
+  return out;
+}
+function boRender() {
+  var n = Math.pow(2, +$("boN").value), sz = +$("boSz").value, bud = +$("boBud").value * 100;
+  $("vboN").textContent = grp(n);
+  $("vboSz").textContent = sz + " B";
+  $("vboBud").textContent = (bud / 1000).toFixed(1) + " µs";
+  var m = boCost(n, sz);
+
+  /* the log-log plot: cost against n for every structure, with the budget line */
+  var svg = $("boSvg");
+  clear(svg);
+  var x0 = 48, x1 = 700, y0 = 268, y1 = 26;
+  var e0 = 1, e1 = 22;                                   /* n from 2^1 to 2^22 */
+  var lo = 0.5, hi = 4e6;                                /* ns axis */
+  var X = function (e) { return x0 + (x1 - x0) * (e - e0) / (e1 - e0); };
+  var Y = function (ns) {
+    var t = (Math.log(Math.max(lo, Math.min(hi, ns))) - Math.log(lo)) / (Math.log(hi) - Math.log(lo));
+    return y0 - (y0 - y1) * t;
+  };
+  /* decade gridlines */
+  [1, 10, 100, 1000, 10000, 100000, 1000000].forEach(function (v) {
+    svg.appendChild(mk("line", { x1: x0, y1: Y(v), x2: x1, y2: Y(v), stroke: C.line, "stroke-width": 1 }));
+    tx(svg, x0 - 6, Y(v) + 3.5, fmtNs(v), { fill: C.dim, size: 9, anchor: "end" });
+  });
+  [2, 6, 10, 14, 18, 22].forEach(function (e) {
+    svg.appendChild(mk("line", { x1: X(e), y1: y0, x2: X(e), y2: y1, stroke: C.line, "stroke-width": 1, opacity: 0.5 }));
+    tx(svg, X(e), y0 + 15, grp(Math.pow(2, e)), { fill: C.dim, size: 9, anchor: "middle" });
+  });
+  tx(svg, x0, y0 + 30, "n · elements  (log scale)", { fill: C.muted, size: 10 });
+  /* the budget wall */
+  svg.appendChild(mk("line", { x1: x0, y1: Y(bud), x2: x1, y2: Y(bud), stroke: C.bad, "stroke-width": 1.8, "stroke-dasharray": "5 4" }));
+  tx(svg, x1, Y(bud) - 6, "per-tick budget " + (bud / 1000).toFixed(1) + " µs", { fill: C.bad, size: 10, anchor: "end", weight: 700 });
+  /* the four curves */
+  BO.forEach(function (b) {
+    var pts = [], e;
+    for (e = e0; e <= e1; e += 0.25) {
+      var c = boCost(Math.pow(2, e), sz);
+      pts.push([X(e), Y(c[b.key].ns)]);
+    }
+    svg.appendChild(mk("path", { d: pathOf(pts), fill: "none", stroke: b.col, "stroke-width": 1.9, opacity: 0.9 }));
+  });
+  /* the marker for the current n */
+  svg.appendChild(mk("line", { x1: X(+$("boN").value), y1: y1, x2: X(+$("boN").value), y2: y0, stroke: C.acc, "stroke-width": 1.4, opacity: 0.65 }));
+  BO.forEach(function (b) {
+    svg.appendChild(mk("circle", { cx: X(+$("boN").value), cy: Y(m[b.key].ns), r: 4, fill: b.col, stroke: "#0b0e14", "stroke-width": 1.4 }));
+  });
+
+  /* the table */
+  var t = $("boTable");
+  while (t.rows.length > 1) t.deleteRow(1);
+  var best = null;
+  BO.forEach(function (b) {
+    var s = m[b.key], r = t.insertRow(-1);
+    if (!best || s.ns < m[best].ns) best = b.key;
+    [b.nm.replace(/,.*/, ""), b.bigO, s.lines.toFixed(1), fmtNs(s.ns),
+      s.ns <= bud ? "fits" : (s.ns / bud).toFixed(1) + "× over"].forEach(function (v, i) {
+      var c = r.insertCell(-1);
+      c.textContent = v;
+      if (i === 0) c.className = "n";
+      if (i === 4 && s.ns > bud) c.style.color = C.bad;
+    });
+  });
+  var bn = BO.filter(function (b) { return b.key === best; })[0];
+  $("boVerdict").innerHTML = "<b>At n = " + grp(n) + " the winner is the " + bn.nm + " at " +
+    fmtNs(m[best].ns) + ".</b> " +
+    (best === "scan"
+      ? "The O(n) scan is beating both O(log n) structures, because " + grp(n) + " elements of " + sz +
+        " bytes is " + fmtBytes(n * sz) + " — " + Math.ceil(n * sz / LINE) + " cache lines the prefetcher can " +
+        "stream while the compares retire in parallel. Big-O counts comparisons; the machine charges for lines."
+      : best === "hash"
+      ? "A single hash and about 1.3 probes into a contiguous table, so the cost is flat in n until the table " +
+        "stops fitting in cache — and that is the only thing that ever changes it."
+      : "The scan has finally lost: " + fmtBytes(n * sz) + " is too much to stream inside the budget, so the " +
+        "logarithmic structure wins. Notice that <code>std::map</code> is still the slowest of the two O(log n) " +
+        "options at every n — same asymptotics, scattered nodes.") +
+    " <code>std::map</code> is " + (m.map.ns / m[best].ns).toFixed(1) + "× the winner here and lives in " +
+    m.map.res.nm + " because its " + grp(n) + " nodes cost " + fmtBytes(n * (sz + 56)) +
+    " with allocator overhead. The crossover moves with element size — drag it and watch the curves swap.";
+}
+["boN", "boSz", "boBud"].forEach(function (id) {
+  $(id).addEventListener("input", boRender);
+  $(id).addEventListener("change", boRender);
+});
+boRender();
+
+/* ══════════════════════════════════════════════════════════════
+   WIDGET 2 — four ways to keep a rolling statistic
+   ══════════════════════════════════════════════════════════════ */
+var RS = [
+  { key: "naive", nm: "naive full-window recompute", sub: "std::accumulate over k samples, every tick", col: C.bad },
+  { key: "sum", nm: "incremental running sum", sub: "add the arrival, subtract the departure", col: C.warn },
+  { key: "welford", nm: "Welford mean + variance", sub: "three scalars, numerically stable", col: C.sky },
+  { key: "ring", nm: "ring-buffer rolling counter", sub: "amortised O(1): each event expires once", col: C.acc2 }
+];
+function rsModel(k, stats) {
+  var winB = k * 8, res = residency(winB), lines = Math.ceil(winB / LINE);
+  var o = {};
+  /* streaming read of the whole window, plus one add per element */
+  o.naive = { ns: (Math.min(2, lines) * res.ns + Math.max(0, lines - 2) * 1.6 + k * 0.4) * stats, big: "O(k)" };
+  /* two loads (arrival, departure) in lines that are already hot, plus arithmetic */
+  o.sum = { ns: (2 * LAT.L1 + 1.5) * stats, big: "O(1)" };
+  o.welford = { ns: (3 * LAT.L1 + 4.5) * stats, big: "O(1)" };
+  /* one store at the tail, plus an amortised single expiry at the head */
+  o.ring = { ns: (2 * LAT.L1 + 2.0) * stats, big: "O(1) amortised" };
+  RS.forEach(function (r) { o[r.key].mem = r.key === "naive" || r.key === "ring" ? winB : (r.key === "sum" ? 16 : 24); });
+  return o;
+}
+function rsRender() {
+  var k = +$("rsK").value, rate = +$("rsRate").value, stats = +$("rsStats").value;
+  $("vrsK").textContent = grp(k);
+  $("vrsRate").textContent = grp(rate);
+  $("vrsStats").textContent = stats;
+  var m = rsModel(k, stats), period = 1e9 / rate;
+  $("rsPeriod").textContent = fmtNs(period);
+  var np = 100 * m.naive.ns / period, ip = 100 * m.sum.ns / period;
+  $("rsNaivePct").textContent = np > 999 ? ">999 %" : np.toFixed(np < 10 ? 1 : 0) + " %";
+  $("rsNaivePct").className = "sv " + (np < 20 ? "ok" : np < 60 ? "warn" : "bad");
+  $("rsIncPct").textContent = ip.toFixed(ip < 10 ? 2 : 1) + " %";
+
+  var box = $("rsBars");
+  clear(box);
+  var maxNs = Math.max(m.naive.ns, m.sum.ns, m.welford.ns, m.ring.ns);
+  RS.forEach(function (r) {
+    var s = m[r.key];
+    var row = document.createElement("div");
+    row.className = "dsrow";
+    var lab = document.createElement("div");
+    lab.className = "dsn";
+    lab.innerHTML = r.nm + "<em>" + s.big + " · " + fmtBytes(s.mem) + " state</em>";
+    var bar = document.createElement("div");
+    bar.className = "bar";
+    var fill = document.createElement("i");
+    fill.style.width = Math.max(1.5, 100 * s.ns / maxNs) + "%";
+    fill.style.background = r.col;
+    fill.style.opacity = "0.88";
+    var val = document.createElement("span");
+    val.textContent = fmtNs(s.ns);
+    bar.appendChild(fill); bar.appendChild(val);
+    row.appendChild(lab); row.appendChild(bar);
+    box.appendChild(row);
+  });
+
+  /* cost against window length — the naive line has a slope, the others do not */
+  var svg = $("rsScale");
+  clear(svg);
+  var x0 = 44, x1 = 700, y0 = 120, y1 = 22;
+  var K0 = 8, K1 = 8192;
+  var X = function (kk) { return x0 + (x1 - x0) * (Math.log(kk) - Math.log(K0)) / (Math.log(K1) - Math.log(K0)); };
+  var top = rsModel(K1, stats).naive.ns;
+  var Y = function (ns) { return y0 - (y0 - y1) * Math.min(1, ns / top); };
+  tx(svg, x0, 14, "ns per tick against window length k", { fill: C.muted, size: 10.5, weight: 700 });
+  svg.appendChild(mk("line", { x1: x0, y1: Y(period), x2: x1, y2: Y(period), stroke: C.bad, "stroke-width": 1.6, "stroke-dasharray": "5 4" }));
+  tx(svg, x1, Y(period) - 5, "tick period " + fmtNs(period), { fill: C.bad, size: 9.5, anchor: "end", weight: 700 });
+  [["naive", C.bad], ["sum", C.acc2]].forEach(function (p) {
+    var pts = [], kk;
+    for (kk = K0; kk <= K1; kk *= 1.15) pts.push([X(kk), Y(rsModel(kk, stats)[p[0]].ns)]);
+    pts.push([X(K1), Y(rsModel(K1, stats)[p[0]].ns)]);
+    svg.appendChild(mk("path", { d: pathOf(pts), fill: "none", stroke: p[1], "stroke-width": 2 }));
+  });
+  svg.appendChild(mk("line", { x1: X(k), y1: y1, x2: X(k), y2: y0, stroke: C.acc, "stroke-width": 1.3, opacity: 0.6 }));
+  [8, 64, 512, 8192].forEach(function (kk) { tx(svg, X(kk), y0 + 14, grp(kk), { fill: C.dim, size: 9, anchor: "middle" }); });
+  tx(svg, x0 + 6, y1 + 10, "naive: slope in k", { fill: C.bad, size: 9.5 });
+  tx(svg, x0 + 6, Y(m.sum.ns) - 6, "incremental: flat", { fill: C.acc2, size: 9.5 });
+
+  var v = $("rsVerdict");
+  if (np > 100) {
+    v.innerHTML = "<b>The naive version cannot keep up at all.</b> " + fmtNs(m.naive.ns) +
+      " of work per tick against a " + fmtNs(period) + " tick period is " + np.toFixed(0) +
+      "&nbsp;% of your budget — the queue behind your handler grows without bound, so your quotes describe a " +
+      "book from a few milliseconds ago. The incremental version does the same job in " + fmtNs(m.sum.ns) +
+      " (" + ip.toFixed(2) + "&nbsp;% of the period) and its cost does not move when you widen the window.";
+  } else if (np > 25) {
+    v.innerHTML = "<b>It fits, and it is eating your budget.</b> The window recompute takes " +
+      np.toFixed(0) + "&nbsp;% of every tick period to produce numbers you could maintain in " +
+      ip.toFixed(2) + "&nbsp;%. Everything else you want to do this tick — the book update, the signal, the " +
+      "risk check, the send — has to fit in what is left. And the moment you widen k to smooth the signal, " +
+      "this bar grows and the others do not.";
+    } else {
+    v.innerHTML = "<b>At k = " + grp(k) + " the recompute is cheap enough to get away with.</b> That is " +
+      "genuinely true and it is the trap: the code ships, then someone widens the window to 4 096 for a " +
+      "smoother volatility estimate and the hot path gets " + (rsModel(4096, stats).naive.ns / m.naive.ns).toFixed(0) +
+      "× slower with no code review. The incremental version has no such failure mode — drag k to the end and " +
+      "watch three of the four bars refuse to move.";
+  }
+}
+["rsK", "rsRate", "rsStats"].forEach(function (id) {
+  $(id).addEventListener("input", rsRender);
+  $(id).addEventListener("change", rsRender);
+});
+rsRender();
+
+/* ══════════════════════════════════════════════════════════════
+   WIDGET 3 — EWMA versus SMA, on a series with a level shift
+   ══════════════════════════════════════════════════════════════ */
+var EW_N = 420, EW_JUMP_AT = 200;
+function ewSeries(noiseBp, jumpBp) {
+  /* deterministic LCG so the picture and the lag numbers are reproducible */
+  var s = 20250908 >>> 0;
+  var rnd = function () { s = (1664525 * s + 1013904223) >>> 0; return s / 4294967296 - 0.5; };
+  var base = 100, out = [], i;
+  for (i = 0; i < EW_N; i++) {
+    var lvl = base * (1 + (i >= EW_JUMP_AT ? jumpBp / 10000 : 0));
+    out.push(lvl * (1 + (noiseBp / 10000) * 2 * rnd()));
+  }
+  return out;
+}
+function ewRender() {
+  var k = +$("ewK").value, hl = +$("ewH").value, nz = +$("ewNoise").value, jp = +$("ewJump").value;
+  $("vewK").textContent = k;
+  $("vewH").textContent = hl;
+  $("vewNoise").textContent = nz;
+  $("vewJump").textContent = jp;
+  var a = 1 - Math.pow(2, -1 / hl);
+  $("ewAlpha").textContent = a.toFixed(4);
+  $("ewMem").textContent = fmtBytes(k * 8);
+
+  var px = ewSeries(nz, jp), sma = [], ewma = [], sum = 0, e = px[0], i;
+  for (i = 0; i < EW_N; i++) {
+    sum += px[i];
+    if (i >= k) sum -= px[i - k];
+    sma.push(sum / Math.min(i + 1, k));
+    e = a * px[i] + (1 - a) * e;
+    ewma.push(e);
+  }
+  /* ticks for each estimator to cover 90 % of the level shift */
+  var pre = 100, post = 100 * (1 + jp / 10000), need = pre + 0.9 * (post - pre);
+  function lag(arr) {
+    var j;
+    for (j = EW_JUMP_AT; j < EW_N; j++) if (arr[j] >= need) return j - EW_JUMP_AT;
+    return -1;
+  }
+  var lS = jp > 0 ? lag(sma) : -1, lE = jp > 0 ? lag(ewma) : -1;
+  $("ewLagS").textContent = lS < 0 ? "—" : lS + " ticks";
+  $("ewLagE").textContent = lE < 0 ? "—" : lE + " ticks";
+  /* residual noise: standard deviation of the estimator over the quiet stretch */
+  function sd(arr, from, to) {
+    var n = 0, mean = 0, m2 = 0, j;
+    for (j = from; j < to; j++) { n++; var d = arr[j] - mean; mean += d / n; m2 += d * (arr[j] - mean); }
+    return n > 1 ? Math.sqrt(m2 / (n - 1)) : 0;
+  }
+  var sdS = sd(sma, 120, 195), sdE = sd(ewma, 120, 195);
+  $("ewNoiseOut").textContent = "SMA " + (sdS / 100 * 10000).toFixed(2) + " bp · EWMA " + (sdE / 100 * 10000).toFixed(2) + " bp";
+
+  /* draw */
+  var cv = $("ewCv"), g = ctx2d(cv), W = 1360, H = 560;
+  g.clearRect(0, 0, W, H);
+  var lo = Infinity, hi = -Infinity;
+  px.concat(sma, ewma).forEach(function (v) { if (v < lo) lo = v; if (v > hi) hi = v; });
+  var pad = (hi - lo) * 0.12 + 1e-6;
+  lo -= pad; hi += pad;
+  var X = function (i2) { return 70 + (W - 100) * i2 / (EW_N - 1); };
+  var Y = function (v) { return H - 46 - (H - 76) * (v - lo) / (hi - lo); };
+  g.strokeStyle = C.line; g.lineWidth = 1;
+  [0, 0.25, 0.5, 0.75, 1].forEach(function (t) {
+    var y = Y(lo + t * (hi - lo));
+    g.beginPath(); g.moveTo(70, y); g.lineTo(W - 30, y); g.stroke();
+    g.fillStyle = C.dim; g.font = "18px ui-monospace, Menlo, monospace";
+    g.fillText((lo + t * (hi - lo)).toFixed(2), 8, y + 6);
+  });
+  /* the shift */
+  g.strokeStyle = C.warn; g.lineWidth = 2; g.setLineDash([7, 6]);
+  g.beginPath(); g.moveTo(X(EW_JUMP_AT), 20); g.lineTo(X(EW_JUMP_AT), H - 40); g.stroke();
+  g.setLineDash([]);
+  g.fillStyle = C.warn; g.font = "bold 19px ui-monospace, Menlo, monospace";
+  g.fillText("level shift +" + jp + " bp", X(EW_JUMP_AT) + 10, 36);
+  function line(arr, col, w) {
+    g.strokeStyle = col; g.lineWidth = w; g.beginPath();
+    for (var j = 0; j < arr.length; j++) { if (j) g.lineTo(X(j), Y(arr[j])); else g.moveTo(X(j), Y(arr[j])); }
+    g.stroke();
+  }
+  line(px, "#3a4150", 1.6);
+  line(sma, C.sky, 3);
+  line(ewma, C.acc2, 3);
+  g.font = "bold 19px ui-monospace, Menlo, monospace";
+  g.fillStyle = "#6a7181"; g.fillText("price", 82, H - 16);
+  g.fillStyle = C.sky; g.fillText("SMA k=" + k, 190, H - 16);
+  g.fillStyle = C.acc2; g.fillText("EWMA half-life " + hl, 360, H - 16);
+
+  var v = $("ewVerdict");
+  if (jp === 0) {
+    v.innerHTML = "<b>No shift, so this is purely a smoothing comparison.</b> Residual noise is " +
+      (sdS / 100 * 10000).toFixed(2) + " bp for the SMA against " + (sdE / 100 * 10000).toFixed(2) +
+      " bp for the EWMA. Raise the level shift to see what each one costs you in lag to buy that smoothness.";
+  } else {
+    v.innerHTML = "<b>The SMA took " + (lS < 0 ? "longer than this series runs" : lS + " ticks") +
+      " to see 90&nbsp;% of the shift; the EWMA took " + (lE < 0 ? "longer than this series runs" : lE + " ticks") +
+      ".</b> The SMA weights every one of its k samples equally, so a fresh observation is worth 1/k of the " +
+      "estimate and the pre-shift samples keep voting until they age out — the response is a ramp about k/2 " +
+      "ticks long. The EWMA gives the newest sample weight α = " + a.toFixed(4) + " and decays the rest " +
+      "geometrically, so it converges in about one half-life. It also costs " + fmtBytes(8) + " of state " +
+      "against the SMA's " + fmtBytes(k * 8) + ", and needs no ring buffer at all. What you give up is a " +
+      "bounded window: the EWMA never fully forgets, so a single bad print leaves a decaying trace forever.";
+  }
+}
+["ewK", "ewH", "ewNoise", "ewJump"].forEach(function (id) {
+  $(id).addEventListener("input", ewRender);
+  $(id).addEventListener("change", ewRender);
+});
+ewRender();
+
+/* ══════════════════════════════════════════════════════════════
+   WIDGET 4 — tracking a percentile without keeping the data
+   ══════════════════════════════════════════════════════════════ */
+var PC = [
+  { key: "exact", nm: "exact: store all, sort on query", col: C.bad },
+  { key: "ring", nm: "last-m ring, sort on query", col: C.warn },
+  { key: "reservoir", nm: "uniform reservoir sample", col: C.sky },
+  { key: "hist", nm: "log-bucket histogram / t-digest", col: C.acc2 }
+];
+function pcModel(n, q, memB) {
+  var m = Math.max(64, Math.floor(memB / 8));          /* samples that fit the budget */
+  var tailFrac = 1 - q;
+  var o = {};
+  o.exact = {
+    mem: n * 8,
+    insert: residency(n * 8).ns + 1,
+    query: n * Math.log(Math.max(2, n)) / Math.LN2 * 0.9,   /* a real sort, ns */
+    err: 0
+  };
+  /* a ring of the last m samples answers a DIFFERENT question: the quantile of
+     the recent past, and only if m * tailFrac >= a few samples */
+  o.ring = {
+    mem: m * 8, insert: LAT.L1 + 1,
+    query: m * Math.log(Math.max(2, m)) / Math.LN2 * 0.9,
+    err: m * tailFrac >= 5 ? 100 / Math.sqrt(Math.max(1, m * tailFrac)) : 100
+  };
+  /* uniform reservoir: expected tail samples = m * tailFrac */
+  var tailN = m * tailFrac;
+  o.reservoir = {
+    mem: m * 8, insert: 3.5,
+    query: m * Math.log(Math.max(2, m)) / Math.LN2 * 0.9,
+    err: tailN >= 1 ? Math.min(100, 100 / Math.sqrt(tailN)) : 100
+  };
+  /* log buckets: relative error is set by the bucket width, not by n */
+  var buckets = Math.max(16, Math.floor(memB / 8));
+  var decades = 6;                                       /* 10 ns .. 10 ms */
+  o.hist = {
+    mem: buckets * 8, insert: 2 * LAT.L1 + 5,            /* one log2, one indexed add */
+    query: buckets * 0.6,
+    err: 100 * (Math.pow(10, decades / buckets) - 1) / 2
+  };
+  return o;
+}
+function pcRender() {
+  var n = Math.pow(2, +$("pcN").value), q = +$("pcQ").value, memB = Math.pow(2, +$("pcBud").value);
+  $("vpcN").textContent = grp(n);
+  $("vpcBud").textContent = fmtBytes(memB);
+  var m = pcModel(n, q, memB);
+  var box = $("pcBars");
+  clear(box);
+  var maxE = 100;
+  PC.forEach(function (p) {
+    var s = m[p.key];
+    var row = document.createElement("div");
+    row.className = "dsrow";
+    var lab = document.createElement("div");
+    lab.className = "dsn";
+    lab.innerHTML = p.nm + "<em>error at p" + (q * 100).toFixed(q >= 0.999 ? 2 : 0).replace(/0$/, "") + "</em>";
+    var bar = document.createElement("div");
+    bar.className = "bar";
+    var fill = document.createElement("i");
+    fill.style.width = Math.max(1.5, 100 * Math.min(maxE, s.err) / maxE) + "%";
+    fill.style.background = p.col;
+    fill.style.opacity = "0.88";
+    var val = document.createElement("span");
+    val.textContent = s.err === 0 ? "exact" : (s.err >= 100 ? "unusable" : "± " + s.err.toFixed(1) + " %");
+    bar.appendChild(fill); bar.appendChild(val);
+    row.appendChild(lab); row.appendChild(bar);
+    box.appendChild(row);
+  });
+  var t = $("pcTable");
+  while (t.rows.length > 1) t.deleteRow(1);
+  PC.forEach(function (p) {
+    var s = m[p.key], r = t.insertRow(-1);
+    [p.nm.replace(/:.*/, "").replace(/ \/.*/, ""), fmtBytes(s.mem), fmtNs(s.insert), fmtNs(s.query),
+      s.err === 0 ? "exact" : (s.err >= 100 ? "unusable" : "± " + s.err.toFixed(1) + " %")].forEach(function (v, i) {
+      var c = r.insertCell(-1);
+      c.textContent = v;
+      if (i === 0) c.className = "n";
+      if (i === 1 && s.mem > memB) c.style.color = C.bad;
+      if (i === 4 && s.err >= 100) c.style.color = C.bad;
+    });
+  });
+  var tailN = Math.max(64, Math.floor(memB / 8)) * (1 - q);
+  $("pcVerdict").innerHTML = "<b>You asked for p" + (q * 100).toFixed(2).replace(/0+$/, "").replace(/\.$/, "") +
+    " over " + grp(n) + " samples in " + fmtBytes(memB) + ".</b> Exact would need " + fmtBytes(n * 8) +
+    " and a " + fmtNs(m.exact.query) + " sort on every query — correct and unaffordable. The reservoir fits, " +
+    "but from " + grp(Math.max(64, Math.floor(memB / 8))) + " retained samples the expected number that came " +
+    "from beyond your quantile is " + (tailN < 1 ? "less than one" : tailN.toFixed(1)) + ", so its estimate of " +
+    "that boundary is " + (tailN < 1 ? "not an estimate at all — it has never seen the region you are asking about"
+      : "±" + m.reservoir.err.toFixed(0) + "&nbsp;%") + ". The histogram spends the same memory on " +
+    grp(Math.max(16, Math.floor(memB / 8))) + " logarithmic buckets, so its relative error is ±" +
+    m.hist.err.toFixed(2) + "&nbsp;% <em>everywhere</em>, independent of n, and an insert is a " +
+    "<code>log2</code> plus an indexed increment at " + fmtNs(m.hist.insert) + ". That is the shape of " +
+    "estimator you want on a hot path: fixed cost, fixed memory, and resolution placed where the question is.";
+}
+["pcN", "pcBud"].forEach(function (id) {
+  $(id).addEventListener("input", pcRender);
+  $(id).addEventListener("change", pcRender);
+});
+$("pcQ").addEventListener("change", pcRender);
+pcRender();
+
+/* ══════════════════════════════════════════════════════════════
+   WIDGET 5 — tail arithmetic across a chain of stages
+   ══════════════════════════════════════════════════════════════ */
+var TC_NAMES = ["NIC", "parse", "book", "signal", "risk", "encode", "send", "wire",
+  "ack", "log", "hedge", "monitor", "audit", "replay"];
+function tcRender() {
+  var n = +$("tcN").value, p = +$("tcP").value / 10000, med = +$("tcMed").value, slow = +$("tcSlow").value * 1000;
+  $("vtcN").textContent = n;
+  $("vtcP").textContent = (p * 100).toFixed(2).replace(/0+$/, "").replace(/\.$/, "") + " %";
+  $("vtcMed").textContent = med;
+  $("vtcSlow").textContent = (slow / 1000).toFixed(0);
+
+  var allFast = Math.pow(1 - p, n), anySlow = 1 - allFast;
+  /* the chain's latency is n*med plus slow for every stage that took its slow path.
+     P(k stages slow) is binomial, so the chain quantile is a sum over k. */
+  function quantile(qq) {
+    var cum = 0, k, comb = 1;
+    for (k = 0; k <= n; k++) {
+      if (k > 0) comb = comb * (n - k + 1) / k;
+      cum += comb * Math.pow(p, k) * Math.pow(1 - p, n - k);
+      if (cum >= qq) return n * med + k * slow;
+    }
+    return n * med + n * slow;
+  }
+  var q50 = quantile(0.5), q99 = quantile(0.99), q999 = quantile(0.999);
+  $("tcAll").textContent = (allFast * 100).toFixed(2) + " %";
+  $("tcAny").textContent = anySlow < 0.0001 ? "<0.01 %" : (anySlow * 100).toFixed(2) + " %";
+  $("tcP999").textContent = fmtNs(q999);
+
+  var svg = $("tcSvg");
+  clear(svg);
+  var x0 = 20, x1 = 700, i;
+  /* the chain of stages */
+  tx(svg, x0, 16, "the serial path · a tick is slow if ANY stage is slow", { fill: C.muted, size: 10.5, weight: 700 });
+  var bw = (x1 - x0) / n;
+  for (i = 0; i < n; i++) {
+    var hot = Math.random;                  /* not used: the picture is deterministic */
+    svg.appendChild(mk("rect", {
+      x: x0 + i * bw + 1.5, y: 26, width: Math.max(3, bw - 3), height: 34, rx: 4,
+      fill: "rgba(124,58,237,.20)", stroke: C.acc2, "stroke-width": 1
+    }));
+    if (bw > 40) {
+      tx(svg, x0 + i * bw + bw / 2, 42, TC_NAMES[i], { fill: C.ink, size: 9.5, anchor: "middle", weight: 700 });
+      tx(svg, x0 + i * bw + bw / 2, 54, med + " ns", { fill: C.dim, size: 9, anchor: "middle" });
+    }
+  }
+  tx(svg, x0, 76, "median " + fmtNs(n * med) + "  ·  each stage slow " +
+    (p * 100).toFixed(2).replace(/0+$/, "").replace(/\.$/, "") + " % of the time (+" + fmtNs(slow) + ")",
+    { fill: C.dim, size: 10 });
+
+  /* P(at least one slow) as the number of stages grows */
+  var gy0 = 200, gy1 = 100;
+  var X = function (k) { return x0 + (x1 - x0) * (k - 1) / 13; };
+  var Y = function (v) { return gy0 - (gy0 - gy1) * Math.min(1, v / Math.max(0.02, 1 - Math.pow(1 - p, 14))); };
+  svg.appendChild(mk("rect", { x: x0, y: gy1 - 8, width: x1 - x0, height: gy0 - gy1 + 16, rx: 4, fill: "#12151c", stroke: C.line, "stroke-width": 1 }));
+  tx(svg, x0 + 6, gy1 - 14, "P(at least one stage slow) against stage count", { fill: C.muted, size: 10.5, weight: 700 });
+  var pts = [], k;
+  for (k = 1; k <= 14; k++) pts.push([X(k), Y(1 - Math.pow(1 - p, k))]);
+  svg.appendChild(mk("path", { d: pathOf(pts), fill: "none", stroke: C.bad, "stroke-width": 2 }));
+  svg.appendChild(mk("circle", { cx: X(n), cy: Y(anySlow), r: 4.5, fill: C.bad, stroke: "#0b0e14", "stroke-width": 1.5 }));
+  tx(svg, X(n) + 8, Y(anySlow) + 4, (anySlow * 100).toFixed(2) + " %", { fill: C.bad, size: 10, weight: 700 });
+  [1, 4, 7, 10, 14].forEach(function (kk) { tx(svg, X(kk), gy0 + 22, kk + " stage" + (kk === 1 ? "" : "s"), { fill: C.dim, size: 9, anchor: "middle" }); });
+
+  /* the three chain quantiles, to scale */
+  var by = 248, mxq = Math.max(q999, 1);
+  [["p50", q50, C.ok], ["p99", q99, C.warn], ["p99.9", q999, C.bad]].forEach(function (pp, j) {
+    var yy = by + j * 17;
+    tx(svg, x0 + 44, yy + 11, pp[0], { fill: C.ink, size: 10, anchor: "end" });
+    svg.appendChild(mk("rect", { x: x0 + 50, y: yy, width: Math.max(2, (x1 - x0 - 110) * pp[1] / mxq), height: 13, rx: 2, fill: pp[2], opacity: 0.85 }));
+    tx(svg, x0 + 56 + Math.max(2, (x1 - x0 - 110) * pp[1] / mxq), yy + 11, fmtNs(pp[1]), { fill: pp[2], size: 9.5, weight: 700 });
+  });
+
+  $("tcVerdict").innerHTML = "<b>Every stage hits its number and the chain does not.</b> With " + n +
+    " stages each taking a slow path " + (p * 100).toFixed(2).replace(/0+$/, "").replace(/\.$/, "") +
+    "&nbsp;% of the time, P(all fast) = (1 − " + p.toFixed(5) + ")<sup>" + n + "</sup> = " +
+    (allFast * 100).toFixed(2) + "&nbsp;%, so " + (anySlow * 100).toFixed(2) + "&nbsp;% of ticks pay at least " +
+    "one " + fmtNs(slow) + " penalty. The median is " + fmtNs(q50) + " and the p99.9 is " + fmtNs(q999) +
+    " — a factor of " + (q999 / q50).toFixed(1) + " between the number you quote and the number you are graded " +
+    "on. Two consequences worth stating out loud. Adding a stage to the serial path is never free even when the " +
+    "stage is fast, because it adds another independent chance to be slow. And driving one stage's slow-path " +
+    "rate to zero moves the chain only as far as its share of the total — the arithmetic rewards attacking the " +
+    "worst offender, not the one you understand best.";
+}
+["tcN", "tcP", "tcMed", "tcSlow"].forEach(function (id) {
+  $(id).addEventListener("input", tcRender);
+  $(id).addEventListener("change", tcRender);
+});
+tcRender();
+
+/* ══════════════════════════════════════════════════════════════
+   WIDGET 6 — aligning two venues whose clocks disagree
+   ══════════════════════════════════════════════════════════════ */
+var AL_N = 26, AL_SPAN = 4000;      /* µs of wall time shown */
+function alSeries() {
+  var s = 20250909 >>> 0;
+  var rnd = function () { s = (1664525 * s + 1013904223) >>> 0; return s / 4294967296; };
+  var A = [], B = [], t = 0, i, pa = 100, pb = 100;
+  for (i = 0; i < AL_N; i++) {
+    t += AL_SPAN / AL_N * (0.5 + rnd());
+    pa += (rnd() - 0.5) * 0.02;
+    A.push({ t: t, p: pa });
+  }
+  t = 0;
+  for (i = 0; i < AL_N; i++) {
+    t += AL_SPAN / AL_N * (0.5 + rnd());
+    pb += (rnd() - 0.5) * 0.02;
+    /* B genuinely follows A with a 250 µs lag — that is the only real signal here */
+    B.push({ t: t, p: pb });
+  }
+  /* make B a lagged copy of A plus its own noise, so "real" edge is well defined */
+  B.forEach(function (b, j) {
+    var src = A[Math.max(0, Math.min(AL_N - 1, j - 2))];
+    b.p = src.p + (b.p - 100) * 0.25;
+  });
+  return { A: A, B: B };
+}
+var AL = alSeries();
+function alPick(arr, t, mode) {
+  var i, best = null;
+  if (mode === "ffill") {
+    for (i = 0; i < arr.length; i++) if (arr[i].t <= t) best = arr[i];
+    return best;
+  }
+  if (mode === "nearest") {
+    for (i = 0; i < arr.length; i++) if (!best || Math.abs(arr[i].t - t) < Math.abs(best.t - t)) best = arr[i];
+    return best;
+  }
+  for (i = 0; i < arr.length - 1; i++) {
+    if (arr[i].t <= t && arr[i + 1].t >= t) {
+      var w = (t - arr[i].t) / Math.max(1e-9, arr[i + 1].t - arr[i].t);
+      return { t: t, p: arr[i].p + w * (arr[i + 1].p - arr[i].p) };
+    }
+  }
+  return arr[arr.length - 1];
+}
+function alRender() {
+  var skew = +$("alSkew").value, grid = +$("alGrid").value;
+  var mode = $("alMode").value, stamp = $("alStamp").value;
+  $("valSkew").textContent = (skew > 0 ? "+" : "") + skew + " µs";
+  $("valGrid").textContent = grid;
+  /* receive-time alignment adds YOUR network asymmetry on top of the venues' skew */
+  var effSkew = skew + (stamp === "recv" ? 180 : 0);
+  var Bs = AL.B.map(function (b) { return { t: b.t + effSkew, p: b.p }; });
+
+  var svg = $("alSvg");
+  clear(svg);
+  var x0 = 46, x1 = 700, ya = 60, yb = 150, i;
+  var X = function (t) { return x0 + (x1 - x0) * Math.max(0, Math.min(1, t / AL_SPAN)); };
+  var lo = 99.9, hi = 100.1;
+  AL.A.concat(Bs).forEach(function (d) { lo = Math.min(lo, d.p); hi = Math.max(hi, d.p); });
+  var Yv = function (p, top) { return top + 56 - 52 * (p - lo) / Math.max(1e-6, hi - lo); };
+  function draw(arr, top, col, label) {
+    tx(svg, x0 - 8, top + 12, label, { fill: col, size: 10, anchor: "end", weight: 700 });
+    var pts = arr.map(function (d) { return [X(d.t), Yv(d.p, top)]; });
+    svg.appendChild(mk("path", { d: pathOf(pts), fill: "none", stroke: col, "stroke-width": 1.6, opacity: 0.55 }));
+    arr.forEach(function (d) {
+      svg.appendChild(mk("circle", { cx: X(d.t), cy: Yv(d.p, top), r: 2.8, fill: col }));
+    });
+  }
+  tx(svg, x0, 20, "one time axis, " + AL_SPAN + " µs wide · aligned on " +
+    (stamp === "exch" ? "exchange send time" : "your NIC receive time"), { fill: C.muted, size: 10.5, weight: 700 });
+  draw(AL.A, ya, C.acc2, "venue A");
+  draw(Bs, yb, C.sky, "venue B");
+  /* the resampling grid and the apparent spread on it */
+  var sig = 0, real = 0, worst = 0, gy = 232;
+  svg.appendChild(mk("rect", { x: x0, y: gy - 42, width: x1 - x0, height: 58, rx: 4, fill: "#12151c", stroke: C.line, "stroke-width": 1 }));
+  tx(svg, x0 + 6, gy - 48, "A − B on the resampled grid · a bar past the line looks like free money", { fill: C.muted, size: 10 });
+  var thresh = 0.02;
+  var ticks = [];
+  for (i = grid; i < AL_SPAN; i += grid) ticks.push(i);
+  ticks.forEach(function (t) {
+    var a = alPick(AL.A, t, mode), b = alPick(Bs, t, mode);
+    if (!a || !b) return;
+    var d = a.p - b.p;
+    /* the honest comparison: both series at their own true times, no skew, ffill */
+    var a0 = alPick(AL.A, t, "ffill"), b0 = alPick(AL.B, t, "ffill");
+    var d0 = (a0 && b0) ? a0.p - b0.p : 0;
+    if (Math.abs(d) > thresh) { sig++; if (Math.abs(d0) > thresh && d * d0 > 0) real++; }
+    worst = Math.max(worst, Math.abs(d) - Math.abs(d0));
+    var h = Math.max(0.8, Math.min(26, Math.abs(d) / 0.06 * 26));
+    svg.appendChild(mk("rect", {
+      x: X(t) - Math.max(1.5, (x1 - x0) / ticks.length / 2 - 1), y: d > 0 ? gy - h : gy,
+      width: Math.max(3, (x1 - x0) / ticks.length - 2), height: h, rx: 1,
+      fill: Math.abs(d) > thresh ? (Math.abs(d0) > thresh ? C.ok : C.bad) : C.dim,
+      opacity: 0.85
+    }));
+  });
+  svg.appendChild(mk("line", { x1: x0, y1: gy, x2: x1, y2: gy, stroke: C.line, "stroke-width": 1 }));
+  [-thresh, thresh].forEach(function (th) {
+    var h = th / 0.06 * 26;
+    svg.appendChild(mk("line", { x1: x0, y1: gy - h, x2: x1, y2: gy - h, stroke: C.warn, "stroke-width": 1, "stroke-dasharray": "4 4", opacity: 0.7 }));
+  });
+  tx(svg, x1, gy + 26, ticks.length + " grid points", { fill: C.dim, size: 9.5, anchor: "end" });
+
+  $("alSig").textContent = sig;
+  $("alReal").textContent = real + " / " + sig;
+  $("alReal").className = "sv " + (sig === 0 ? "" : real === sig ? "ok" : real * 2 > sig ? "warn" : "bad");
+  $("alEdge").textContent = (worst * 100).toFixed(2) + " ¢";
+  $("alEdge").className = "sv " + (worst < 0.002 ? "ok" : worst < 0.01 ? "warn" : "bad");
+
+  var v = $("alVerdict");
+  var parts = [];
+  if (stamp === "recv") {
+    parts.push("<b>You are aligning on receive time.</b> That folds your own network asymmetry — here about " +
+      "180 µs more path to venue B — into the comparison, so B's prints all look later than they were and A " +
+      "appears to lead. This is a fact about your cabling, not about the market, and it will invert the day you " +
+      "move a cross-connect.");
+  }
+  if (Math.abs(effSkew) > 60) {
+    parts.push("<b>" + Math.abs(effSkew).toFixed(0) + " µs of effective skew</b> shifts one series against the " +
+      "other, and shifting a price series against a correlated one manufactures a spread out of nothing: " +
+      sig + " apparent signals, of which " + real + " survive when both series are put back on their true " +
+      "times. Everything else is the skew reading itself back to you.");
+  }
+  if (mode === "interp") {
+    parts.push("<b>Interpolation is forward-looking by construction.</b> The value it gives you at t is a " +
+      "blend of the sample before t and the sample <em>after</em> — information you did not have at t. Every " +
+      "backtest built on an interpolated join is profitable and none of them survive live.");
+  } else if (mode === "nearest") {
+    parts.push("<b>“Nearest” reaches into the future</b> by up to half a grid step (" + (grid / 2).toFixed(0) +
+      " µs here) whenever the next sample is closer than the last one. It is a subtler leak than interpolation " +
+      "and it scales with your grid — widen the grid and the leak grows.");
+  }
+  if (grid > 400) {
+    parts.push("<b>A " + grid + " µs grid is coarser than the phenomenon.</b> Both venues update several times " +
+      "inside one grid cell, so you are comparing arbitrary survivors and calling the difference a signal.");
+  }
+  if (!parts.length) {
+    parts.push("<b>This is the honest configuration.</b> Exchange send timestamps, an as-of join that takes " +
+      "the last value at or before t, a grid finer than the update rate, and no skew — " + sig +
+      " apparent signals of which " + real + " are real. Now break exactly one thing and watch the phantom " +
+      "edge appear: the point of this widget is that every one of those knobs can produce profit that does not exist.");
+  }
+  v.innerHTML = parts.join(" ");
+}
+["alSkew", "alGrid"].forEach(function (id) {
+  $(id).addEventListener("input", alRender);
+  $(id).addEventListener("change", alRender);
+});
+["alMode", "alStamp"].forEach(function (id) { $(id).addEventListener("change", alRender); });
+alRender();
+
+/* ── MCQ engine (shared across week pages) ───────────────────── */
+Array.prototype.forEach.call(document.querySelectorAll(".mcq"), function (q) {
+  var answer = parseInt(q.getAttribute("data-a"), 10);
+  var opts = Array.prototype.slice.call(q.querySelectorAll(".opt"));
+  var fb = q.querySelector(".fb");
+  opts.forEach(function (o, i) {
+    o.addEventListener("click", function () {
+      if (q.dataset.done === "1") return;
+      q.dataset.done = "1";
+      var right = i === answer;
+      opts.forEach(function (b, j) {
+        b.disabled = true;
+        if (j === answer) b.classList.add("right");
+        else if (j === i) b.classList.add("wrong");
+        else b.classList.add("dim");
+      });
+      fb.innerHTML = (right ? "<b>Correct.</b> " : "<b>Not quite.</b> ") + q.getAttribute("data-exp");
+      fb.className = "fb show " + (right ? "good" : "poor");
+    });
+  });
+});
+</script>
+</body>
+</html>

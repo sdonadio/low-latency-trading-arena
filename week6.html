@@ -1,0 +1,1418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" href="data:," />
+<title>Week 6 · Compile-Time &amp; Policy-Based Design — Low-Latency Trading Arena</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    /* ── Low-Latency Trading Arena · shared palette (identical on every page) ── */
+    --accent:       #7c3aed;
+    --accent-2:     #c4b5fd;
+    --accent-3:     #ede9fe;
+    --accent-rgb:   124,58,237;
+    --accent-2-rgb: 196,181,253;
+    --bg:           #0f1115;
+    --panel:        #181b22;
+    --panel2:       #1e222b;
+    --panel-2:      #13161b;
+    --ink:          #e8e6e3;
+    --ink-dim:      #c6c3bf;
+    --ink-mute:     #6f757f;
+    --muted:        #9aa0a6;
+    --dim:          #5f6673;
+    --line:         #272c36;
+    --line-2:       #333a47;
+    --border:       #272c36;
+    --ok:           #3fb950;
+    --warn:         #d29922;
+    --bad:          #f85149;
+    --info:         #6cb6ff;
+    --sky:          #58a6ff;
+    --violet:       #a78bfa;
+    --teal:         #2dd4bf;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.62;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent-2);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  /* ── nav / footer ─────────────────────────────────────────── */
+  nav.top{position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+    padding:11px 22px;background:rgba(15,17,21,.94);border-bottom:1px solid var(--line)}
+  nav.top>a:first-child{font-weight:800;letter-spacing:-.2px;color:var(--ink);font-size:14.5px;
+    border-left:3px solid var(--accent);padding-left:10px}
+  nav.top .crumbs{font-size:12px;color:var(--muted)}
+  nav.top .crumbs b{color:var(--ink);font-weight:700}
+  footer{border-top:1px solid var(--line);background:var(--panel);
+    padding:26px 22px 34px;text-align:center;font-size:11.5px;color:var(--dim);letter-spacing:.3px}
+
+  /* ── sections & typography ────────────────────────────────── */
+  section{max-width:1180px;margin:0 auto;padding:36px 22px 42px;border-top:1px solid var(--line)}
+  section#hero{border-top:none}
+  .kicker{font-size:10.5px;font-weight:800;letter-spacing:1.9px;text-transform:uppercase;color:var(--accent-2)}
+  h1{font-size:clamp(26px,4.2vw,40px);font-weight:800;letter-spacing:-.9px;line-height:1.13;margin:10px 0 6px}
+  h2{font-size:21px;font-weight:700;letter-spacing:-.3px;margin:4px 0 4px}
+  h3{font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);margin-bottom:11px}
+  h4{font-size:13.5px;font-weight:700;margin-bottom:5px}
+  p{margin:9px 0;max-width:82ch}
+  .lead{color:var(--muted);font-size:15px;max-width:84ch}
+  .sub{color:var(--muted);font-size:12.5px}
+  strong{color:#fff;font-weight:650}
+  em.hi{color:var(--accent-2);font-style:normal;font-weight:600}
+  code,.mono{font-family:var(--mono);font-size:12.5px}
+  code{background:rgba(var(--accent-2-rgb),.13);color:#ddd6fe;padding:1px 5px;border-radius:4px}
+  ul.you{list-style:none;margin:16px 0 0;display:grid;gap:8px}
+  ul.you li{position:relative;padding-left:26px;font-size:13.5px;color:var(--ink);max-width:78ch}
+  ul.you li::before{content:"";position:absolute;left:4px;top:8px;width:8px;height:8px;border-radius:2px;
+    background:var(--accent);box-shadow:0 0 0 3px rgba(var(--accent-rgb),.22)}
+  ul.plain{list-style:none;display:grid;gap:7px;font-size:13px;color:var(--muted)}
+  ul.plain li{padding-left:16px;position:relative}
+  ul.plain li::before{content:"\2022";position:absolute;left:2px;color:var(--accent-2)}
+
+  /* ── panels & layout ──────────────────────────────────────── */
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .panel.tight{padding:13px 14px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;align-items:start}
+  .split{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:18px;align-items:start}
+  .split-r{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:18px;align-items:start}
+  .stack{display:grid;gap:14px}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+
+  /* ── controls ─────────────────────────────────────────────── */
+  .btn{font-family:inherit;font-size:12px;font-weight:650;cursor:pointer;color:var(--ink);
+    background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:7px 14px;transition:.15s}
+  .btn:hover:not(:disabled){border-color:var(--accent-2);color:#fff}
+  .btn:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .btn:disabled{opacity:.35;cursor:not-allowed}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.primary:hover:not(:disabled){filter:brightness(1.25)}
+  .btn.on{background:rgba(var(--accent-rgb),.28);border-color:var(--accent-2);color:#fff}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+  .tab{font-family:inherit;font-size:12px;font-weight:650;cursor:pointer;color:var(--muted);
+    background:transparent;border:1px solid var(--line);border-radius:20px;padding:6px 14px;transition:.15s}
+  .tab:hover{color:var(--ink)}
+  .tab[aria-selected="true"]{background:rgba(var(--accent-rgb),.3);border-color:var(--accent-2);color:#fff}
+  .tab:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .ctl{display:grid;gap:4px;margin-bottom:12px}
+  .ctl label{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);
+    display:flex;justify-content:space-between;gap:10px}
+  .ctl label b{font-family:var(--mono);color:var(--accent-2);font-size:12px;text-transform:none;letter-spacing:0}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:3px;
+    background:#2b313d;outline:none;cursor:pointer}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;
+    background:var(--accent-2);border:2px solid var(--bg);cursor:pointer}
+  input[type=range]::-moz-range-thumb{width:15px;height:15px;border-radius:50%;background:var(--accent-2);
+    border:2px solid var(--bg);cursor:pointer}
+  input[type=range]:focus-visible{box-shadow:0 0 0 3px rgba(var(--accent-2-rgb),.4)}
+  select,textarea,input[type=text]{font-family:var(--mono);font-size:12.5px;color:var(--ink);
+    background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:7px 9px;width:100%}
+  select:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px solid var(--accent-2);outline-offset:1px}
+  textarea{line-height:1.55;resize:vertical}
+
+  /* ── stats / pills / code ─────────────────────────────────── */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:1px;
+    background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .stat{background:var(--panel);padding:10px 12px}
+  .stat .sl{font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--dim)}
+  .stat .sv{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--ink);margin-top:3px}
+  .stat .sv.ok{color:var(--ok)} .stat .sv.bad{color:var(--bad)} .stat .sv.warn{color:var(--warn)}
+  .stat .sv.acc{color:var(--accent-2)}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;letter-spacing:.5px;
+    padding:3px 9px;border-radius:20px;border:1px solid var(--line);color:var(--muted)}
+  .pill.ok{color:var(--ok);border-color:rgba(63,185,80,.5);background:rgba(63,185,80,.1)}
+  .pill.bad{color:var(--bad);border-color:rgba(248,81,73,.5);background:rgba(248,81,73,.1)}
+  .pill.warn{color:var(--warn);border-color:rgba(210,153,34,.5);background:rgba(210,153,34,.1)}
+  .pill.acc{color:var(--accent-2);border-color:rgba(var(--accent-2-rgb),.5);background:rgba(var(--accent-rgb),.18)}
+  pre.code{font-family:var(--mono);font-size:11.8px;line-height:1.62;background:#0b0e14;color:#dbe3ea;
+    border:1px solid var(--line);border-radius:10px;padding:13px 14px;overflow-x:auto;white-space:pre}
+  pre.code .k{color:#6cb6ff} pre.code .s{color:#8ddb8c} pre.code .c{color:#6b7484;font-style:italic}
+  pre.code .n{color:#e0b070} pre.code .b{color:#ddd6fe;font-weight:700}
+  .note{border-left:3px solid var(--accent);background:rgba(var(--accent-rgb),.12);border-radius:0 8px 8px 0;
+    padding:10px 13px;font-size:12.5px;color:var(--muted)}
+  .note b{color:var(--ink)}
+  .log{font-family:var(--mono);font-size:11.5px;max-height:230px;overflow-y:auto;display:grid;gap:5px}
+  .log div{background:var(--panel2);border-left:3px solid var(--line);border-radius:0 6px 6px 0;padding:6px 9px;color:var(--muted)}
+  .log div.hl{border-left-color:var(--accent-2);color:var(--ink);background:rgba(var(--accent-rgb),.15)}
+  .log div.ok{border-left-color:var(--ok)} .log div.bad{border-left-color:var(--bad)}
+  svg{display:block;max-width:100%;height:auto}
+  .svgwrap{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px;overflow-x:auto}
+  table.t{width:100%;border-collapse:collapse;font-size:12px}
+  table.t th{font-size:9.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--dim);
+    text-align:left;padding:0 8px 7px;border-bottom:1px solid var(--line)}
+  table.t td{padding:7px 8px;border-bottom:1px solid rgba(39,44,54,.6);color:var(--muted);font-family:var(--mono);font-size:11.8px}
+  table.t td.n{color:var(--ink);font-weight:600}
+
+  /* ── pitfalls ─────────────────────────────────────────────── */
+  details.pit{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:10px;overflow:hidden}
+  details.pit>summary{cursor:pointer;padding:12px 15px;font-size:13.5px;font-weight:650;color:var(--ink);
+    list-style:none;display:flex;gap:11px;align-items:flex-start}
+  details.pit>summary::-webkit-details-marker{display:none}
+  details.pit>summary::before{content:"\25B8";color:var(--accent-2);font-size:12px;line-height:1.5;transition:.2s}
+  details.pit[open]>summary::before{transform:rotate(90deg)}
+  details.pit>summary:focus-visible{outline:2px solid var(--accent-2);outline-offset:-2px}
+  details.pit .body{padding:0 15px 15px 39px;font-size:13px;color:var(--muted);display:grid;gap:9px}
+  details.pit .body .fix{color:var(--ok);font-weight:600}
+
+  /* ── MCQ ──────────────────────────────────────────────────── */
+  .mcq{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 17px;margin-bottom:13px}
+  .mcq .q{font-size:13.8px;font-weight:650;color:var(--ink);margin:0 0 11px;max-width:84ch}
+  .mcq .q span{color:var(--accent-2);font-family:var(--mono);margin-right:7px}
+  .opts{display:grid;gap:7px}
+  .opt{text-align:left;font-family:inherit;font-size:13px;cursor:pointer;color:var(--muted);
+    background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:9px 12px;transition:.15s}
+  .opt:hover:not(:disabled){border-color:var(--accent-2);color:var(--ink)}
+  .opt:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .opt.right{border-color:var(--ok);background:rgba(63,185,80,.13);color:#bce8c4}
+  .opt.wrong{border-color:var(--bad);background:rgba(248,81,73,.12);color:#f4b6b1}
+  .opt.dim{opacity:.5}
+  .fb{margin-top:11px;font-size:12.5px;line-height:1.6;color:var(--muted);display:none;
+    border-left:3px solid var(--line);padding-left:11px}
+  .fb.show{display:block}
+  .fb.show.good{border-left-color:var(--ok)} .fb.show.poor{border-left-color:var(--bad)}
+  .fb b{color:var(--ink)}
+
+  /* ── next ─────────────────────────────────────────────────── */
+  .nextgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+  .nextcard{display:block;background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:15px 17px;transition:.18s;color:inherit}
+  .nextcard:hover{border-color:var(--accent-2);transform:translateY(-2px);text-decoration:none}
+  .nextcard .nl{font-size:10px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--accent-2)}
+  .nextcard .nt{font-size:14.5px;font-weight:700;color:var(--ink);margin-top:5px}
+  .nextcard .nd{font-size:12px;color:var(--muted);margin-top:5px}
+
+  @media (max-width:720px){
+    .grid2,.grid3,.split,.split-r{grid-template-columns:1fr}
+    section{padding:26px 15px 32px}
+    nav.top{padding:10px 15px;gap:8px}
+    nav.top .crumbs{font-size:11px}
+    p,.lead{max-width:none}
+  }
+
+  /* ── week-page shared ─────────────────────────────────────── */
+  #hero{padding:52px 22px 40px;
+    background:radial-gradient(ellipse 820px 340px at 22% -14%,rgba(var(--accent-rgb),.3),transparent 66%)}
+  #hero .wk{font-family:var(--mono);font-size:12px;letter-spacing:2px;color:var(--accent-2);font-weight:700}
+  #hero h1{max-width:24ch}
+  #hero .promise{font-size:16.5px;color:var(--ink);max-width:74ch;margin-top:10px;line-height:1.55}
+  .secnum{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;
+    background:rgba(var(--accent-rgb),.35);border:1px solid var(--accent-2);color:#fff;font-family:var(--mono);
+    font-size:11px;font-weight:700;margin-right:9px;vertical-align:2px}
+  .sw{display:inline-flex;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex-wrap:wrap}
+  .sw button{font-family:inherit;font-size:11.5px;font-weight:650;cursor:pointer;color:var(--muted);
+    background:var(--panel2);border:none;padding:7px 13px;transition:.15s}
+  .sw button[aria-pressed="true"]{background:rgba(var(--accent-rgb),.32);color:#fff}
+  .sw button:focus-visible{outline:2px solid var(--accent-2);outline-offset:-2px}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-top:10px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
+
+  /* ── week-6 specific ──────────────────────────────────────── */
+  .tablewrap{overflow-x:auto}
+  .codepair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+  .lanes{display:grid;gap:12px}
+  .toggles{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:16px;align-items:start}
+  .dash{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}
+  a.btn{display:inline-flex;align-items:center;text-decoration:none}
+  a.btn:hover{text-decoration:none}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:5px 12px;font-size:12px;color:var(--muted)}
+  .kv b{font-family:var(--mono);font-size:11.5px;color:var(--ink-dim);font-weight:600;white-space:nowrap}
+  .chk{font-family:var(--mono);font-size:11.5px;font-weight:650;cursor:pointer;color:var(--muted);
+    background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:6px 11px;transition:.15s}
+  .chk:hover{color:var(--ink);border-color:var(--accent-2)}
+  .chk[aria-pressed="true"]{background:rgba(var(--accent-rgb),.3);border-color:var(--accent-2);color:#fff}
+  .chk:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  pre.code .dead{opacity:.28;text-decoration:line-through}
+  pre.code .keep{background:rgba(var(--accent-rgb),.24);border-radius:3px}
+  .verdict{border:1px solid var(--accent-2);border-radius:12px;padding:14px 16px;
+    background:rgba(var(--accent-rgb),.14)}
+  .verdict .vt{font-size:15px;font-weight:750;color:#fff}
+  .axis{display:grid;gap:5px;margin-bottom:11px}
+  .axis .al{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted)}
+  .axis .ao{display:flex;gap:6px;flex-wrap:wrap}
+
+  /* ── mobile guard (identical on every page): single column under 720px,
+        no horizontal overflow. Must stay last in the sheet. ───────────── */
+  @media (max-width:720px){
+    .grid2,.grid3,.grid2.narrow-right,.split,.split-r,.codepair,
+    .nextgrid,.dash,.toggles,.lanes,.weeknav,.weeks,.roles,.stack{
+      grid-template-columns:minmax(0,1fr)}
+    [class*="grid"]>*,.stack>*,.wrap>*,.panel,.panel.tight,.nextcard,.wk,.row>*{min-width:0}
+    pre,pre.code,.svgwrap,svg,canvas,table,select,input,textarea,.mono{max-width:100%}
+    pre,pre.code,.svgwrap,.tablewrap{overflow-x:auto}
+    code,.mono{overflow-wrap:anywhere}
+    .ctl,.ctl>*,.controls>*,.row,.legend>*{min-width:0}
+    .ctl{flex-wrap:wrap} .ctl select,.ctl input[type=range]{flex:1 1 100%;width:100%}
+    p,.lead,.sub,.promise{max-width:none}
+  }
+</style>
+</head>
+<body>
+
+<nav class="top"><a href="index.html">Low-Latency Trading Arena</a><span class="crumbs"><a href="week5.html">← Week 5</a> · <b>Week 6 · Compile-Time &amp; Policy-Based Design</b> · <a href="week7.html">Week 7 →</a></span></nav>
+
+<!-- ══════════════ HERO ══════════════ -->
+<section id="hero">
+  <div class="wk">WEEK 6 · 15-WEEK TRACK  ·  SESSION 4 · 9-SESSION TRACK</div>
+  <h1>Compile-Time &amp; Policy-Based Design</h1>
+  <p class="promise">The fastest instruction is the one you never execute. Last week you gave the
+  compiler the types; this week you give it the <em class="hi">tables, the dispatch and the
+  configuration</em> too — and then you test the zero-overhead claim instead of repeating it, because
+  compile-time design has a real bill: build time, debuggability, and the flag you can no longer flip
+  at 09:31.</p>
+  <ul class="you">
+    <li>Compute at build time with <code>constexpr</code> and <code>consteval</code>, and prove it with <code>static_assert</code> — then explain why a <code>constexpr</code> function is <strong>not</strong> a promise.</li>
+    <li>Replace a virtual hook with <strong>CRTP</strong> and trace the call path step by step for both.</li>
+    <li>Dispatch a closed message set with <code>std::variant</code> and a compile-time visitor, and with <strong>tag dispatch</strong>, and price all four designs against each other.</li>
+    <li>Compose a market-data handler from <em class="hi">policies</em> and watch the generated hot path shrink line by line.</li>
+    <li>Say — out loud, with a number — when compile-time design is the wrong answer.</li>
+  </ul>
+  <div class="row" style="margin-top:22px">
+    <span class="pill acc">Lab: CRTP beside virtual, a <code>constexpr</code> table, a policy, a visitor</span>
+    <span class="pill">HW6: static vs dynamic dispatch, shown in <code>-O2 -S</code></span>
+    <span class="pill warn">Project Phase 1: no virtual on the receive path</span>
+  </div>
+</section>
+
+<!-- ══════════════ WHAT ══════════════ -->
+<section id="what">
+  <div class="kicker">Part 1</div>
+  <h2><span class="secnum">1</span>What is it? Moving work from run time to build time</h2>
+  <p class="lead">Your compiler is a computer, and it is idle while your bot is trading. Anything it can
+  finish during the build — a conversion table, a tick ladder, a decision about which handler to call —
+  is work your hot path never does. The three keywords that let you say so are
+  <code>constexpr</code>, <code>consteval</code> and <code>static_assert</code>, and the difference
+  between the first two is the difference between a <em class="hi">permission</em> and a
+  <em class="hi">guarantee</em>.</p>
+
+  <div class="grid3" style="margin-top:16px">
+    <div class="panel">
+      <h4><code>constexpr</code> — may</h4>
+      <p class="sub">A function that <strong>can</strong> be evaluated at compile time when its
+      arguments are constant expressions, and that compiles to an ordinary runtime function otherwise.
+      Nothing forces the compile-time path. Call it with a variable read from a socket and it runs, at
+      run time, exactly as slowly as you feared.</p>
+    </div>
+    <div class="panel">
+      <h4><code>consteval</code> — must</h4>
+      <p class="sub">An <em class="hi">immediate function</em> (C++20). It must be evaluated at compile
+      time; calling it with a runtime value is a compile error, and no runtime copy of it is ever
+      emitted. Use it when a runtime evaluation would be a bug rather than a slowdown — parsing a
+      symbol table, building a fee ladder, checking a wire layout.</p>
+    </div>
+    <div class="panel">
+      <h4><code>static_assert</code> — prove</h4>
+      <p class="sub">The cheapest test you will ever write, because it runs during the build and costs
+      nothing afterwards. Assert tick sizes, <code>sizeof</code>, <code>alignof</code>, wire offsets and
+      table contents. A violated assumption becomes a failed build instead of a failed session.</p>
+    </div>
+  </div>
+
+  <h3 style="margin-top:30px">Interactive · where does the table get built?</h3>
+  <p class="sub" style="margin-bottom:12px">The same tick-size table, four ways. Watch the marker move
+  along the program's lifetime — build, link, load, <code>main</code>, first tick — and read what each
+  choice costs where.</p>
+
+  <div class="split">
+    <div class="stack">
+      <div class="svgwrap">
+        <svg id="ctSvg" viewBox="0 0 660 250" role="img" aria-label="A timeline of a program's lifetime from compilation to the first tick, marking where the lookup table is built for each of four strategies"></svg>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="sl">Work before <code>main</code></div><div class="sv" id="ctInit">—</div></div>
+        <div class="stat"><div class="sl">Bytes in the binary</div><div class="sv" id="ctBin">—</div></div>
+        <div class="stat"><div class="sl">Ops per lookup</div><div class="sv" id="ctOps">—</div></div>
+        <div class="stat"><div class="sl">Section</div><div class="sv acc" id="ctSec">—</div></div>
+        <div class="stat"><div class="sl"><code>static_assert</code>able</div><div class="sv" id="ctSa">—</div></div>
+      </div>
+      <div class="note" id="ctMsg"></div>
+    </div>
+    <div class="stack">
+      <div class="panel">
+        <h3>How the table is built</h3>
+        <div class="row" role="group" aria-label="Choose how the table is built" style="margin-bottom:12px">
+          <div class="sw" id="ctPick">
+            <button type="button" data-k="loop" aria-pressed="false">loop in main()</button>
+            <button type="button" data-k="dynamic" aria-pressed="false">static initialiser</button>
+            <button type="button" data-k="constexpr" aria-pressed="true">constexpr</button>
+            <button type="button" data-k="consteval" aria-pressed="false">consteval</button>
+          </div>
+        </div>
+        <div class="ctl"><label for="ctN">Table entries <b id="ctNV">256</b></label>
+          <input type="range" id="ctN" min="8" max="1024" step="8" value="256" aria-label="Number of entries in the lookup table"/></div>
+        <div class="kv" id="ctKv" style="margin-top:12px"></div>
+      </div>
+      <pre class="code" id="ctCode"></pre>
+    </div>
+  </div>
+
+  <div class="note" style="margin-top:20px"><b>The trap in one line.</b>
+  <code>constexpr int t = ticks_from_price(px);</code> is compile-time because the
+  <em class="hi">variable</em> is <code>constexpr</code>. <code>int t =
+  ticks_from_price(px);</code> with the same function is a normal call. If you want the guarantee,
+  either declare the destination <code>constexpr</code>, or declare the function
+  <code>consteval</code>.</div>
+</section>
+
+<!-- ══════════════ HOW ══════════════ -->
+<section id="how">
+  <div class="kicker">Part 2</div>
+  <h2><span class="secnum">2</span>How does it work? Four ways to choose a handler</h2>
+  <p class="lead">Every design in this section answers one question — <em class="hi">given a message,
+  which code runs?</em> — and they differ only in <strong>when</strong> the question is answered.
+  Virtual answers it per call, from memory. A <code>switch</code> answers it per call, from a tag.
+  <code>std::visit</code> and CRTP answer it while compiling.</p>
+
+  <h3 style="margin-top:24px">Interactive · CRTP vs virtual, one step at a time</h3>
+  <p class="sub" style="margin-bottom:12px">Press <b>Step</b> to walk a single call through both
+  designs. The virtual lane has six stages and two of them are dependent memory loads; the CRTP lane
+  has one, and the <code>static_cast</code> emits no instruction at all.</p>
+
+  <div class="split">
+    <div class="stack">
+      <div class="svgwrap">
+        <svg id="crSvg" viewBox="0 0 660 260" role="img" aria-label="Two lanes showing the stages of a virtual call and of a CRTP call, with a token advancing through each stage and a running cycle count"></svg>
+      </div>
+      <div class="row">
+        <button class="btn primary" type="button" id="crStep">Step</button>
+        <button class="btn" type="button" id="crPlay">Play</button>
+        <button class="btn" type="button" id="crReset">Reset</button>
+      </div>
+      <div class="panel tight">
+        <h3 id="crName">—</h3>
+        <p class="sub" id="crWhat"></p>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="sl">Virtual · cycles</div><div class="sv bad" id="crVc">—</div></div>
+        <div class="stat"><div class="sl">CRTP · cycles</div><div class="sv ok" id="crTc">—</div></div>
+        <div class="stat"><div class="sl">Dependent loads</div><div class="sv warn" id="crLoads">—</div></div>
+        <div class="stat"><div class="sl">Inlinable</div><div class="sv" id="crInl">—</div></div>
+      </div>
+    </div>
+    <div class="stack">
+      <pre class="code">
+<span class="c">// what we are replacing: a vtable per object</span>
+<span class="k">struct</span> <span class="b">IStrategy</span> {
+  <span class="k">virtual</span> <span class="k">double</span> signal(<span class="k">const</span> Book&amp;) <span class="k">const</span> = <span class="n">0</span>;
+  <span class="k">virtual</span> ~IStrategy() = <span class="k">default</span>;
+};
+<span class="k">struct</span> <span class="b">VMomentum</span> : IStrategy {
+  <span class="k">double</span> signal(<span class="k">const</span> Book&amp; b) <span class="k">const</span> <span class="k">override</span> { <span class="k">return</span> b.obi * <span class="n">0.5</span>; }
+};</pre>
+      <pre class="code">
+<span class="c">// CRTP: the base is templated on its own derived type</span>
+<span class="k">template</span> &lt;<span class="k">class</span> <span class="b">Derived</span>&gt;
+<span class="k">struct</span> <span class="b">Strategy</span> {
+  <span class="k">double</span> signal(<span class="k">const</span> Book&amp; b) <span class="k">const</span> {
+    <span class="k">return</span> <span class="k">static_cast</span>&lt;<span class="k">const</span> Derived*&gt;(<span class="k">this</span>)-&gt;signal_impl(b);
+  }                                    <span class="c">// no vtable, no load</span>
+};
+<span class="k">struct</span> <span class="b">Momentum</span> : Strategy&lt;Momentum&gt; {
+  <span class="k">double</span> signal_impl(<span class="k">const</span> Book&amp; b) <span class="k">const</span> { <span class="k">return</span> b.obi * <span class="n">0.5</span>; }
+};
+<span class="k">struct</span> <span class="b">MeanRevert</span> : Strategy&lt;MeanRevert&gt; {
+  <span class="k">double</span> signal_impl(<span class="k">const</span> Book&amp; b) <span class="k">const</span> { <span class="k">return</span> -b.obi * <span class="n">0.25</span>; }
+};
+<span class="c">// generic over strategies — and NO common base pointer</span>
+<span class="k">template</span> &lt;<span class="k">class</span> S&gt; <span class="k">double</span> tick(<span class="k">const</span> Strategy&lt;S&gt;&amp; s, <span class="k">const</span> Book&amp; b) {
+  <span class="k">return</span> s.signal(b);              <span class="c">// resolves &amp; inlines</span>
+}</pre>
+      <div class="note"><b>The thing CRTP takes away.</b> There is no
+      <code>std::vector&lt;Strategy*&gt;</code>, because <code>Strategy&lt;Momentum&gt;</code> and
+      <code>Strategy&lt;MeanRevert&gt;</code> are unrelated types. If you need a heterogeneous
+      container chosen from a config file, you need type erasure — and that is a legitimate reason to
+      keep a virtual interface at the edge.</div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:32px">Interactive · the zero-overhead claim, on a bench</h3>
+  <p class="sub" style="margin-bottom:12px">Four designs, the same closed set of messages, the same
+  work per message. p50 is where the abstraction shows; <b>p99 is where the branch predictor
+  does</b>. Raise the number of alternatives and shuffle the mix to see which designs care.</p>
+
+  <div class="split-r">
+    <div class="panel">
+      <h3>The receive path</h3>
+      <div class="ctl"><label for="bmMsgs">Messages per tick <b id="bmMsgsV">16</b></label>
+        <input type="range" id="bmMsgs" min="1" max="64" value="16" aria-label="Messages handled per tick"/></div>
+      <div class="ctl"><label for="bmAlt">Alternatives in the union <b id="bmAltV">5</b></label>
+        <input type="range" id="bmAlt" min="2" max="8" value="5" aria-label="Number of message types in the union"/></div>
+      <div class="ctl"><label for="bmMix">Order of arrival</label>
+        <select id="bmMix" aria-label="How predictable the message order is">
+          <option value="runs">long runs of one type — very predictable</option>
+          <option value="mixed" selected>mixed, with structure</option>
+          <option value="random">uniformly shuffled — unpredictable</option>
+        </select></div>
+      <div class="row">
+        <button class="btn" type="button" id="bmRun">Re-run the bench</button>
+      </div>
+      <div class="note" style="margin-top:12px"><b>Cost model, stated.</b> Handler work
+      1.10&#8239;ns. Virtual: +0.90 vtable load, +0.80 indirect call, +1.10 lost inlining.
+      <code>switch</code> on a tag: +0.25 bounds test, +0.55 jump table (an indirect jump — it
+      mispredicts too), +0.90 lost inlining across the arms. <code>std::visit</code>: +0.35 for the
+      variant's own index dispatch, arms inlined. CRTP: 0. Mispredicts cost 15 cycles at
+      4.0&#8239;GHz and land almost entirely in p99. Directional — measure your own.</div>
+    </div>
+    <div class="stack">
+      <div class="svgwrap">
+        <svg id="bmSvg" viewBox="0 0 660 260" role="img" aria-label="A grouped bar chart comparing the p50 and p99 cost per tick of virtual dispatch, a switch on a tag, std::visit with a compile-time visitor, and CRTP static dispatch"></svg>
+      </div>
+      <div class="tablewrap">
+        <table class="t"><thead><tr><th>design</th><th>ns/msg p50</th><th>ns/msg p99</th><th>ns/tick p50</th><th>mispredict</th><th>zero-overhead?</th></tr></thead>
+        <tbody id="bmBody"></tbody></table>
+      </div>
+      <div class="note" id="bmMsg"></div>
+    </div>
+  </div>
+
+  <div class="codepair" style="margin-top:26px">
+    <div class="stack">
+      <div class="sub"><b style="color:var(--ink)"><code>std::variant</code> + compile-time visitor</b></div>
+      <pre class="code">
+<span class="k">using</span> <span class="b">Msg</span> = std::variant&lt;BookUpdate, Fill, SessionEvt&gt;;
+
+<span class="k">struct</span> <span class="b">Router</span> {                     <span class="c">// one visitor, N arms</span>
+  <span class="k">template</span> &lt;<span class="k">class</span> T&gt; <span class="k">double</span> <span class="k">operator</span>()(<span class="k">const</span> T&amp; m) <span class="k">const</span> {
+    <span class="k">if</span> <span class="k">constexpr</span> (std::is_same_v&lt;T, BookUpdate&gt;) <span class="k">return</span> decide(m);
+    <span class="k">else</span> <span class="k">if</span> <span class="k">constexpr</span> (std::is_same_v&lt;T, Fill&gt;) <span class="k">return</span> track(m);
+    <span class="k">else</span> <span class="k">if</span> <span class="k">constexpr</span> (std::is_same_v&lt;T, SessionEvt&gt;) <span class="k">return</span> flag(m);
+    <span class="k">else</span> <span class="k">static_assert</span>(always_false&lt;T&gt;, <span class="s">"unhandled message"</span>);
+  }
+};
+<span class="k">double</span> on_msg(<span class="k">const</span> Msg&amp; m) { <span class="k">return</span> std::visit(Router{}, m); }
+
+<span class="c">// or, with the classic lambda overload set:</span>
+<span class="k">template</span> &lt;<span class="k">class</span>... Fs&gt; <span class="k">struct</span> <span class="b">overload</span> : Fs... { <span class="k">using</span> Fs::<span class="k">operator</span>()...; };
+<span class="k">template</span> &lt;<span class="k">class</span>... Fs&gt; overload(Fs...) -&gt; overload&lt;Fs...&gt;;</pre>
+      <div class="note"><b>Why the <code>static_assert</code> arm matters.</b> Add
+      <code>CancelOrder</code> to the variant and this fails to build with your message. A
+      <code>[](auto&amp;){}</code> catch-all would have compiled and silently dropped it — which is the
+      same class of bug as a <code>default:</code> that does nothing.</div>
+    </div>
+    <div class="stack">
+      <div class="sub"><b style="color:var(--ink)">Tag dispatch — overload resolution as a switch</b></div>
+      <div class="row" role="group" aria-label="Choose a tag" style="margin-bottom:10px">
+        <div class="sw" id="tgPick"></div>
+      </div>
+      <pre class="code" id="tgCode"></pre>
+      <div class="panel tight">
+        <h3>What the compiler did</h3>
+        <div class="kv" id="tgKv"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ WHY ══════════════ -->
+<section id="why">
+  <div class="kicker">Part 3</div>
+  <h2><span class="secnum">3</span>Why it matters: compose the handler, then pay for it</h2>
+  <p class="lead">Policy-based design is Alexandrescu's answer to the deep virtual hierarchy: a host
+  class takes its behaviour as <em class="hi">template parameters</em>, one per axis of variation, and
+  the compiler stitches them together and inlines through the joins. Turning a feature off does not set
+  a flag — it changes a type, and the code for that feature stops existing.</p>
+
+  <h3 style="margin-top:24px">Interactive · the policy composer</h3>
+  <p class="sub" style="margin-bottom:12px">Compose <code>MdHandler</code> from five policies and watch
+  the emitted hot path shrink line by line. The struck-out lines are not skipped at run time — they are
+  <em class="hi">not there</em>.</p>
+
+  <div class="split-r">
+    <div class="panel">
+      <h3>Choose the policies</h3>
+      <div id="poAxes"></div>
+      <div class="row">
+        <button class="btn" type="button" id="poHot">Hot-path build</button>
+        <button class="btn" type="button" id="poSafe">Debug build</button>
+      </div>
+      <div class="stats" style="margin-top:14px">
+        <div class="stat"><div class="sl">ns / packet</div><div class="sv" id="poNs">—</div></div>
+        <div class="stat"><div class="sl">Instructions</div><div class="sv" id="poIns">—</div></div>
+        <div class="stat"><div class="sl">Code size</div><div class="sv" id="poSz">—</div></div>
+        <div class="stat"><div class="sl">Branches</div><div class="sv" id="poBr">—</div></div>
+      </div>
+    </div>
+    <div class="stack">
+      <pre class="code" id="poCode"></pre>
+      <div class="svgwrap">
+        <svg id="poSvg" viewBox="0 0 620 152" role="img" aria-label="A bar comparing the instruction count of the composed hot path against the fully-featured build and against a runtime-flag version of the same handler"></svg>
+      </div>
+      <div class="note" id="poMsg"></div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:32px">Interactive · what compile-time design costs</h3>
+  <p class="sub" style="margin-bottom:12px">Now the other side of the ledger. Policies multiply:
+  every axis you add multiplies the set of types your build system, your error messages and your
+  debugger have to cope with. And a type is not a runtime knob.</p>
+
+  <div class="split">
+    <div class="stack">
+      <div class="svgwrap">
+        <svg id="hcSvg" viewBox="0 0 660 200" role="img" aria-label="A chart of how the number of possible instantiations and the build time grow as policy axes are added"></svg>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="sl">Possible types</div><div class="sv warn" id="hcTypes">—</div></div>
+        <div class="stat"><div class="sl">Instantiated in CI</div><div class="sv" id="hcCi">—</div></div>
+        <div class="stat"><div class="sl">Clean build</div><div class="sv" id="hcBuild">—</div></div>
+        <div class="stat"><div class="sl">Mangled name</div><div class="sv" id="hcName">—</div></div>
+      </div>
+      <div class="verdict">
+        <div class="nl" style="font-size:10px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--accent-2)">Verdict</div>
+        <div class="vt" id="hcT">—</div>
+        <p class="sub" id="hcWhy" style="margin-top:8px"></p>
+      </div>
+    </div>
+    <div class="stack">
+      <div class="panel">
+        <h3>Your configuration space</h3>
+        <div class="ctl"><label for="hcAx">Policy axes <b id="hcAxV">3</b></label>
+          <input type="range" id="hcAx" min="1" max="7" value="3" aria-label="Number of policy axes"/></div>
+        <div class="ctl"><label for="hcOp">Options per axis <b id="hcOpV">2</b></label>
+          <input type="range" id="hcOp" min="2" max="4" value="2" aria-label="Options available on each policy axis"/></div>
+        <div class="ctl"><label for="hcTest">Combinations covered by tests <b id="hcTestV">4</b></label>
+          <input type="range" id="hcTest" min="1" max="24" value="4" aria-label="Number of policy combinations covered by tests"/></div>
+        <div class="row">
+          <button class="btn" type="button" id="hcRt" aria-pressed="false">Must be switchable at run time</button>
+        </div>
+      </div>
+      <div class="panel tight">
+        <h3>The four honest costs</h3>
+        <ul class="plain">
+          <li><b>Build time.</b> Every instantiation is a fresh compile of the whole host class. Templates are not free; they are free <em class="hi">at run time</em>.</li>
+          <li><b>Debuggability.</b> A fully inlined hot path has no frames to step into and no symbols to breakpoint. <code>-Og</code> and <code>[[gnu::noinline]]</code> exist for exactly this afternoon.</li>
+          <li><b>Error quality.</b> A wrong policy fails deep inside the host. Constrain the axes with concepts so the message names the policy.</li>
+          <li><b>Operability.</b> You cannot turn a type on at 09:31. Anything an on-call engineer might need to flip mid-session must stay a runtime flag, and should be off the hot path anyway.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid2" style="margin-top:26px">
+    <div class="panel">
+      <h4>The rule that keeps this sane</h4>
+      <p class="sub"><strong>Compile-time on the hot path, run time at the edges.</strong> The receive
+      path, the codec and the signal are a closed set you know at build time — template them, compose
+      them, inline them, and let <code>static_assert</code> guard the layout. Configuration loading,
+      the reporting tab, the shutdown sequence and anything an operator touches can be as virtual and
+      as dynamic as you like, because none of it runs per tick.</p>
+      <p class="sub">When you need both — a strategy chosen from a config file <em class="hi">and</em> an
+      inlined hot path — put the type erasure at the boundary: pick the concrete
+      <code>Bot&lt;Policies…&gt;</code> once at startup behind one virtual <code>run()</code>, and pay
+      that indirection exactly once per session instead of once per message.</p>
+    </div>
+    <div class="panel">
+      <h4>Where this lands in your bot</h4>
+      <p class="sub"><code>shared/messages.py</code> is a pydantic discriminated union keyed on a
+      <code>type</code> field. Mirror the closed set in C++ as a <code>std::variant</code>, dispatch
+      with the <code>if constexpr</code> visitor above, and the hand-rolled
+      <code>switch (msg.type)</code> disappears from the receive path — along with the
+      <code>default:</code> that used to swallow the message you forgot.</p>
+      <p class="sub">Then compose the handler: <code>NoLog</code> and <code>NoChecksum</code> in the
+      session build, <code>StderrLog</code> and <code>Crc32</code> in the replay build, from the same
+      source. Re-run <code>scripts/latency_replay.py</code> and
+      <code>scripts/latency_report.py</code> before and after, and write down what happened to p99.9 —
+      including “nothing”, if that is the honest answer.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ PITFALLS ══════════════ -->
+<section id="pitfalls">
+  <div class="kicker">Part 4</div>
+  <h2><span class="secnum">4</span>Five ways this goes wrong</h2>
+  <p class="lead">These are the five that cost marks on HW6, every time. Open them.</p>
+
+  <details class="pit"><summary>Assuming <code>constexpr</code> means “at compile time”</summary>
+    <div class="body">
+      <p><code>constexpr</code> on a function is a <em class="hi">permission</em>, not an instruction. It
+      says “this <strong>may</strong> be evaluated at compile time if the arguments allow it”. Call
+      <code>ticks_from_price(px)</code> where <code>px</code> came off a socket and you get an ordinary
+      function call, every tick, with the floating multiply and the rounding you thought you had
+      pre-computed. Nothing warns you; the code is correct, it is just running in the wrong era.</p>
+      <p>The same illusion with tables: <code>const std::array&lt;double,256&gt; T = make_ticks();</code>
+      where <code>make_ticks</code> is <code>constexpr</code> may still be a
+      <em class="hi">dynamic initialiser</em> that runs before <code>main</code> — and if two
+      translation units do that, you also inherit the static-initialisation-order problem.</p>
+      <p class="fix">Fix: force it. Declare the destination <code>constexpr auto TICKS =
+      make_ticks();</code> — now it must be a constant expression or the build fails. Where a runtime
+      evaluation would be a bug, use <code>consteval</code>. And prove it:
+      <code>static_assert(TICKS[0] == 1);</code> only compiles if the value really exists at build time.</p>
+    </div></details>
+
+  <details class="pit"><summary>CRTP that recurses forever</summary>
+    <div class="body">
+      <p>The classic. Your base is <code>template &lt;class D&gt; struct Strategy { double signal(const
+      Book&amp; b) const { return static_cast&lt;const D*&gt;(this)-&gt;signal(b); } };</code> — base
+      and derived hook share the <em class="hi">same name</em>. A derived class that overrides
+      <code>signal</code> works. A derived class that forgets — or that misspells it, or gets the
+      <code>const</code> qualification wrong so it does not hide the base — resolves the call back to
+      <code>Strategy::signal</code>, which calls it again. It compiles cleanly and blows the stack on
+      the first tick.</p>
+      <p>The neighbouring mistake is forgetting that the base is templated on the derived type at all:
+      <code>struct Momentum : Strategy&lt;MeanRevert&gt;</code> compiles, and the
+      <code>static_cast</code> then reinterprets your object as an unrelated type. That is undefined
+      behaviour with no diagnostic.</p>
+      <p class="fix">Fix: give the hook a different name — <code>signal</code> in the base,
+      <code>signal_impl</code> in the derived — so a missing override is a compile error rather than a
+      loop. Then assert the relationship in the base:
+      <code>static_assert(std::is_base_of_v&lt;Strategy&lt;D&gt;, D&gt;)</code>, in a member function
+      body so <code>D</code> is complete by then. Better still, constrain the derived type with a
+      concept that requires <code>signal_impl</code>.</p>
+    </div></details>
+
+  <details class="pit"><summary>A generic catch-all in your visitor</summary>
+    <div class="body">
+      <p><code>std::visit(overload{ …, [](auto&amp;){} }, m)</code> looks tidy and it disables the one
+      guarantee you switched to a variant for. The whole point of a closed set is that adding
+      <code>CancelOrder</code> to the union should <em class="hi">break the build</em> until you handle
+      it. A generic lambda matches it, does nothing, and the message vanishes — the exact failure mode
+      of a <code>default:</code> label that silently returns.</p>
+      <p>Two more edges worth knowing. <code>std::visit</code> on a variant whose alternatives are not
+      all handled with the same return type will not compile at all, which is good. And a variant can
+      become <em class="hi">valueless by exception</em> if an alternative's move constructor throws
+      mid-assignment; <code>std::visit</code> then throws <code>std::bad_variant_access</code>. Keep
+      hot-path alternatives trivially copyable and that state is unreachable.</p>
+      <p class="fix">Fix: no <code>auto</code> arm on the hot path. Either write one lambda per
+      alternative, or use the <code>if constexpr</code> chain with
+      <code>else static_assert(always_false&lt;T&gt;, "unhandled message")</code> — the dependent-false
+      idiom, because a bare <code>static_assert(false)</code> fires even in discarded arms.</p>
+    </div></details>
+
+  <details class="pit"><summary>Policy creep — 243 types nobody tested</summary>
+    <div class="body">
+      <p>Five policy axes with three options each is 243 distinct instantiations of your handler. Your
+      CI builds four of them. The other 239 are code that has never been compiled, which means they
+      have never been type-checked either — a policy combination nobody tried can fail to build
+      <em class="hi">months</em> later, at the moment somebody needs it.</p>
+      <p>The build cost is the visible half: each combination is a fresh compile of the whole host
+      class, and template-heavy translation units are where minutes go. The invisible half is the
+      mangled names, which get long enough to make a stack trace unreadable and a
+      <code>nm</code> listing useless.</p>
+      <p class="fix">Fix: keep the axes genuinely orthogonal and few — if two policies are always
+      changed together, they are one policy. Give every axis a default so the common instantiation is
+      one word. Constrain each axis with a concept so a wrong policy fails at the parameter with its own
+      name. Then <code>static_assert</code>-instantiate the combinations you actually ship, in one small
+      translation unit, so CI type-checks them all.</p>
+    </div></details>
+
+  <details class="pit"><summary>The build you cannot debug, and the flag you cannot flip</summary>
+    <div class="body">
+      <p>A fully inlined, policy-composed hot path has no stack frames. There is nothing to step into,
+      no symbol to breakpoint, and the profiler attributes every cycle to one enormous
+      <code>on_packet</code>. Meanwhile a deep template error prints the instantiation stack instead of
+      the mistake, and a <code>constexpr</code> loop that got too big fails with
+      <em class="hi">constexpr evaluation hit maximum step limit</em>, which reads like a compiler bug
+      and is not.</p>
+      <p>The operational version of this is worse than an afternoon. Logging chosen by a policy cannot
+      be turned on during the session it would have explained. If an on-call engineer might need it,
+      compile-time was the wrong place for it.</p>
+      <p class="fix">Fix: keep a <code>-Og</code> build with <code>[[gnu::noinline]]</code> on the
+      handlers for the afternoons you need frames, and check its behaviour matches. Raise
+      <code>-fconstexpr-steps</code> / <code>-fconstexpr-ops-limit</code> when a table legitimately
+      needs it. And draw the line explicitly: anything an operator flips is a runtime flag, read once
+      per session, off the hot path — never a template parameter.</p>
+    </div></details>
+</section>
+
+<!-- ══════════════ CHECK ══════════════ -->
+<section id="check">
+  <div class="kicker">Part 5</div>
+  <h2><span class="secnum">5</span>Check yourself</h2>
+  <p class="lead">Three questions, instant feedback, nothing recorded.</p>
+
+  <div class="mcq" data-a="2" data-exp="<b>It compiles, and runs at run time, every tick.</b> <code>constexpr</code> on a function is a permission — “this <em>may</em> be evaluated at compile time” — not a requirement. Given an argument that is not a constant expression, the compiler emits an ordinary function and calls it, with the multiply and the rounding you believed you had pre-computed, and it says nothing about it. There are exactly two ways to get the guarantee. Declare the destination <code>constexpr</code>: <code>constexpr auto T = make_ticks();</code> must be a constant expression or the build fails. Or declare the function <code>consteval</code>, which makes a runtime call a compile error and emits no runtime copy at all. Then prove it with a <code>static_assert</code> on the result, which only compiles if the value genuinely exists at build time. And watch the middle case: a <code>const</code> — not <code>constexpr</code> — array initialised by a <code>constexpr</code> function may still be a dynamic initialiser running before <code>main</code>.">
+    <p class="q"><span>Q1</span><code>constexpr std::int64_t ticks_from_price(double px);</code> called as <code>auto t = ticks_from_price(msg.px);</code>, where <code>msg</code> came off a socket. What happens?</p>
+    <div class="opts">
+      <button class="opt" type="button">Compile error — a <code>constexpr</code> function needs constant arguments</button>
+      <button class="opt" type="button">It is evaluated at compile time; the compiler proves <code>px</code>'s range</button>
+      <button class="opt" type="button">It compiles and runs at run time, with no diagnostic</button>
+      <button class="opt" type="button">It compiles, and the result is cached after the first call</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+
+  <div class="mcq" data-a="1" data-exp="<b>Infinite recursion on the first call — it compiles cleanly and blows the stack.</b> <code>static_cast&lt;const D*&gt;(this)-&gt;signal(b)</code> performs name lookup in <code>D</code>. If <code>D</code> declares <code>signal</code>, it hides the base's and everything works. If <code>D</code> does not — because it was forgotten, or misspelled, or declared without <code>const</code> so it does not hide the base overload — lookup finds <code>Strategy&lt;D&gt;::signal</code> and you call yourself. There is no diagnostic, because the code is perfectly well-formed; it is simply a loop. This is the single most common CRTP bug and the reason for the naming convention: <code>signal</code> in the base, <code>signal_impl</code> in the derived. A missing <code>signal_impl</code> is then a compile error with a clear message. Belt and braces: <code>static_assert(std::is_base_of_v&lt;Strategy&lt;D&gt;, D&gt;)</code> inside a member function body — where <code>D</code> is complete — catches the other classic, <code>struct Momentum : Strategy&lt;MeanRevert&gt;</code>.">
+    <p class="q"><span>Q2</span>Your CRTP base calls <code>static_cast&lt;const D*&gt;(this)-&gt;signal(b)</code> from a method also named <code>signal</code>. A new derived class forgets to define <code>signal</code>. What happens?</p>
+    <div class="opts">
+      <button class="opt" type="button">A compile error: <code>signal</code> is not a member of <code>D</code></button>
+      <button class="opt" type="button">It compiles, then recurses forever on the first call</button>
+      <button class="opt" type="button">The base implementation is used, as with a non-pure virtual</button>
+      <button class="opt" type="button">Undefined behaviour at the <code>static_cast</code></button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+
+  <div class="mcq" data-a="3" data-exp="<b>It has to stay a runtime flag, read off the hot path.</b> A policy is a template parameter, so it is part of a type, so choosing it is something the <em>compiler</em> did — weeks ago, on somebody's laptop. There is no mechanism by which an operator changes a type in a running process, and shipping a second binary mid-session is not an answer at 09:31. Note what is <em>not</em> the objection: the cost. A runtime <code>if (log_enabled_)</code> on a well-predicted flag is a fraction of a nanosecond, and the branch predictor will get it right every single time because the value never changes. That is affordable. What you must not do is put the flag test inside the innermost loop and then log from the hot path — read it once per session, or once per tick at worst, and do the actual I/O on another thread. The rule to carry out of Week 6: compile-time on the hot path, run time at the edges. Anything an on-call engineer might flip lives at the edge, by definition.">
+    <p class="q"><span>Q3</span>You composed your handler from policies, including <code>NoLog</code>. Mid-session, an on-call engineer needs verbose logging to diagnose a stuck order. What is the honest answer?</p>
+    <div class="opts">
+      <button class="opt" type="button">Re-instantiate <code>MdHandler&lt;StderrLog, …&gt;</code> and hot-swap it</button>
+      <button class="opt" type="button">Policies are chosen at run time by the linker; set the environment variable</button>
+      <button class="opt" type="button">Use <code>if constexpr</code> on a runtime flag instead</button>
+      <button class="opt" type="button">Logging should never have been a policy — it needs a runtime flag, off the hot path</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+</section>
+
+<!-- ══════════════ NEXT ══════════════ -->
+<section id="next">
+  <div class="kicker">Part 6</div>
+  <h2><span class="secnum">6</span>Do the work</h2>
+  <div class="grid2" style="margin-top:14px">
+    <div class="panel"><h4>In the lab (~45–60 min)</h4><ul class="plain">
+      <li>Write the virtual version first, then the CRTP version beside it, and diff
+      <code>-O2 -S</code>: the CRTP call becomes a plain multiply, the virtual one keeps its indirect
+      <code>call</code>.</li>
+      <li>A <code>constexpr</code> table with a <code>constexpr</code> constructor, proven by
+      <code>static_assert(kTicks.px[50] == 100.5)</code>.</li>
+      <li>A <code>Quoter&lt;FeePolicy&gt;</code>, instantiated two ways, and the observation that the fee
+      is folded into the arithmetic rather than loaded.</li>
+      <li>A <code>std::variant</code> receive path with the <code>overload</code> helper — then add an
+      alternative and confirm the build breaks.</li>
+    </ul></div>
+    <div class="panel"><h4>HW6 &amp; Project Phase 1</h4><ul class="plain">
+      <li><b>HW6:</b> a <code>constexpr</code> lookup table guarded by <code>static_assert</code>, that
+      the program actually uses.</li>
+      <li><b>HW6:</b> a CRTP base plus derived that demonstrably inlines with no vtable, and a
+      compile-time-dispatched visitor over two or three message types.</li>
+      <li><b>HW6:</b> a short write-up of the zero-cost claim, with the before/after latency numbers —
+      and if p99.9 did not move, say so and say why.</li>
+      <li><b>Phase 1:</b> no virtual call on the receive path. Type erasure, if you need it, sits at the
+      startup boundary and is paid once.</li>
+    </ul></div>
+  </div>
+  <div class="nextgrid" style="margin-top:18px">
+    <div class="nextcard"><div class="nl">Code</div>
+      <div class="nt">Get the code</div>
+      <div class="nd">Both tracks share one starter tree. Week 6 is a scratch file plus your bot's
+      receive path; <code>make test</code> runs the grader over everything you have built so far.</div>
+      <div class="row" style="margin-top:11px">
+        <a class="btn" href="https://github.com/sdonadio/hft-cpp-starter-columbia">15-week track starter</a>
+        <a class="btn" href="https://github.com/sdonadio/hft-cpp-starter-uchicago">9-session track starter</a>
+      </div></div>
+    <a class="nextcard" href="week5.html"><div class="nl">Previous</div>
+      <div class="nt">← Week 5 · Templates &amp; Generic Programming</div>
+      <div class="nd">Templates gave the compiler the types. This week it got the tables and the dispatch too.</div></a>
+    <a class="nextcard" href="week7.html"><div class="nl">Next</div>
+      <div class="nt">Week 7 · Data Structures for HFT — The Order Book →</div>
+      <div class="nd">Dispatch now costs nothing. Next: make the data those paths touch just as cheap to reach.</div></a>
+  </div>
+</section>
+
+<footer>Low-Latency Trading Arena · an interactive companion for a course on low-latency trading systems in C++ · <a href="https://github.com/sdonadio/low-latency-trading-arena">Source</a></footer>
+
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════
+   Week 6 — Compile-Time & Policy-Based Design
+   ════════════════════════════════════════════════════════════════ */
+var $ = function (id) { return document.getElementById(id); };
+/* SVG namespace taken from the document so no absolute URL appears in this file */
+var SVGNS = $("ctSvg").namespaceURI;
+function mk(tag, attrs) {
+  var e = document.createElementNS(SVGNS, tag);
+  for (var k in attrs) { if (attrs.hasOwnProperty(k)) e.setAttribute(k, attrs[k]); }
+  return e;
+}
+function txt(x, y, s, size, fill, anchor, weight) {
+  var t = mk("text", { x: x, y: y, "font-size": size || 10, "font-family": "monospace", fill: fill || "#9aa0a6" });
+  if (anchor) t.setAttribute("text-anchor", anchor);
+  if (weight) t.setAttribute("font-weight", weight);
+  t.textContent = s;
+  return t;
+}
+function clear(n) { while (n.firstChild) n.removeChild(n.firstChild); }
+function lcg(seed) { var s = seed >>> 0; return function () { s = (1664525 * s + 1013904223) >>> 0; return s / 4294967296; }; }
+var C = { acc: "#7c3aed", acc2: "#c4b5fd", ok: "#3fb950", warn: "#d29922", bad: "#f85149",
+          info: "#6cb6ff", dim: "#5f6673", mute: "#9aa0a6", line: "#272c36", line2: "#333a47",
+          p2: "#1e222b", ink: "#e8e6e3", vio: "#a78bfa" };
+function kb(v) { return v < 1024 ? v + " B" : (v / 1024).toFixed(1) + " KB"; }
+var GHZ = 4.0, MISPREDICT_NS = 15 / GHZ;
+
+/* ════ 1. WHERE DOES THE TABLE GET BUILT? ═════════════════════ */
+var CT = { k: "constexpr", n: 256 };
+var CT_PHASES = ["compile", "link", "load", "main()", "first tick"];
+var CT_DEF = {
+  loop: { phase: 3, name: "a loop in main()", sec: ".bss", sa: false, ops: 1,
+    init: function (n) { return n * 3; }, bin: function () { return 0; },
+    kv: [["when", "after main() starts, before you open the session"],
+         ["section", ".bss — zero pages, nothing in the file"],
+         ["hazard", "code can run before the table is filled"],
+         ["static_assert", "impossible — the value does not exist at build time"]],
+    code: [
+      'std::array&lt;std::int64_t, N&gt; TICKS;      <span class="c">// .bss, zero-filled</span>',
+      '',
+      '<span class="k">int</span> main() {',
+      '  <span class="k">for</span> (std::size_t i = <span class="n">0</span>; i &lt; N; ++i)',
+      '    TICKS[i] = (i &lt; N / <span class="n">2</span>) ? <span class="n">1</span> : <span class="n">5</span>;   <span class="c">// runs at startup</span>',
+      '  run();',
+      '}',
+      '<span class="c">// works, but nothing stops a constructor somewhere else</span>',
+      '<span class="c">// from reading TICKS before main() ever runs.</span>'
+    ],
+    msg: "<b>Correct, and fragile.</b> The table is filled by instructions that execute after <code>main</code> begins. Any static object whose constructor reads <code>TICKS</code> sees zeros, and nothing in the type system prevents that. You also cannot <code>static_assert</code> a single entry, because at build time there is nothing to assert." },
+  dynamic: { phase: 2, name: "a dynamic (static) initialiser", sec: ".bss + init array", sa: false, ops: 1,
+    init: function (n) { return n * 3 + 24; }, bin: function () { return 0; },
+    kv: [["when", "before main(), in an unspecified order"],
+         ["section", ".bss, plus an entry in .init_array"],
+         ["hazard", "static-initialisation-order across translation units"],
+         ["static_assert", "impossible — still a runtime value"]],
+    code: [
+      '<span class="c">// const, NOT constexpr — so this is a dynamic initialiser</span>',
+      '<span class="k">const</span> std::array&lt;std::int64_t, N&gt; TICKS = make_ticks();',
+      '',
+      '<span class="c">// make_ticks() may even be marked constexpr and STILL</span>',
+      '<span class="c">// be called at run time here, before main(), in an order</span>',
+      '<span class="c">// the standard does not define across translation units.</span>',
+      '',
+      '<span class="c">// The fix is one keyword:</span>',
+      '<span class="k">constexpr</span> <span class="k">auto</span> TICKS = make_ticks();   <span class="c">// now it must fold</span>'
+    ],
+    msg: "<b>The illusion most people ship.</b> <code>make_ticks()</code> is <code>constexpr</code>, so it <em>looks</em> compile-time — but the destination is only <code>const</code>, so the compiler is free to emit a dynamic initialiser that runs before <code>main</code>. You get startup work you did not intend and the static-initialisation-order problem for free. One keyword fixes it." },
+  constexpr: { phase: 0, name: "a constexpr function and a constexpr variable", sec: ".rodata", sa: true, ops: 1,
+    init: function () { return 0; }, bin: function (n) { return n * 8; },
+    kv: [["when", "during compilation — the loop runs in the compiler"],
+         ["section", ".rodata — read-only bytes in the binary"],
+         ["hazard", "none at run time; the bytes are simply there"],
+         ["static_assert", "yes — assert any entry, at build time"]],
+    code: [
+      '<span class="k">constexpr</span> std::size_t N = <span class="n">256</span>;',
+      '',
+      '<span class="k">constexpr</span> std::array&lt;std::int64_t, N&gt; make_ticks() {',
+      '  std::array&lt;std::int64_t, N&gt; t{};',
+      '  <span class="k">for</span> (std::size_t i = <span class="n">0</span>; i &lt; N; ++i)',
+      '    t[i] = (i &lt; N / <span class="n">2</span>) ? <span class="n">1</span> : <span class="n">5</span>;   <span class="c">// 0.01 or 0.05, in ticks</span>',
+      '  <span class="k">return</span> t;                          <span class="c">// computed by the compiler</span>',
+      '}',
+      '<span class="k">constexpr</span> <span class="k">auto</span> TICKS = make_ticks();  <span class="c">// MUST fold, or fail</span>',
+      '<span class="k">static_assert</span>(TICKS[<span class="n">0</span>] == <span class="n">1</span> &amp;&amp; TICKS[N - <span class="n">1</span>] == <span class="n">5</span>);',
+      '',
+      '<span class="k">inline</span> std::int64_t tick_size(std::size_t band) {',
+      '  <span class="k">return</span> TICKS[band];               <span class="c">// one indexed load</span>',
+      '}'
+    ],
+    msg: "<b>This is the one you want.</b> The loop executes inside the compiler; <code>TICKS</code> becomes read-only bytes in the binary, mapped straight from the file with no initialisation code at all. The hot path is a single indexed load, and the <code>static_assert</code> proves the contents before you ship. The table is still available at run time as ordinary data — you have lost nothing." },
+  consteval: { phase: 0, name: "consteval — a compile-time-only function", sec: ".rodata", sa: true, ops: 1,
+    init: function () { return 0; }, bin: function (n) { return n * 8; },
+    kv: [["when", "during compilation, and nowhere else"],
+         ["section", ".rodata"],
+         ["hazard", "none — a runtime call will not compile"],
+         ["static_assert", "yes, and the function itself cannot exist at run time"]],
+    code: [
+      '<span class="k">consteval</span> std::int64_t ticks_from_price(<span class="k">double</span> px) {',
+      '  <span class="k">return</span> <span class="k">static_cast</span>&lt;std::int64_t&gt;(px * <span class="n">100.0</span> + <span class="n">0.5</span>);',
+      '}',
+      '<span class="k">constexpr</span> std::int64_t OPEN_TICKS = ticks_from_price(<span class="n">184.00</span>);',
+      '<span class="k">static_assert</span>(OPEN_TICKS == <span class="n">18400</span>);',
+      '',
+      '<span class="c">// and this is the whole point:</span>',
+      '<span class="c">// std::int64_t t = ticks_from_price(msg.px);</span>',
+      '<span class="c">//   error: call to consteval function is not a</span>',
+      '<span class="c">//          constant expression</span>',
+      '<span class="c">// The mistake is now a build failure, not a slow tick.</span>'
+    ],
+    msg: "<b>The guarantee, not the permission.</b> <code>consteval</code> makes a runtime call a compile error and emits no runtime copy of the function at all. Reach for it where evaluating at run time would be a <em>bug</em> rather than a slowdown — wire-layout arithmetic, fee ladders, symbol tables. The cost is inflexibility, which is exactly what you were buying." }
+};
+function ctDraw() {
+  var d = CT_DEF[CT.k], n = CT.n;
+  var svg = $("ctSvg"); clear(svg);
+  var X0 = 30, X1 = 636, W = X1 - X0, Y = 92, i;
+  svg.appendChild(txt(X0, 26, "the lifetime of your program, left to right", 10.5, C.mute, null, "700"));
+  svg.appendChild(mk("line", { x1: X0, y1: Y, x2: X1, y2: Y, stroke: C.line2, "stroke-width": 2 }));
+  for (i = 0; i < CT_PHASES.length; i++) {
+    var x = X0 + (i + 0.5) / CT_PHASES.length * W;
+    var here = i === d.phase;
+    svg.appendChild(mk("circle", { cx: x, cy: Y, r: here ? 9 : 5,
+      fill: here ? C.acc : C.p2, stroke: here ? C.acc2 : C.line2, "stroke-width": 2 }));
+    svg.appendChild(txt(x, Y + 26, CT_PHASES[i], 10.5, here ? C.acc2 : C.dim, "middle", here ? "700" : null));
+  }
+  var divx = X0 + 2 / CT_PHASES.length * W;
+  svg.appendChild(mk("line", { x1: divx, y1: Y - 26, x2: divx, y2: Y + 34, stroke: C.line2,
+    "stroke-width": 1.2, "stroke-dasharray": "3 3" }));
+  svg.appendChild(txt(divx - 8, Y + 46, "build time", 9.5, C.dim, "end"));
+  svg.appendChild(txt(divx + 8, Y + 46, "run time", 9.5, C.dim));
+  var mx = X0 + (d.phase + 0.5) / CT_PHASES.length * W;
+  svg.appendChild(mk("line", { x1: mx, y1: Y - 32, x2: mx, y2: Y - 11, stroke: C.acc2, "stroke-width": 2 }));
+  svg.appendChild(txt(Math.max(mx, X0 + 66), Y - 38, "the table is built here", 10.5, C.acc2, "middle", "700"));
+  /* the two bars */
+  var initOps = d.init(n), binB = d.bin(n);
+  var BY = 168, BH = 20, maxOps = 1024 * 3 + 24;
+  svg.appendChild(txt(X0, BY - 8, "work executed before main()", 10, C.mute));
+  svg.appendChild(mk("rect", { x: X0, y: BY, width: W, height: BH, rx: 4, fill: C.p2, stroke: C.line }));
+  function barLabel(x, y, w, s, col) {
+    var need = s.length * 5.6 + 14;
+    if (w >= need) svg.appendChild(txt(x + 8, y + 14, s, 9.5, "#0f1115", null, "700"));
+    else svg.appendChild(txt(x + w + 8, y + 14, s, 9.5, col, null, "700"));
+  }
+  if (initOps) {
+    var iw = Math.max(2, initOps / maxOps * W);
+    svg.appendChild(mk("rect", { x: X0, y: BY, width: iw, height: BH, fill: C.bad, opacity: 0.8 }));
+    barLabel(X0, BY, iw, "~" + initOps.toLocaleString() + " instructions before main()", C.bad);
+  } else {
+    svg.appendChild(txt(X0 + 8, BY + 14, "none — zero instructions", 9.5, C.ok, null, "700"));
+  }
+  svg.appendChild(txt(X0, BY + 46, "read-only bytes shipped in the binary", 10, C.mute));
+  svg.appendChild(mk("rect", { x: X0, y: BY + 54, width: W, height: BH, rx: 4, fill: C.p2, stroke: C.line }));
+  if (binB) {
+    var bw2 = Math.max(2, binB / (1024 * 8) * W);
+    svg.appendChild(mk("rect", { x: X0, y: BY + 54, width: bw2, height: BH, fill: C.acc, opacity: 0.85 }));
+    barLabel(X0, BY + 54, bw2, kb(binB) + " of .rodata — mapped, never initialised", C.acc2);
+  } else {
+    svg.appendChild(txt(X0 + 8, BY + 68, "none — .bss costs no file bytes, but must be filled at run time", 9.5, C.warn, null, "700"));
+  }
+
+  $("ctInit").textContent = initOps ? "~" + initOps.toLocaleString() + " ops" : "0";
+  $("ctInit").className = "sv " + (initOps ? "bad" : "ok");
+  $("ctBin").textContent = binB ? kb(binB) : "0 B";
+  $("ctOps").textContent = d.ops + " load";
+  $("ctSec").textContent = d.sec;
+  $("ctSa").textContent = d.sa ? "yes" : "no";
+  $("ctSa").className = "sv " + (d.sa ? "ok" : "bad");
+  $("ctCode").innerHTML = d.code.join("\n");
+  var h = "", j;
+  for (j = 0; j < d.kv.length; j++) h += "<b>" + d.kv[j][0] + "</b><span>" + d.kv[j][1] + "</span>";
+  $("ctKv").innerHTML = h;
+  $("ctMsg").innerHTML = d.msg;
+  var bs = $("ctPick").querySelectorAll("button"), k;
+  for (k = 0; k < bs.length; k++) bs[k].setAttribute("aria-pressed", bs[k].getAttribute("data-k") === CT.k ? "true" : "false");
+}
+Array.prototype.forEach.call($("ctPick").querySelectorAll("button"), function (b) {
+  b.addEventListener("click", function () { CT.k = b.getAttribute("data-k"); ctDraw(); });
+});
+$("ctN").addEventListener("input", function () { CT.n = +this.value; $("ctNV").textContent = CT.n; ctDraw(); });
+ctDraw();
+
+/* ════ 2. CRTP vs VIRTUAL, STEP BY STEP ═══════════════════════ */
+var CR_V = [
+  { n: "load the vtable pointer", c: 4, load: 1,
+    w: "The first 8 bytes of the object are a hidden pointer to its class's vtable. That is a memory access before you know anything — an L1 hit if the object is hot, far worse if it is not." },
+  { n: "load the slot for signal()", c: 4, load: 1,
+    w: "A second load, and it <em>depends</em> on the first: the address you are reading was itself just read from memory. Dependent loads cannot be overlapped, so the latencies add." },
+  { n: "indirect call to the target", c: 2, load: 0,
+    w: "<code>call *%rax</code>. The branch-target buffer predicts where this goes. At a site that only ever sees one type it predicts perfectly; at a site with several it does not, and a miss costs about 15 cycles." },
+  { n: "prologue — set up a frame", c: 2, load: 0,
+    w: "Because the call is opaque, the callee is a real function: it establishes a frame, and the arguments arrive through the ABI rather than staying in the registers they were already in." },
+  { n: "the body — obi * 0.5", c: 2, load: 0,
+    w: "The work. This is the only stage the CRTP lane also has, and it is the only stage that computes anything." },
+  { n: "epilogue and return", c: 2, load: 0,
+    w: "Tear the frame down and return. The optimiser could not schedule anything across the call, could not fold <code>0.5</code> into a surrounding expression, and could not keep the result in a register of the caller's choosing." }
+];
+var CR_T = [
+  { n: "static_cast<Derived*>(this)", c: 0, load: 0,
+    w: "Zero instructions. The cast is a compile-time reinterpretation of a pointer that is already in a register — for single inheritance the address does not even change. Nothing is emitted." },
+  { n: "the body — obi * 0.5, inlined", c: 2, load: 0,
+    w: "The compiler knows exactly which function this is, so it pastes the body in, folds the constant, and schedules the multiply among the surrounding instructions. There is no call, no frame, and nothing to predict." }
+];
+var CR = { i: 0, timer: null };
+function crDraw() {
+  var svg = $("crSvg"); clear(svg);
+  var X0 = 24, X1 = 636, i;
+  var totalSteps = CR_V.length;
+  svg.appendChild(txt(X0, 24, "one call, stage by stage — press Step", 10.5, C.mute, null, "700"));
+  /* virtual lane */
+  var lanes = [{ y: 52, arr: CR_V, lab: "virtual", col: C.bad }, { y: 150, arr: CR_T, lab: "CRTP", col: C.ok }];
+  var vc = 0, tc = 0, loads = 0;
+  for (i = 0; i < CR_V.length && i < CR.i; i++) { vc += CR_V[i].c; loads += CR_V[i].load; }
+  for (i = 0; i < CR_T.length && i < CR.i; i++) { tc += CR_T[i].c; }
+  lanes.forEach(function (L) {
+    svg.appendChild(txt(X0, L.y - 8, L.lab, 11, L.col, null, "700"));
+    var n = L.arr.length, bw = (X1 - X0 - (n - 1) * 8) / n, k;
+    for (k = 0; k < n; k++) {
+      var x = X0 + k * (bw + 8);
+      var done = k < CR.i, cur = k === CR.i - 1;
+      svg.appendChild(mk("rect", { x: x, y: L.y, width: bw, height: 46, rx: 6,
+        fill: done ? (cur ? "rgba(124,58,237,.45)" : "rgba(124,58,237,.18)") : C.p2,
+        stroke: cur ? C.acc2 : (done ? "rgba(196,181,253,.5)" : C.line), "stroke-width": cur ? 2.2 : 1 }));
+      var words = L.arr[k].n.split(" "), l1 = "", l2 = "";
+      words.forEach(function (w) { if ((l1 + " " + w).length <= Math.floor(bw / 5.9)) l1 += (l1 ? " " : "") + w; else l2 += (l2 ? " " : "") + w; });
+      svg.appendChild(txt(x + bw / 2, L.y + 19, l1, 9, done ? C.ink : C.dim, "middle", cur ? "700" : null));
+      if (l2) svg.appendChild(txt(x + bw / 2, L.y + 31, l2.length > Math.floor(bw / 5.5) ? l2.slice(0, Math.floor(bw / 5.5)) + "…" : l2, 9, done ? C.ink : C.dim, "middle"));
+      svg.appendChild(txt(x + bw / 2, L.y + 42, L.arr[k].c ? "~" + L.arr[k].c + "c" : "0 instr", 8.5,
+        L.arr[k].c ? C.warn : C.ok, "middle", "700"));
+    }
+  });
+  svg.appendChild(txt(X0, 232, "stage " + Math.min(CR.i, totalSteps) + " of " + totalSteps +
+    "  ·  virtual " + vc + " cycles (" + (vc / GHZ).toFixed(2) + " ns)  ·  CRTP " + tc +
+    " cycles (" + (tc / GHZ).toFixed(2) + " ns)", 10.5, C.acc2));
+  var stage = CR.i > 0 ? CR_V[Math.min(CR.i - 1, CR_V.length - 1)] : null;
+  $("crName").textContent = stage ? "Stage " + CR.i + " · " + stage.n : "Press Step to begin";
+  $("crWhat").innerHTML = stage ? stage.w
+    : "The two lanes handle the same call. The virtual lane has six stages, two of which are dependent memory loads; the CRTP lane has two, and the first one emits nothing at all.";
+  $("crVc").textContent = vc + " c";
+  $("crTc").textContent = tc + " c";
+  $("crLoads").textContent = loads;
+  $("crLoads").className = "sv " + (loads ? "bad" : "ok");
+  $("crInl").textContent = CR.i >= CR_V.length ? "virtual: no · CRTP: yes" : "—";
+}
+$("crStep").addEventListener("click", function () {
+  CR.i = CR.i >= CR_V.length ? 0 : CR.i + 1; crDraw();
+});
+$("crPlay").addEventListener("click", function () {
+  if (CR.timer) { clearInterval(CR.timer); CR.timer = null; }
+  CR.i = 0; crDraw();
+  CR.timer = setInterval(function () {
+    CR.i++;
+    if (CR.i >= CR_V.length) { CR.i = CR_V.length; clearInterval(CR.timer); CR.timer = null; }
+    crDraw();
+  }, 900);
+});
+$("crReset").addEventListener("click", function () {
+  if (CR.timer) { clearInterval(CR.timer); CR.timer = null; }
+  CR.i = 0; crDraw();
+});
+crDraw();
+
+/* ════ 3. THE ZERO-OVERHEAD BENCH ═════════════════════════════ */
+var BM = { msgs: 16, alt: 5, mix: "mixed", seed: 11 };
+var W_WORK = 1.10;
+var BM_D = [
+  { k: "virt", n: "virtual", over: 0.90 + 0.80 + 1.10, ind: 1, inl: 0, col: C.bad,
+    zo: "no — three separate taxes" },
+  { k: "sw", n: "switch (msg.type)", over: 0.25 + 0.55 + 0.90, ind: 1, inl: 0, col: C.warn,
+    zo: "no — and it is a jump table, so it mispredicts too" },
+  { k: "vis", n: "variant + visit", over: 0.35, ind: 0.5, inl: 1, col: C.info,
+    zo: "almost — the variant index costs something" },
+  { k: "crtp", n: "CRTP / static", over: 0.0, ind: 0, inl: 1, col: C.ok,
+    zo: "yes — this is the baseline" }
+];
+function bmMispredict() {
+  var base = BM.mix === "runs" ? 0.04 : BM.mix === "mixed" ? 0.22 : 0.72;
+  return base * (BM.alt - 1) / Math.max(1, BM.alt - 1) * Math.min(1, (BM.alt - 1) / 4);
+}
+function bmDraw() {
+  var mpr = bmMispredict();
+  var rows = BM_D.map(function (d) {
+    var p50 = W_WORK + d.over;
+    var p99 = p50 + d.ind * MISPREDICT_NS * (mpr > 0 ? 1 : 0);
+    var mean = p50 + d.ind * mpr * MISPREDICT_NS;
+    return { d: d, p50: p50, p99: p99, mean: mean, tick: mean * BM.msgs, mpr: d.ind ? mpr : 0 };
+  });
+  var svg = $("bmSvg"); clear(svg);
+  var X0 = 128, X1 = 640, W = X1 - X0, i;
+  var maxV = 0;
+  rows.forEach(function (r) { if (r.p99 > maxV) maxV = r.p99; });
+  maxV *= 1.16;
+  svg.appendChild(txt(X0, 22, "ns per message — p50 solid, p99 outlined", 10.5, C.mute, null, "700"));
+  for (i = 0; i < rows.length; i++) {
+    var y = 42 + i * 50, r = rows[i];
+    svg.appendChild(txt(X0 - 10, y + 20, r.d.n, 10, r.d.col, "end", "700"));
+    svg.appendChild(mk("rect", { x: X0, y: y + 22, width: r.p99 / maxV * W, height: 14, rx: 2,
+      fill: "none", stroke: r.d.col, "stroke-width": 1.2, "stroke-dasharray": "3 2" }));
+    svg.appendChild(mk("rect", { x: X0, y: y + 4, width: Math.max(2, r.p50 / maxV * W), height: 18, rx: 3,
+      fill: r.d.col, opacity: 0.82 }));
+    svg.appendChild(txt(X0 + r.p50 / maxV * W + 7, y + 17, r.p50.toFixed(2) + " ns", 9.5, r.d.col, null, "700"));
+    if (r.p99 > r.p50 + 0.01)
+      svg.appendChild(txt(X0 + r.p99 / maxV * W + 7, y + 33, "p99 " + r.p99.toFixed(2), 9, r.d.col));
+  }
+  svg.appendChild(txt(X0, 246, "the work itself is " + W_WORK.toFixed(2) +
+    " ns. Everything past the first " + W_WORK.toFixed(2) + " ns of each bar is dispatch.", 10, C.acc2));
+
+  var body = "";
+  for (i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    body += "<tr><td class=\"n\">" + r.d.n + "</td><td>" + r.p50.toFixed(2) + "</td><td>" +
+      r.p99.toFixed(2) + "</td><td>" + r.tick.toFixed(1) + "</td><td>" +
+      (r.mpr ? (r.mpr * 100).toFixed(0) + "%" : "—") + "</td><td>" + r.d.zo + "</td></tr>";
+  }
+  $("bmBody").innerHTML = body;
+  var best = rows[3], worst = rows[0];
+  $("bmMsg").innerHTML = "<b>" + (worst.tick / best.tick).toFixed(1) +
+    "× on the p50, and the gap widens in the tail.</b> " +
+    (BM.mix === "runs"
+      ? "With long runs of one type the branch predictor is right about 96% of the time, so the indirect designs look nearly free — this is the measurement people quote when they say dispatch does not matter. It is also the least realistic arrival pattern in a market."
+      : BM.mix === "random"
+        ? "Uniformly shuffled arrivals defeat the branch-target buffer: about " + (mpr * 100).toFixed(0) +
+          "% of the indirect branches miss, at " + MISPREDICT_NS.toFixed(2) +
+          " ns each, and every one of those lands in your p99. <code>std::visit</code> and CRTP have nothing to predict, so their p50 and p99 are the same number."
+        : "A realistic mix still misses about " + (mpr * 100).toFixed(0) +
+          "% of the time. Note that the <code>switch</code> is not immune: a jump table is an indirect jump, so it mispredicts exactly like the virtual call does, and it also blocks inlining across the arms.") +
+    " Worth saying plainly: <b>" + best.p50.toFixed(2) + " ns vs " + worst.p50.toFixed(2) +
+    " ns is " + ((worst.p50 - best.p50) * BM.msgs).toFixed(1) + " ns per tick</b> — real, but small next to one cache miss. Zero-overhead is a claim to verify, not a reason to rewrite everything.";
+}
+$("bmMsgs").addEventListener("input", function () { BM.msgs = +this.value; $("bmMsgsV").textContent = BM.msgs; bmDraw(); });
+$("bmAlt").addEventListener("input", function () { BM.alt = +this.value; $("bmAltV").textContent = BM.alt; bmDraw(); });
+$("bmMix").addEventListener("change", function () { BM.mix = this.value; bmDraw(); });
+$("bmRun").addEventListener("click", function () { BM.seed = (BM.seed * 41 + 13) % 99991; bmDraw(); });
+bmDraw();
+
+/* ════ 3b. TAG DISPATCH ═══════════════════════════════════════ */
+var TG = [
+  { k: "bid", n: "bid_tag", pick: "improve(px, t, bid_tag)", res: "px + t",
+    kv: [["chosen by", "overload resolution on the tag type"],
+         ["runtime test", "none — there is no side field to read"],
+         ["emitted", "one add, then folded into the caller"],
+         ["why bid", "a HIGHER bid is more aggressive, so improving means adding a tick"]] },
+  { k: "ask", n: "ask_tag", pick: "improve(px, t, ask_tag)", res: "px - t",
+    kv: [["chosen by", "overload resolution on the tag type"],
+         ["runtime test", "none"],
+         ["emitted", "one subtract, then folded"],
+         ["why ask", "a LOWER ask is more aggressive, so improving means subtracting a tick"]] },
+  { k: "none", n: "no tag", pick: "improve(px, t, side)", res: "side == 'B' ? px + t : px - t",
+    kv: [["chosen by", "a runtime comparison, every call"],
+         ["runtime test", "one compare and one branch — predictable, but present"],
+         ["emitted", "cmp, then a branch or a cmov"],
+         ["the real cost", "the value is no longer a constant, so the caller cannot fold it"]] }
+];
+var TGI = { i: 0 };
+function tgDraw() {
+  var t = TG[TGI.i];
+  var lines = [
+    '<span class="c">// two empty types. They carry no data — only identity.</span>',
+    '<span class="k">struct</span> <span class="b">bid_tag</span> {}; <span class="k">struct</span> <span class="b">ask_tag</span> {};',
+    '',
+    '<span class="k">constexpr</span> std::int64_t improve(std::int64_t px, std::int64_t t, bid_tag)',
+    '  { <span class="k">return</span> px + t; }',
+    '<span class="k">constexpr</span> std::int64_t improve(std::int64_t px, std::int64_t t, ask_tag)',
+    '  { <span class="k">return</span> px - t; }',
+    '',
+    '<span class="k">template</span> &lt;<span class="k">class</span> Tag&gt;',
+    '<span class="k">constexpr</span> std::int64_t join(std::int64_t px, std::size_t band, Tag tag) {',
+    '  <span class="k">return</span> improve(px, TICKS[band], tag);   <span class="c">// no branch on side</span>',
+    '}',
+    '<span class="k">static_assert</span>(join(<span class="n">18400</span>, <span class="n">0</span>, bid_tag{}) == <span class="n">18401</span>);',
+    '<span class="k">static_assert</span>(join(<span class="n">18401</span>, <span class="n">0</span>, ask_tag{}) == <span class="n">18400</span>);',
+    '',
+    '<span class="c">// your selection:</span>',
+    '<span class="keep">' + t.pick + '  &rarr;  ' + t.res + '</span>'
+  ];
+  if (t.k === "none") {
+    lines = lines.slice(0, 15).concat([
+      '<span class="c">// the version WITHOUT tags, for comparison:</span>',
+      'std::int64_t improve(std::int64_t px, std::int64_t t, <span class="k">char</span> side)',
+      '  { <span class="keep"><span class="k">return</span> side == <span class="s">\'B\'</span> ? px + t : px - t;</span> }',
+      '<span class="c">// correct, cheap, and no longer a constant expression —</span>',
+      '<span class="c">// so nothing upstream can be folded around it.</span>'
+    ]);
+  }
+  $("tgCode").innerHTML = lines.join("\n");
+  var h = "", j;
+  for (j = 0; j < t.kv.length; j++) h += "<b>" + t.kv[j][0] + "</b><span>" + t.kv[j][1] + "</span>";
+  $("tgKv").innerHTML = h;
+  var bs = $("tgPick").querySelectorAll("button"), k;
+  for (k = 0; k < bs.length; k++) bs[k].setAttribute("aria-pressed", k === TGI.i ? "true" : "false");
+}
+(function () {
+  TG.forEach(function (t, i) {
+    var b = document.createElement("button");
+    b.type = "button"; b.textContent = t.n;
+    b.setAttribute("aria-pressed", i === TGI.i ? "true" : "false");
+    b.addEventListener("click", function () { TGI.i = i; tgDraw(); });
+    $("tgPick").appendChild(b);
+  });
+})();
+tgDraw();
+
+/* ════ 4. THE POLICY COMPOSER ═════════════════════════════════ */
+var PO_AXES = [
+  { k: "log", label: "Logging", opts: [
+      { k: "NoLog", ins: 0, sz: 0, br: 0, ns: 0, line: null },
+      { k: "StderrLog", ins: 14, sz: 96, br: 1, ns: 0.42, line: 'LogPolicy::line("md\\n");' }] },
+  { k: "ck", label: "Checksum", opts: [
+      { k: "NoChecksum", ins: 0, sz: 0, br: 0, ns: 0, line: null },
+      { k: "Crc32", ins: 22, sz: 172, br: 1, ns: 0.31, line: 'if (!ChecksumPolicy::check(p, n)) return false;' }] },
+  { k: "ts", label: "Timestamping", opts: [
+      { k: "NoStamp", ins: 0, sz: 0, br: 0, ns: 0, line: null },
+      { k: "RdtscStamp", ins: 6, sz: 44, br: 0, ns: 0.09, line: 'const auto t0 = StampPolicy::now();' }] },
+  { k: "val", label: "Field validation", opts: [
+      { k: "NoValidate", ins: 0, sz: 0, br: 0, ns: 0, line: null },
+      { k: "StrictValidate", ins: 31, sz: 240, br: 4, ns: 0.55, line: 'if (!ValidatePolicy::ok(m)) return false;' }] },
+  { k: "al", label: "Allocation", opts: [
+      { k: "ArenaAlloc", ins: 3, sz: 24, br: 0, ns: 0.02, line: 'auto* w = AllocPolicy::acquire(n);   // one bump' },
+      { k: "PoolAlloc", ins: 6, sz: 48, br: 1, ns: 0.05, line: 'auto* w = AllocPolicy::acquire(n);   // free-list pop' },
+      { k: "HeapAlloc", ins: 9, sz: 72, br: 2, ns: 22.0, line: 'auto* w = AllocPolicy::acquire(n);   // operator new' }] }
+];
+var PO = { log: 0, ck: 0, ts: 0, val: 0, al: 0 };
+var PO_BASE = { ins: 21, sz: 168, br: 1, ns: 1.10 };
+function poBuild() {
+  var box = $("poAxes"); box.innerHTML = "";
+  PO_AXES.forEach(function (ax) {
+    var d = document.createElement("div"); d.className = "axis";
+    var l = document.createElement("div"); l.className = "al"; l.textContent = ax.label;
+    var o = document.createElement("div"); o.className = "ao";
+    o.setAttribute("role", "group"); o.setAttribute("aria-label", ax.label + " policy");
+    ax.opts.forEach(function (op, i) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "chk"; b.textContent = op.k;
+      b.setAttribute("aria-pressed", PO[ax.k] === i ? "true" : "false");
+      b.addEventListener("click", function () { PO[ax.k] = i; poBuild(); poDraw(); });
+      o.appendChild(b);
+    });
+    d.appendChild(l); d.appendChild(o); box.appendChild(d);
+  });
+}
+function poDraw() {
+  var ins = PO_BASE.ins, sz = PO_BASE.sz, br = PO_BASE.br, ns = PO_BASE.ns;
+  var names = [], body = [];
+  var full = PO_BASE.ins, rt = PO_BASE.ins;
+  PO_AXES.forEach(function (ax) {
+    var op = ax.opts[PO[ax.k]];
+    names.push(op.k);
+    ins += op.ins; sz += op.sz; br += op.br; ns += op.ns;
+    /* the fully-featured build = the most expensive option on every axis */
+    var mx = ax.opts[ax.opts.length - 1];
+    full += mx.ins;
+    /* the runtime-flag version keeps every feature's code AND a test per feature */
+    rt += mx.ins + (mx.ins ? 2 : 0);
+    ax.opts.forEach(function (o2) {
+      if (!o2.line) return;
+      body.push({ line: o2.line, on: o2 === op });
+    });
+  });
+  var lines = [
+    '<span class="c">// the type IS the configuration</span>',
+    '<span class="k">using</span> <span class="b">Handler</span> = MdHandler&lt;' + names.join(', ') + '&gt;;',
+    '',
+    '<span class="k">template</span> &lt;<span class="k">class</span> LogPolicy, <span class="k">class</span> ChecksumPolicy, <span class="k">class</span> StampPolicy,',
+    '          <span class="k">class</span> ValidatePolicy, <span class="k">class</span> AllocPolicy&gt;',
+    '<span class="k">class</span> <span class="b">MdHandler</span> {',
+    ' <span class="k">public</span>:',
+    '  <span class="k">bool</span> on_packet(<span class="k">const</span> std::byte* p, std::size_t n, <span class="k">const</span> Md&amp; m) {'
+  ];
+  var seen = {};
+  body.forEach(function (b) {
+    if (seen[b.line]) return; seen[b.line] = 1;
+    lines.push('    ' + (b.on ? '<span class="keep">' + b.line + '</span>' : '<span class="dead">' + b.line + '</span>'));
+  });
+  lines.push('    last_ = m.mid_ticks;                 <span class="c">// the actual work</span>');
+  lines.push('    <span class="k">return</span> <span class="k">true</span>;');
+  lines.push('  }');
+  lines.push('};');
+  lines.push('');
+  lines.push('<span class="c">// struck-out lines are not skipped at run time.</span>');
+  lines.push('<span class="c">// They are not in the binary.</span>');
+  $("poCode").innerHTML = lines.join("\n");
+
+  $("poNs").textContent = ns.toFixed(2) + " ns";
+  $("poNs").className = "sv " + (ns > 5 ? "bad" : ns > 2 ? "warn" : "ok");
+  $("poIns").textContent = ins;
+  $("poSz").textContent = kb(sz);
+  $("poBr").textContent = br;
+  $("poBr").className = "sv " + (br > 4 ? "warn" : "ok");
+
+  var svg = $("poSvg"); clear(svg);
+  var X0 = 118, X1 = 604, W = X1 - X0, mx2 = Math.max(rt, full, ins) * 1.1, i;
+  var bars = [["composed", ins, C.acc], ["all features", full, C.warn], ["runtime flags", rt, C.bad]];
+  svg.appendChild(txt(X0, 20, "instructions in on_packet()", 10.5, C.mute, null, "700"));
+  for (i = 0; i < bars.length; i++) {
+    var y = 30 + i * 32;
+    svg.appendChild(txt(X0 - 10, y + 15, bars[i][0], 10, bars[i][2], "end", "700"));
+    svg.appendChild(mk("rect", { x: X0, y: y, width: Math.max(2, bars[i][1] / mx2 * W), height: 21, rx: 3,
+      fill: bars[i][2], opacity: 0.82 }));
+    svg.appendChild(txt(X0 + bars[i][1] / mx2 * W + 7, y + 15, bars[i][1] + " instr", 9.5, bars[i][2], null, "700"));
+  }
+  svg.appendChild(txt(18, 138, "“runtime flags” = the same features behind if(enabled_) tests: the code stays, and so do the branches.", 9.5, C.dim));
+
+  $("poMsg").innerHTML = ins <= PO_BASE.ins + 4
+    ? "<b>" + ins + " instructions.</b> Everything you turned off is gone — not branched around, gone. This is the version that ships into a session, and it is <em>" +
+      (rt / ins).toFixed(1) + "×</em> smaller than the same feature set behind runtime flags."
+    : (PO.al === 2
+      ? "<b>" + ns.toFixed(2) + " ns per packet, and " + (100 * 22.0 / ns).toFixed(0) +
+        "% of it is <code>HeapAlloc</code>.</b> Every other policy on this page is worth a fraction of a nanosecond; one <code>operator new</code> on the hot path costs more than all of them together. Compile-time composition does not save you from a bad choice — it just makes the bad choice explicit in the type."
+      : "<b>" + ins + " instructions, " + br + " branches, " + ns.toFixed(2) +
+        " ns.</b> Each policy you enable adds its code and its branches to the emitted hot path. The point is not that features are free — it is that the ones you did not select cost exactly nothing, and the choice is visible in the type name rather than buried in a config file.");
+}
+$("poHot").addEventListener("click", function () {
+  PO = { log: 0, ck: 0, ts: 1, val: 0, al: 0 }; poBuild(); poDraw();
+});
+$("poSafe").addEventListener("click", function () {
+  PO = { log: 1, ck: 1, ts: 1, val: 1, al: 2 }; poBuild(); poDraw();
+});
+poBuild(); poDraw();
+
+/* ════ 5. WHEN COMPILE-TIME DESIGN HURTS ══════════════════════ */
+var HC = { ax: 3, op: 2, test: 4, rt: false };
+function hcDraw() {
+  var types = Math.pow(HC.op, HC.ax);
+  var tested = Math.min(HC.test, types);
+  var build = 2.2 + tested * (0.9 + HC.ax * 0.22) + Math.pow(HC.ax, 1.4) * 0.5;
+  var nameLen = 12 + HC.ax * 17;
+  var svg = $("hcSvg"); clear(svg);
+  var X0 = 40, X1 = 636, W = X1 - X0, Y0 = 34, H = 118, i;
+  svg.appendChild(txt(X0, 22, "possible instantiations as you add axes (" + HC.op + " options each) — log scale", 10.5, C.mute, null, "700"));
+  var maxN = Math.pow(HC.op, 7);
+  var yOf = function (v) { return Y0 + H - Math.log(v) / Math.log(maxN) * H; };
+  svg.appendChild(mk("line", { x1: X0, y1: Y0 + H, x2: X1, y2: Y0 + H, stroke: C.line2 }));
+  for (i = 1; i <= 7; i++) {
+    var x = X0 + (i - 0.5) / 7 * W, v = Math.pow(HC.op, i);
+    var here = i === HC.ax;
+    svg.appendChild(mk("rect", { x: x - 20, y: yOf(v), width: 40, height: Y0 + H - yOf(v), rx: 3,
+      fill: here ? C.acc : (i < HC.ax ? "rgba(124,58,237,.3)" : C.p2),
+      stroke: here ? C.acc2 : C.line, "stroke-width": here ? 2 : 1 }));
+    svg.appendChild(txt(x, Y0 + H + 15, i + " ax", 9.5, here ? C.acc2 : C.dim, "middle", here ? "700" : null));
+    svg.appendChild(txt(x, yOf(v) - 5, "" + v, 9, here ? C.acc2 : C.dim, "middle", here ? "700" : null));
+  }
+  var ty = yOf(Math.max(tested, 1));
+  svg.appendChild(mk("line", { x1: X0, y1: ty, x2: X1, y2: ty, stroke: C.ok, "stroke-width": 1.4, "stroke-dasharray": "5 3" }));
+  svg.appendChild(txt(X1, ty - 5, "covered by tests: " + tested, 9.5, C.ok, "end", "700"));
+  svg.appendChild(txt(X0, Y0 + H + 34, (types - tested) + " combination" + (types - tested === 1 ? "" : "s") +
+    " have never been compiled, so they have never been type-checked either.", 10,
+    types - tested > 8 ? C.bad : types - tested > 0 ? C.warn : C.ok));
+
+  $("hcTypes").textContent = types.toLocaleString();
+  $("hcTypes").className = "sv " + (types > 32 ? "bad" : types > 8 ? "warn" : "ok");
+  $("hcCi").textContent = tested + " / " + types;
+  $("hcBuild").textContent = build.toFixed(1) + " s";
+  $("hcBuild").className = "sv " + (build > 25 ? "bad" : build > 12 ? "warn" : "ok");
+  $("hcName").textContent = "~" + nameLen + " ch";
+  $("hcName").className = "sv " + (nameLen > 80 ? "bad" : nameLen > 55 ? "warn" : "ok");
+
+  var t, why;
+  if (HC.rt) {
+    t = "Wrong tool — this is a runtime knob";
+    why = "You said an operator has to change this during a session. A policy is part of a type, and nothing changes a type in a running process: the choice was made on a build machine, possibly weeks ago. Make it an ordinary flag, read once per session and kept off the hot path. A well-predicted <code>if (enabled_)</code> costs a fraction of a nanosecond and the branch predictor will get it right every single time, because the value never changes. Keep compile-time composition for the axes that are genuinely fixed at build time — the codec, the container, the signal.";
+  } else if (types - tested > 16) {
+    t = "Policy creep";
+    why = types.toLocaleString() + " possible instantiations and " + tested + " of them compiled by CI. The other " +
+      (types - tested) + " are code that has never been type-checked, and template code that is never instantiated is never really checked at all — a combination nobody tried can fail to build months later, at the moment somebody needs it. Collapse axes that always move together into one policy, give every axis a default so the common case is one word, and <code>static_assert</code>-instantiate the combinations you ship in one small translation unit so CI at least compiles them.";
+  } else if (build > 25) {
+    t = "Fine at run time, expensive at build time";
+    why = "A " + build.toFixed(0) + " s clean build for this component, paid by every person on the team on every build, is how teams quietly abandon templates. The run-time story is perfect and irrelevant to the person waiting. Move the instantiations that never change into an explicitly-instantiated translation unit, keep the header thin, and measure with <code>-ftime-trace</code> before you optimise a guess.";
+  } else if (nameLen > 70) {
+    t = "It works; nobody can read the stack trace";
+    why = "Mangled names around " + nameLen + " characters make a crash dump, a profiler view and an <code>nm</code> listing hard to use, and a fully inlined hot path has no frames to step into anyway. That is survivable, and it is the reason to keep an <code>-Og</code> build with <code>[[gnu::noinline]]</code> on the handlers for the afternoon you need frames — plus a check that it behaves the same as the fast build.";
+  } else {
+    t = "Proportionate";
+    why = HC.ax + " axes, " + types + " possible types, " + tested + " compiled in CI, " + build.toFixed(1) +
+      " s to build. This is what policy-based design should look like: few axes, genuinely orthogonal, each one constrained by a concept so a wrong policy fails with its own name in the message. Add the sixth axis only when you can name the two combinations that need it.";
+  }
+  $("hcT").textContent = t;
+  $("hcWhy").innerHTML = why;
+  $("hcRt").setAttribute("aria-pressed", HC.rt ? "true" : "false");
+  $("hcRt").className = "btn" + (HC.rt ? " on" : "");
+}
+$("hcAx").addEventListener("input", function () { HC.ax = +this.value; $("hcAxV").textContent = HC.ax; hcDraw(); });
+$("hcOp").addEventListener("input", function () { HC.op = +this.value; $("hcOpV").textContent = HC.op; hcDraw(); });
+$("hcTest").addEventListener("input", function () { HC.test = +this.value; $("hcTestV").textContent = HC.test; hcDraw(); });
+$("hcRt").addEventListener("click", function () { HC.rt = !HC.rt; hcDraw(); });
+hcDraw();
+
+/* ── MCQ engine (shared across week pages) ───────────────────── */
+Array.prototype.forEach.call(document.querySelectorAll(".mcq"), function (q) {
+  var answer = parseInt(q.getAttribute("data-a"), 10);
+  var opts = Array.prototype.slice.call(q.querySelectorAll(".opt"));
+  var fb = q.querySelector(".fb");
+  opts.forEach(function (o, i) {
+    o.addEventListener("click", function () {
+      if (q.dataset.done === "1") return;
+      q.dataset.done = "1";
+      var right = i === answer;
+      opts.forEach(function (b, j) {
+        b.disabled = true;
+        if (j === answer) b.classList.add("right");
+        else if (j === i) b.classList.add("wrong");
+        else b.classList.add("dim");
+      });
+      fb.innerHTML = (right ? "<b>Correct.</b> " : "<b>Not quite.</b> ") + q.getAttribute("data-exp");
+      fb.className = "fb show " + (right ? "good" : "poor");
+    });
+  });
+});
+</script>
+</body>
+</html>

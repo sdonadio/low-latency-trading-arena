@@ -852,7 +852,7 @@ function dpDraw() {
   var m = dpModel(), a = DP.anim;
   var svg = $("dpSvg"); clear(svg);
   var X0 = 130, X1 = 636, W = X1 - X0;
-  var maxNs = Math.max(m.vt, 1) * 1.04;
+  var maxNs = Math.max(m.vt, 1) * 1.24;
   var xw = function (v) { return v / maxNs * W; };
   var parts = [
     ["work", W_WORK, C.acc],
@@ -1009,7 +1009,7 @@ function inDraw() {
   var svg = $("inSvg"); clear(svg);
   var X0 = 20, X1 = 600, W = X1 - X0, Y = 44, H = 30;
   var L1I = 32768, scaleMax = Math.max(2600, total * 1.15);
-  svg.appendChild(txt(X0, 22, "machine code emitted, byte for byte — the 32 KB L1i is " + Math.round(L1I / scaleMax * 100) + "× wider than this bar", 10.5, C.mute, null, "700"));
+  svg.appendChild(txt(X0, 22, "machine code emitted, byte for byte — the 32 KB L1i is " + Math.round(L1I / scaleMax) + "× wider than this bar", 10.5, C.mute, null, "700"));
   svg.appendChild(mk("rect", { x: X0, y: Y, width: W, height: H, rx: 5, fill: C.p2, stroke: C.line }));
   var x = X0;
   for (i = 0; i < chosen.length; i++) {
@@ -1190,12 +1190,12 @@ function icDraw() {
   bad.push('    <span class="k">return</span> <span class="k">sizeof</span> v;');
   var floatOk = (t.arm === 0 || t.arm === 1);
   bad.push('  } <span class="k">else</span> <span class="k">if</span> (std::is_floating_point_v&lt;T&gt;) {');
-  bad.push('    <span class="' + (floatOk ? "" : "err") + '">    <span class="k">auto</span> t = <span class="k">static_cast</span>&lt;std::int64_t&gt;(v * <span class="n">100.0</span>);</span>' +
+  bad.push('    <span class="' + (floatOk ? "" : "err") + '"><span class="k">auto</span> t = <span class="k">static_cast</span>&lt;std::int64_t&gt;(v * <span class="n">100.0</span>);</span>' +
     (floatOk ? '  <span class="c">// ok</span>' : '  <span class="c">// ERROR: no operator*</span>'));
   if (!floatOk) broken.push("<code>v * 100.0</code> — " + t.n + " has no <code>operator*</code> with a <code>double</code>");
   var byteOk = (t.arm === 2);
   bad.push('  } <span class="k">else</span> {');
-  bad.push('    <span class="' + (byteOk ? "" : "err") + '">    std::memcpy(b.p, v.data(), v.size());</span>' +
+  bad.push('    <span class="' + (byteOk ? "" : "err") + '">std::memcpy(b.p, v.data(), v.size());</span>' +
     (byteOk ? '     <span class="c">// ok</span>' : '   <span class="c">// ERROR: no member</span>'));
   if (!byteOk) broken.push("<code>v.data()</code> and <code>v.size()</code> — " + t.n + " has no such members");
   bad.push('  }');

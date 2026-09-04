@@ -1,0 +1,1493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" href="data:," />
+<title>Week 10 · Concurrency II — Lock-Free Pipelines — Low-Latency Trading Arena</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    /* ── Low-Latency Trading Arena · shared palette (identical on every page) ── */
+    --accent:       #7c3aed;
+    --accent-2:     #c4b5fd;
+    --accent-3:     #ede9fe;
+    --accent-rgb:   124,58,237;
+    --accent-2-rgb: 196,181,253;
+    --bg:           #0f1115;
+    --panel:        #181b22;
+    --panel2:       #1e222b;
+    --panel-2:      #13161b;
+    --ink:          #e8e6e3;
+    --ink-dim:      #c6c3bf;
+    --ink-mute:     #6f757f;
+    --muted:        #9aa0a6;
+    --dim:          #5f6673;
+    --line:         #272c36;
+    --line-2:       #333a47;
+    --border:       #272c36;
+    --ok:           #3fb950;
+    --warn:         #d29922;
+    --bad:          #f85149;
+    --info:         #6cb6ff;
+    --sky:          #58a6ff;
+    --violet:       #a78bfa;
+    --teal:         #2dd4bf;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.62;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent-2);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  /* ── nav / footer ─────────────────────────────────────────── */
+  nav.top{position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+    padding:11px 22px;background:rgba(15,17,21,.94);border-bottom:1px solid var(--line)}
+  nav.top>a:first-child{font-weight:800;letter-spacing:-.2px;color:var(--ink);font-size:14.5px;
+    border-left:3px solid var(--accent);padding-left:10px}
+  nav.top .crumbs{font-size:12px;color:var(--muted)}
+  nav.top .crumbs b{color:var(--ink);font-weight:700}
+  footer{border-top:1px solid var(--line);background:var(--panel);
+    padding:26px 22px 34px;text-align:center;font-size:11.5px;color:var(--dim);letter-spacing:.3px}
+
+  /* ── sections & typography ────────────────────────────────── */
+  section{max-width:1180px;margin:0 auto;padding:36px 22px 42px;border-top:1px solid var(--line)}
+  section#hero{border-top:none}
+  .kicker{font-size:10.5px;font-weight:800;letter-spacing:1.9px;text-transform:uppercase;color:var(--accent-2)}
+  h1{font-size:clamp(26px,4.2vw,40px);font-weight:800;letter-spacing:-.9px;line-height:1.13;margin:10px 0 6px}
+  h2{font-size:21px;font-weight:700;letter-spacing:-.3px;margin:4px 0 4px}
+  h3{font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);margin-bottom:11px}
+  h4{font-size:13.5px;font-weight:700;margin-bottom:5px}
+  p{margin:9px 0;max-width:82ch}
+  .lead{color:var(--muted);font-size:15px;max-width:84ch}
+  .sub{color:var(--muted);font-size:12.5px}
+  strong{color:#fff;font-weight:650}
+  em.hi{color:var(--accent-2);font-style:normal;font-weight:600}
+  code,.mono{font-family:var(--mono);font-size:12.5px}
+  code{background:rgba(var(--accent-2-rgb),.13);color:#ddd4fb;padding:1px 5px;border-radius:4px}
+  ul.you{list-style:none;margin:16px 0 0;display:grid;gap:8px}
+  ul.you li{position:relative;padding-left:26px;font-size:13.5px;color:var(--ink);max-width:78ch}
+  ul.you li::before{content:"";position:absolute;left:4px;top:8px;width:8px;height:8px;border-radius:2px;
+    background:var(--accent);box-shadow:0 0 0 3px rgba(var(--accent-rgb),.22)}
+  ul.plain{list-style:none;display:grid;gap:7px;font-size:13px;color:var(--muted)}
+  ul.plain li{padding-left:16px;position:relative}
+  ul.plain li::before{content:"\2022";position:absolute;left:2px;color:var(--accent-2)}
+
+  /* ── panels & layout ──────────────────────────────────────── */
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .panel.tight{padding:13px 14px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;align-items:start}
+  .split{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:18px;align-items:start}
+  .split-r{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:18px;align-items:start}
+  .stack{display:grid;gap:14px}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+
+  /* ── controls ─────────────────────────────────────────────── */
+  .btn{font-family:inherit;font-size:12px;font-weight:650;cursor:pointer;color:var(--ink);
+    background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:7px 14px;transition:.15s}
+  .btn:hover:not(:disabled){border-color:var(--accent-2);color:#fff}
+  .btn:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .btn:disabled{opacity:.35;cursor:not-allowed}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.primary:hover:not(:disabled){filter:brightness(1.25)}
+  .btn.on{background:rgba(var(--accent-rgb),.28);border-color:var(--accent-2);color:#fff}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+  .tab{font-family:inherit;font-size:12px;font-weight:650;cursor:pointer;color:var(--muted);
+    background:transparent;border:1px solid var(--line);border-radius:20px;padding:6px 14px;transition:.15s}
+  .tab:hover{color:var(--ink)}
+  .tab[aria-selected="true"]{background:rgba(var(--accent-rgb),.3);border-color:var(--accent-2);color:#fff}
+  .tab:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .ctl{display:grid;gap:4px;margin-bottom:12px}
+  .ctl label{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);
+    display:flex;justify-content:space-between;gap:10px}
+  .ctl label b{font-family:var(--mono);color:var(--accent-2);font-size:12px;text-transform:none;letter-spacing:0}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:3px;
+    background:#2b313d;outline:none;cursor:pointer}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;
+    background:var(--accent-2);border:2px solid var(--bg);cursor:pointer}
+  input[type=range]::-moz-range-thumb{width:15px;height:15px;border-radius:50%;background:var(--accent-2);
+    border:2px solid var(--bg);cursor:pointer}
+  input[type=range]:focus-visible{box-shadow:0 0 0 3px rgba(var(--accent-2-rgb),.4)}
+  select,textarea,input[type=text]{font-family:var(--mono);font-size:12.5px;color:var(--ink);
+    background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:7px 9px;width:100%}
+  select:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px solid var(--accent-2);outline-offset:1px}
+  textarea{line-height:1.55;resize:vertical}
+
+  /* ── stats / pills / code ─────────────────────────────────── */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:1px;
+    background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .stat{background:var(--panel);padding:10px 12px}
+  .stat .sl{font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--dim)}
+  .stat .sv{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--ink);margin-top:3px}
+  .stat .sv.ok{color:var(--ok)} .stat .sv.bad{color:var(--bad)} .stat .sv.warn{color:var(--warn)}
+  .stat .sv.acc{color:var(--accent-2)}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;letter-spacing:.5px;
+    padding:3px 9px;border-radius:20px;border:1px solid var(--line);color:var(--muted)}
+  .pill.ok{color:var(--ok);border-color:rgba(63,185,80,.5);background:rgba(63,185,80,.1)}
+  .pill.bad{color:var(--bad);border-color:rgba(248,81,73,.5);background:rgba(248,81,73,.1)}
+  .pill.warn{color:var(--warn);border-color:rgba(210,153,34,.5);background:rgba(210,153,34,.1)}
+  .pill.acc{color:var(--accent-2);border-color:rgba(var(--accent-2-rgb),.5);background:rgba(var(--accent-rgb),.18)}
+  pre.code{font-family:var(--mono);font-size:11.8px;line-height:1.62;background:#0b0e14;color:#dbe3ea;
+    border:1px solid var(--line);border-radius:10px;padding:13px 14px;overflow-x:auto;white-space:pre}
+  pre.code .k{color:#6cb6ff} pre.code .s{color:#8ddb8c} pre.code .c{color:#6b7484;font-style:italic}
+  pre.code .n{color:#e0b070} pre.code .b{color:#ddd4fb;font-weight:700}
+  .note{border-left:3px solid var(--accent);background:rgba(var(--accent-rgb),.12);border-radius:0 8px 8px 0;
+    padding:10px 13px;font-size:12.5px;color:var(--muted)}
+  .note b{color:var(--ink)}
+  .log{font-family:var(--mono);font-size:11.5px;max-height:230px;overflow-y:auto;display:grid;gap:5px}
+  .log div{background:var(--panel2);border-left:3px solid var(--line);border-radius:0 6px 6px 0;padding:6px 9px;color:var(--muted)}
+  .log div.hl{border-left-color:var(--accent-2);color:var(--ink);background:rgba(var(--accent-rgb),.15)}
+  .log div.ok{border-left-color:var(--ok)} .log div.bad{border-left-color:var(--bad)}
+  svg{display:block;max-width:100%;height:auto}
+  .svgwrap{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px;overflow-x:auto}
+  table.t{width:100%;border-collapse:collapse;font-size:12px}
+  table.t th{font-size:9.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--dim);
+    text-align:left;padding:0 8px 7px;border-bottom:1px solid var(--line)}
+  table.t td{padding:7px 8px;border-bottom:1px solid rgba(39,44,54,.6);color:var(--muted);font-family:var(--mono);font-size:11.8px}
+  table.t td.n{color:var(--ink);font-weight:600}
+
+  /* ── pitfalls ─────────────────────────────────────────────── */
+  details.pit{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:10px;overflow:hidden}
+  details.pit>summary{cursor:pointer;padding:12px 15px;font-size:13.5px;font-weight:650;color:var(--ink);
+    list-style:none;display:flex;gap:11px;align-items:flex-start}
+  details.pit>summary::-webkit-details-marker{display:none}
+  details.pit>summary::before{content:"\25B8";color:var(--accent-2);font-size:12px;line-height:1.5;transition:.2s}
+  details.pit[open]>summary::before{transform:rotate(90deg)}
+  details.pit>summary:focus-visible{outline:2px solid var(--accent-2);outline-offset:-2px}
+  details.pit .body{padding:0 15px 15px 39px;font-size:13px;color:var(--muted);display:grid;gap:9px}
+  details.pit .body .fix{color:var(--ok);font-weight:600}
+
+  /* ── MCQ ──────────────────────────────────────────────────── */
+  .mcq{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 17px;margin-bottom:13px}
+  .mcq .q{font-size:13.8px;font-weight:650;color:var(--ink);margin:0 0 11px;max-width:84ch}
+  .mcq .q span{color:var(--accent-2);font-family:var(--mono);margin-right:7px}
+  .opts{display:grid;gap:7px}
+  .opt{text-align:left;font-family:inherit;font-size:13px;cursor:pointer;color:var(--muted);
+    background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:9px 12px;transition:.15s}
+  .opt:hover:not(:disabled){border-color:var(--accent-2);color:var(--ink)}
+  .opt:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .opt.right{border-color:var(--ok);background:rgba(63,185,80,.13);color:#bce8c4}
+  .opt.wrong{border-color:var(--bad);background:rgba(248,81,73,.12);color:#f4b6b1}
+  .opt.dim{opacity:.5}
+  .fb{margin-top:11px;font-size:12.5px;line-height:1.6;color:var(--muted);display:none;
+    border-left:3px solid var(--line);padding-left:11px}
+  .fb.show{display:block}
+  .fb.show.good{border-left-color:var(--ok)} .fb.show.poor{border-left-color:var(--bad)}
+  .fb b{color:var(--ink)}
+
+  /* ── next ─────────────────────────────────────────────────── */
+  .nextgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+  .nextcard{display:block;background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:15px 17px;transition:.18s;color:inherit}
+  .nextcard:hover{border-color:var(--accent-2);transform:translateY(-2px);text-decoration:none}
+  .nextcard .nl{font-size:10px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--accent-2)}
+  .nextcard .nt{font-size:14.5px;font-weight:700;color:var(--ink);margin-top:5px}
+  .nextcard .nd{font-size:12px;color:var(--muted);margin-top:5px}
+
+  @media (max-width:720px){
+    .grid2,.grid3,.split,.split-r{grid-template-columns:1fr}
+    section{padding:26px 15px 32px}
+    nav.top{padding:10px 15px;gap:8px}
+    nav.top .crumbs{font-size:11px}
+    p,.lead{max-width:none}
+  }
+
+  /* ── week-page shared ─────────────────────────────────────── */
+  #hero{padding:52px 22px 40px;
+    background:radial-gradient(ellipse 820px 340px at 22% -14%,rgba(var(--accent-rgb),.3),transparent 66%)}
+  #hero .wk{font-family:var(--mono);font-size:12px;letter-spacing:2px;color:var(--accent-2);font-weight:700}
+  #hero h1{max-width:24ch}
+  #hero .promise{font-size:16.5px;color:var(--ink);max-width:74ch;margin-top:10px;line-height:1.55}
+  .secnum{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;
+    background:rgba(var(--accent-rgb),.35);border:1px solid var(--accent-2);color:#fff;font-family:var(--mono);
+    font-size:11px;font-weight:700;margin-right:9px;vertical-align:2px}
+  .sw{display:inline-flex;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex-wrap:wrap}
+  .sw button{font-family:inherit;font-size:11.5px;font-weight:650;cursor:pointer;color:var(--muted);
+    background:var(--panel2);border:none;padding:7px 13px;transition:.15s}
+  .sw button[aria-pressed="true"]{background:rgba(var(--accent-rgb),.32);color:#fff}
+  .sw button:focus-visible{outline:2px solid var(--accent-2);outline-offset:-2px}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-top:10px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
+
+
+
+  /* ── week-10 specific ─────────────────────────────────────── */
+  .tablewrap{overflow-x:auto}
+  .cells{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px}
+  .cell{position:relative;height:52px;border-radius:7px;border:1px solid var(--line);
+    background:#0b0e14;display:grid;place-items:center;font-family:var(--mono);font-size:11.5px;
+    color:var(--dim);transition:.16s}
+  .cell.used{background:rgba(var(--accent-rgb),.3);border-color:var(--accent-2);color:#fff}
+  .cell.justw{box-shadow:0 0 0 2px var(--ok) inset}
+  .cell .ix{position:absolute;top:2px;left:5px;font-size:8.5px;color:var(--dim)}
+  .cell .ptr{position:absolute;bottom:2px;font-size:8.5px;font-weight:800;letter-spacing:.5px}
+  .cell .ptr.h{left:4px;color:var(--ok)} .cell .ptr.t{right:4px;color:var(--info)}
+  .bars{display:grid;gap:7px;margin-top:10px}
+  .bar{display:grid;grid-template-columns:126px minmax(0,1fr) 92px;gap:9px;align-items:center}
+  .bar .bl{font-size:11px;font-weight:650;color:var(--muted)}
+  .bar .bt{position:relative;height:16px;border-radius:5px;background:#0b0e14;
+    border:1px solid var(--line);overflow:hidden}
+  .bar .bt i{display:block;height:100%;width:0;transition:width .35s}
+  .bar .bv{font-family:var(--mono);font-size:11px;color:var(--accent-2);text-align:right}
+  .steps{display:grid;gap:5px;font-family:var(--mono);font-size:11.5px}
+  .steps div{background:var(--panel2);border-left:3px solid var(--line);border-radius:0 6px 6px 0;
+    padding:6px 10px;color:var(--dim);white-space:pre-wrap;overflow-wrap:anywhere}
+  .steps div.on{border-left-color:var(--accent-2);color:var(--ink);background:rgba(var(--accent-rgb),.16)}
+  .steps div.past{color:var(--muted)}
+  .toggles{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:9px}
+  .tg{display:flex;gap:10px;align-items:flex-start;background:var(--panel2);border:1px solid var(--line);
+    border-radius:9px;padding:9px 11px;cursor:pointer;transition:.15s}
+  .tg:hover{border-color:var(--line-2)}
+  .tg.on{border-color:var(--accent-2);background:rgba(var(--accent-rgb),.14)}
+  .tg input{margin-top:2px;width:15px;height:15px;accent-color:var(--accent);flex-shrink:0;cursor:pointer}
+  .tg .tt{font-size:12px;font-weight:650;color:var(--ink)}
+  .tg .td{font-size:11px;color:var(--muted);margin-top:2px}
+  .big{font-family:var(--mono);font-size:26px;font-weight:700;color:var(--accent-2);letter-spacing:-.5px}
+  .bigsub{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--dim);margin-top:2px}
+  .verdict{margin-top:14px;font-family:var(--mono);font-size:13px;font-weight:700;letter-spacing:.6px}
+  .verdict.met{color:var(--ok)} .verdict.miss{color:var(--bad)}
+  .lanes{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+  .pipe{display:grid;gap:8px}
+  .stage{display:grid;grid-template-columns:150px minmax(0,1fr);gap:10px;align-items:center;
+    background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:8px 10px}
+  .stage.hot{border-color:var(--bad);background:rgba(248,81,73,.1)}
+  .stage .sn{font-size:11.5px;font-weight:700;color:var(--ink)}
+  .stage .sd{font-size:10px;color:var(--dim);margin-top:1px}
+  .qbadge{font-family:var(--mono);font-size:10.5px;color:var(--muted);text-align:center;
+    letter-spacing:.5px;padding:1px 0}
+  .qbadge.warn{color:var(--warn)} .qbadge.bad{color:var(--bad);font-weight:700}
+  .codepair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+  /* ── mobile guard (identical on every page): single column under 720px,
+        no horizontal overflow. Must stay last in the sheet. ───────────── */
+  @media (max-width:720px){
+    .grid2,.grid3,.grid2.narrow-right,.split,.split-r,.codepair,
+    .nextgrid,.dash,.toggles,.lanes,.weeknav,.weeks,.roles,.stack{
+      grid-template-columns:minmax(0,1fr)}
+    [class*="grid"]>*,.stack>*,.wrap>*,.panel,.panel.tight,.nextcard,.wk,.row>*{min-width:0}
+    pre,pre.code,.svgwrap,svg,canvas,table,select,input,textarea,.mono{max-width:100%}
+    pre,pre.code,.svgwrap,.tablewrap{overflow-x:auto}
+    code,.mono{overflow-wrap:anywhere}
+    .ctl,.ctl>*,.controls>*,.row,.legend>*{min-width:0}
+    .ctl{flex-wrap:wrap} .ctl select,.ctl input[type=range]{flex:1 1 100%;width:100%}
+    p,.lead,.sub,.promise{max-width:none}
+  }
+</style>
+</head>
+<body>
+
+<nav class="top"><a href="index.html">Low-Latency Trading Arena</a><span class="crumbs"><a href="week9.html">← Week 9</a> · <b>Week 10 · Concurrency II — Lock-Free Pipelines</b> · <a href="week11.html">Week 11 →</a></span></nav>
+
+
+<!-- ══════════════ HERO ══════════════ -->
+<section id="hero">
+  <div class="wk">WEEK 10 · 15-WEEK TRACK  ·  SESSION 6 · 9-SESSION TRACK</div>
+  <h1>Concurrency II — Lock-Free Pipelines</h1>
+  <p class="promise">Week 9 gave you atomics and a memory model. This week you assemble them into the
+  one data structure your bot actually needs: a <strong>bounded single-producer / single-consumer ring
+  buffer</strong> that hands ticks from the socket thread to the strategy thread with no mutex, no
+  allocation, and no unbounded queue hiding a slow consumer. Then you chain four of them into a
+  pipeline and watch where it backs up.</p>
+  <ul class="you">
+    <li>Draw an SPSC ring from memory — <em class="hi">monotonic head and tail, a power-of-two mask, full when <code>tail - head == cap</code></em> — and say which index each thread owns.</li>
+    <li>Justify every memory order in <code>push</code> and <code>pop</code>, and name the one pairing that ThreadSanitizer will hold you to.</li>
+    <li>Explain why SPSC needs no CAS, what MPSC costs instead, and how the ABA problem fools a naive <code>compare_exchange</code>.</li>
+    <li>Distinguish wait-free, lock-free and blocking, and pick busy-spin, <code>yield</code> or sleep on purpose rather than by habit.</li>
+  </ul>
+  <div class="row" style="margin-top:22px">
+    <span class="pill acc">Lab: <code>include/spsc_ring.hpp</code> — seven grades, ending in a TSan run</span>
+    <span class="pill">Wire the ring between receive and <code>on_book</code></span>
+    <span class="pill warn">An unbounded queue is a latency bug that looks like a memory bug</span>
+  </div>
+</section>
+
+<!-- ══════════════ WHAT ══════════════ -->
+<section id="what">
+  <div class="kicker">Part 1</div>
+  <h2><span class="secnum">1</span>What is it? One ring, two threads, no lock</h2>
+  <p class="lead">A lock-free pipeline is a chain of bounded queues, and the queue that matters is the
+  easy case: <strong>exactly one thread pushes, exactly one thread pops</strong>. Because each index has
+  a single writer, no thread ever needs to retry — a plain atomic load and store with the right ordering
+  is the whole mechanism. Step the ring below and watch the two counters move independently.</p>
+
+  <div class="split" style="margin-top:18px">
+    <div class="panel">
+      <h3>SPSC ring · capacity 8, mask 7</h3>
+      <div class="cells" id="rgCells" role="group" aria-label="Ring buffer slots with head and tail markers"></div>
+      <div class="row" style="margin-top:13px">
+        <button class="btn primary" id="rgPush" type="button" aria-label="Push one item onto the ring">push(v) →</button>
+        <button class="btn" id="rgPop" type="button" aria-label="Pop one item from the ring">← pop(out)</button>
+        <button class="btn" id="rgBurst" type="button" aria-label="Push five items at once">push × 5</button>
+        <button class="btn" id="rgReset" type="button" aria-label="Reset the ring to empty">Reset</button>
+      </div>
+      <div class="legend">
+        <span><i style="background:var(--ok)"></i>head — consumer writes, producer reads</span>
+        <span><i style="background:var(--info)"></i>tail — producer writes, consumer reads</span>
+        <span><i style="background:rgba(124,58,237,.6)"></i>occupied slot</span>
+      </div>
+      <div class="steps" id="rgLog" style="margin-top:13px" aria-live="polite"></div>
+    </div>
+    <div class="stack">
+      <div class="panel tight"><h3>State</h3>
+        <div class="stats">
+          <div class="stat"><div class="sl">head (monotonic)</div><div class="sv" id="rgH">0</div></div>
+          <div class="stat"><div class="sl">tail (monotonic)</div><div class="sv" id="rgT">0</div></div>
+          <div class="stat"><div class="sl">size = tail − head</div><div class="sv acc" id="rgSz">0</div></div>
+          <div class="stat"><div class="sl">status</div><div class="sv ok" id="rgSt">empty</div></div>
+        </div>
+        <p class="sub" style="margin-top:11px">The counters never wrap back to zero — they only increase.
+        The <em class="hi">slot</em> is <code>counter &amp; mask</code>. Unsigned overflow of the counters is
+        well defined and the subtraction stays correct, so you get all 8 slots with no sacrificial element.</p>
+      </div>
+      <div class="panel tight"><h3>Index arithmetic, right now</h3>
+        <pre class="code" id="rgMath">—</pre>
+      </div>
+      <div class="note" id="rgNote"></div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:30px">The two lines of the contract that carry all the weight</h3>
+  <div class="codepair" style="margin-top:12px">
+    <div>
+      <pre class="code"><span class="c">// producer thread only — it owns tail_</span>
+<span class="k">bool</span> push(std::uint64_t v) {
+  <span class="k">const</span> <span class="k">auto</span> t = tail_.load(mo::relaxed);
+  <span class="k">const</span> <span class="k">auto</span> h = head_.load(mo::acquire);
+  <span class="k">if</span> (t - h == cap_) <span class="k">return</span> <span class="k">false</span>;   <span class="c">// full</span>
+  buf_[t &amp; mask_] = v;              <span class="c">// write payload…</span>
+  tail_.store(t + <span class="n">1</span>, mo::release); <span class="c">// …then publish</span>
+  <span class="k">return</span> <span class="k">true</span>;
+}</pre>
+      <p class="sub">The <code>release</code> store is the publication. Everything written before it —
+      here, the payload — is visible to any thread that <code>acquire</code>-loads the same variable and
+      sees the new value.</p>
+    </div>
+    <div>
+      <pre class="code"><span class="c">// consumer thread only — it owns head_</span>
+<span class="k">bool</span> pop(std::uint64_t&amp; out) {
+  <span class="k">const</span> <span class="k">auto</span> h = head_.load(mo::relaxed);
+  <span class="k">const</span> <span class="k">auto</span> t = tail_.load(mo::acquire);
+  <span class="k">if</span> (h == t) <span class="k">return</span> <span class="k">false</span>;        <span class="c">// empty</span>
+  out = buf_[h &amp; mask_];            <span class="c">// read payload…</span>
+  head_.store(h + <span class="n">1</span>, mo::release); <span class="c">// …then free the slot</span>
+  <span class="k">return</span> <span class="k">true</span>;
+}</pre>
+      <p class="sub">Perfect mirror. Each thread reads its own counter <code>relaxed</code> — nobody else
+      writes it — and reads the other thread's counter <code>acquire</code>. That is the entire
+      correctness argument, and the whole of it fits on these sixteen lines.</p>
+    </div>
+  </div>
+  <div class="note" style="margin-top:12px"><b>The contract in the starter.</b>
+  <code>include/spsc_ring.hpp</code> gives you <code>SPSCRing(capacity_pow2)</code>,
+  <code>push(v) → bool</code>, <code>pop(out) → bool</code>, <code>empty()</code>, <code>full()</code>.
+  <code>push</code> returns <code>false</code> when full; <code>pop</code> returns <code>false</code>
+  when empty. Seven grades: <code>basic, empty_pop, full, fifo, wrap, concurrent, tsan</code> —
+  <code>make spsc</code> for the first five, then a two-thread run and a
+  <code>-fsanitize=thread</code> build that must print zero ThreadSanitizer warnings.</div>
+</section>
+
+<!-- ══════════════ HOW ══════════════ -->
+<section id="how">
+  <div class="kicker">Part 2</div>
+  <h2><span class="secnum">2</span>How does it work? Padding, orderings, and the price of a CAS</h2>
+  <p class="lead">Three mechanisms make or break the ring: where the two counters live in memory, which
+  memory order publishes the payload, and whether you need a retry loop at all. Take them one at a time.</p>
+
+  <h3 style="margin-top:24px">a · What if head and tail share a cache line?</h3>
+  <p><code>head_</code> is written by the consumer; <code>tail_</code> is written by the producer. Two
+  <code>size_t</code> next to each other are 16 bytes, so they land in the same 64-byte line by default.
+  Every producer store then invalidates the consumer's copy of that line and vice versa — two cores
+  ping-ponging one line through the coherence protocol. Nothing is incorrect; you have simply
+  <strong>serialized two threads through a cache line</strong>. Flip the toggle.</p>
+
+  <div class="split-r" style="margin-top:14px">
+    <div class="panel">
+      <h3>Cache-line occupancy</h3>
+      <div class="svgwrap"><svg id="fsSvg" viewBox="0 0 520 190" role="img" aria-label="Diagram of head and tail counters in cache lines, padded or shared"></svg></div>
+      <div class="row" style="margin-top:12px">
+        <div class="sw" role="group" aria-label="Choose counter layout">
+          <button id="fsShared" type="button" aria-pressed="false">Same line (no padding)</button>
+          <button id="fsPad" type="button" aria-pressed="true">alignas(64) each</button>
+        </div>
+      </div>
+      <div class="bars" id="fsBars"></div>
+    </div>
+    <div class="stack">
+      <div class="panel tight"><h3>Measured effect</h3>
+        <div class="stats">
+          <div class="stat"><div class="sl">Throughput</div><div class="sv acc" id="fsThru">—</div></div>
+          <div class="stat"><div class="sl">ns per push/pop pair</div><div class="sv" id="fsNs">—</div></div>
+          <div class="stat"><div class="sl">Struct size</div><div class="sv" id="fsSize">—</div></div>
+          <div class="stat"><div class="sl">Coherence traffic</div><div class="sv" id="fsCoh">—</div></div>
+        </div>
+      </div>
+      <pre class="code" id="fsCode">—</pre>
+      <div class="note" id="fsNote"></div>
+    </div>
+  </div>
+  <p class="sub" style="margin-top:10px">Figures are representative of two cores on the same die of a
+  ~3&#8239;GHz x86-64 part with 64-byte cache lines. Your absolute numbers will differ; the
+  <em class="hi">direction and rough factor</em> will not. Measure it in the lab — it is the cheapest
+  three-line win in the whole course.</p>
+
+  <h3 style="margin-top:32px">b · Which ordering is actually enough?</h3>
+  <p>The permitted-readings table below is the memory model made concrete. Pick an ordering for the
+  producer's store to <code>tail_</code> and for the consumer's load of it, then ask the one question
+  that matters: <strong>can the consumer observe the new <code>tail_</code> but the old payload?</strong></p>
+
+  <div class="split" style="margin-top:14px">
+    <div class="panel">
+      <h3>Producer publishes · consumer observes</h3>
+      <div class="grid2">
+        <div class="ctl"><label for="moStore">Producer: <code>tail_.store</code></label>
+          <select id="moStore" aria-label="Memory order used by the producer store to tail">
+            <option value="relaxed">memory_order_relaxed</option>
+            <option value="release" selected="selected">memory_order_release</option>
+            <option value="seq_cst">memory_order_seq_cst</option>
+          </select></div>
+        <div class="ctl"><label for="moLoad">Consumer: <code>tail_.load</code></label>
+          <select id="moLoad" aria-label="Memory order used by the consumer load of tail">
+            <option value="relaxed">memory_order_relaxed</option>
+            <option value="acquire" selected="selected">memory_order_acquire</option>
+            <option value="seq_cst">memory_order_seq_cst</option>
+          </select></div>
+      </div>
+      <div class="svgwrap"><svg id="moSvg" viewBox="0 0 540 210" role="img" aria-label="Timeline showing which payload values the consumer is permitted to read"></svg></div>
+      <div class="verdict" id="moVerdict">—</div>
+      <p class="sub" id="moWhy" style="margin-top:8px"></p>
+    </div>
+    <div class="stack">
+      <div class="panel tight"><h3>Permitted readings of <code>buf_[t &amp; mask_]</code></h3>
+        <div class="tablewrap"><table class="t" id="moTable">
+          <thead><tr><th>Consumer sees tail_</th><th>May read payload</th><th>Verdict</th></tr></thead>
+          <tbody></tbody></table></div>
+      </div>
+      <div class="panel tight"><h3>What each ordering buys</h3>
+        <div class="stats">
+          <div class="stat"><div class="sl">Race-free?</div><div class="sv" id="moSafe">—</div></div>
+          <div class="stat"><div class="sl">TSan</div><div class="sv" id="moTsan">—</div></div>
+          <div class="stat"><div class="sl">x86-64 fence cost</div><div class="sv" id="moCost">—</div></div>
+          <div class="stat"><div class="sl">ARM64 fence cost</div><div class="sv" id="moArm">—</div></div>
+        </div>
+      </div>
+      <div class="note" id="moNote"></div>
+    </div>
+  </div>
+  <p class="sub" style="margin-top:10px">Note the trap at both ends. <code>relaxed</code>/<code>relaxed</code>
+  is a data race — undefined behaviour, and TSan will say so. <code>seq_cst</code>/<code>seq_cst</code>
+  is correct but adds a full barrier: on x86-64 the store becomes an <code>xchg</code>-style locked
+  operation costing tens of nanoseconds where the release store was free. Release/acquire is not a
+  compromise here; it is the exact tool.</p>
+
+  <h3 style="margin-top:32px">c · MPSC, MPMC and what a CAS loop costs</h3>
+  <p>Add a second producer and the single-writer argument collapses: two threads can read the same
+  <code>tail_</code>, both write slot <em>t</em>, and one message is lost. The fix is a
+  <strong>compare-and-swap retry loop</strong> — claim the slot atomically, and if someone beat you to
+  it, re-read and try again. Nobody blocks, but everybody retries, and retries are wasted cache-line
+  round trips. Drag the slider.</p>
+
+  <div class="split-r" style="margin-top:14px">
+    <div class="panel">
+      <h3>Cost per enqueue vs number of producers</h3>
+      <div class="ctl"><label for="csN">Concurrent producer threads <b id="csNV">1</b></label>
+        <input type="range" id="csN" min="1" max="16" value="1" aria-label="Number of concurrent producer threads"/></div>
+      <div class="svgwrap"><svg id="csSvg" viewBox="0 0 540 220" role="img" aria-label="Chart of nanoseconds per enqueue against producer count for SPSC, MPSC and mutex queues"></svg></div>
+      <div class="legend">
+        <span><i style="background:#7c3aed"></i>SPSC (no CAS — only valid at 1 producer)</span>
+        <span><i style="background:#d29922"></i>MPSC (CAS on tail)</span>
+        <span><i style="background:#f85149"></i>mutex-protected queue</span>
+      </div>
+    </div>
+    <div class="stack">
+      <div class="panel tight"><h3>At this producer count</h3>
+        <div class="stats">
+          <div class="stat"><div class="sl">MPSC ns/enqueue</div><div class="sv acc" id="csMpsc">—</div></div>
+          <div class="stat"><div class="sl">Mean CAS attempts</div><div class="sv" id="csTry">—</div></div>
+          <div class="stat"><div class="sl">Mutex ns/enqueue</div><div class="sv bad" id="csMx">—</div></div>
+          <div class="stat"><div class="sl">MPSC vs SPSC</div><div class="sv warn" id="csRel">—</div></div>
+        </div>
+      </div>
+      <pre class="code"><span class="c">// MPSC producer side: claim a slot, then fill it</span>
+<span class="k">auto</span> t = tail_.load(mo::relaxed);
+<span class="k">do</span> {
+  <span class="k">if</span> (t - head_.load(mo::acquire) == cap_)
+    <span class="k">return</span> <span class="k">false</span>;                <span class="c">// full</span>
+} <span class="k">while</span> (!tail_.compare_exchange_weak(
+        t, t + <span class="n">1</span>, mo::acq_rel, mo::relaxed));
+buf_[t &amp; mask_] = v;               <span class="c">// slot is mine</span>
+seq_[t &amp; mask_].store(t + <span class="n">1</span>, mo::release);</pre>
+      <div class="note" id="csNote"></div>
+    </div>
+  </div>
+  <p class="sub" style="margin-top:10px">Notice the second atomic. Once producers can finish out of
+  order, the consumer can no longer trust <code>tail_</code> to mean &ldquo;everything below this is
+  written&rdquo; — it needs a per-slot sequence stamp. MPMC adds the same on the consumer side. That is
+  the real cost of many writers: not the CAS instruction, but the extra state and the extra cache line
+  every message now touches.</p>
+
+  <h3 style="margin-top:32px">d · The ABA problem, one step at a time</h3>
+  <p>A CAS only asks &ldquo;is the value still what I read?&rdquo; — never &ldquo;has it been
+  untouched?&rdquo;. If another thread changes A to B and back to A, your CAS succeeds on a world that
+  moved underneath you. Step through the classic lock-free stack pop.</p>
+
+  <div class="split" style="margin-top:14px">
+    <div class="panel">
+      <h3>Two threads popping a lock-free stack</h3>
+      <div class="steps" id="abaSteps" aria-live="polite"></div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn" id="abaPrev" type="button" aria-label="Previous step">← Back</button>
+        <button class="btn primary" id="abaNext" type="button" aria-label="Next step">Step →</button>
+        <button class="btn" id="abaReset" type="button" aria-label="Restart the walkthrough">Restart</button>
+        <span class="pill" id="abaCount">step 0 / 7</span>
+      </div>
+    </div>
+    <div class="stack">
+      <div class="panel tight"><h3>Stack, as thread 1 believes it</h3>
+        <div class="svgwrap"><svg id="abaSvg" viewBox="0 0 500 160" role="img" aria-label="Linked-list stack state during the ABA sequence"></svg></div>
+      </div>
+      <div class="panel tight"><h3>Outcome</h3>
+        <h4 id="abaTitle">—</h4>
+        <p class="sub" id="abaDesc"></p>
+      </div>
+      <div class="note"><b>Why SPSC is exempt.</b> ABA is a <em>reclamation</em> problem: it needs freed
+      nodes to be reused while another thread holds a stale pointer. A ring buffer owns a fixed array and
+      never frees a node, and an SPSC ring never CASes anything. That is the second reason the ring is
+      the structure you should reach for — the hard part of lock-free programming is memory reclamation,
+      and the ring simply does not have any.</div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:32px">e · Wait-free, lock-free, blocking</h3>
+  <div class="grid3" style="margin-top:12px">
+    <div class="panel"><h4>Wait-free</h4>
+      <p class="sub">Every thread completes in a <strong>bounded</strong> number of its own steps,
+      regardless of what any other thread does. No retry loops at all. Strongest guarantee, hardest to
+      build, and rarely what you need.</p>
+      <p class="sub"><em class="hi">Your SPSC push and pop are wait-free.</em> There is no loop in either
+      one — that is why they are the fastest thing here.</p></div>
+    <div class="panel"><h4>Lock-free</h4>
+      <p class="sub">At least one thread always makes progress. Individual threads may retry
+      indefinitely, but the system as a whole never stalls, so descheduling or killing a thread cannot
+      wedge the structure.</p>
+      <p class="sub"><em class="hi">A CAS-loop MPSC queue is lock-free, not wait-free.</em> One unlucky
+      producer can starve while others succeed.</p></div>
+    <div class="panel"><h4>Blocking</h4>
+      <p class="sub">A thread can be stopped by another thread's inaction. A mutex holder that is
+      descheduled, page-faults, or is preempted by a higher-priority thread stops everyone waiting on it.</p>
+      <p class="sub"><em class="hi">This is the tail-latency failure mode.</em> Median cost looks fine;
+      the p99.9 carries the one time the holder lost its core.</p></div>
+  </div>
+</section>
+
+<!-- ══════════════ WHY ══════════════ -->
+<section id="why">
+  <div class="kicker">Part 3</div>
+  <h2><span class="secnum">3</span>Why it matters: the pipeline, and where it backs up</h2>
+  <p class="lead">One ring is a lab exercise. Your bot is four stages chained by rings —
+  <strong>feed handler → book builder → strategy → order gateway</strong> — and the end-to-end latency is
+  not the sum of the stage costs. It is the sum of the stage costs <em>plus every queue that is not
+  empty</em>. Turn up the arrival rate and watch which ring fills first.</p>
+
+  <div class="split" style="margin-top:18px">
+    <div class="panel">
+      <h3>Tick-to-trade pipeline · steady state</h3>
+      <div class="pipe" id="plPipe"></div>
+      <div class="legend" style="margin-top:12px">
+        <span><i style="background:rgba(124,58,237,.55)"></i>service time</span>
+        <span><i style="background:var(--warn)"></i>queue &gt; half full</span>
+        <span><i style="background:var(--bad)"></i>saturated — this stage is the bottleneck</span>
+      </div>
+      <p class="sub" style="margin-top:11px">Each bar is one stage's service time; the badge between two
+      stages is the ring that connects them. Queueing delay is computed from the classic
+      <code>ρ/(1−ρ)</code> shape, so it is finite until utilisation reaches one and then it is not.</p>
+    </div>
+    <div class="stack">
+      <div class="panel tight"><h3>Load</h3>
+        <div class="ctl"><label for="plRate">Message arrival rate <b id="plRateV">100 k/s</b></label>
+          <input type="range" id="plRate" min="10" max="600" value="100" aria-label="Arrival rate in thousands of messages per second"/></div>
+        <div class="ctl"><label for="plFeed">Feed handler: decode <b id="plFeedV">0.8 µs</b></label>
+          <input type="range" id="plFeed" min="1" max="60" value="8" aria-label="Feed handler service time in tenths of a microsecond"/></div>
+        <div class="ctl"><label for="plBook">Book builder: apply update <b id="plBookV">1.2 µs</b></label>
+          <input type="range" id="plBook" min="1" max="60" value="12" aria-label="Book builder service time in tenths of a microsecond"/></div>
+        <div class="ctl"><label for="plStrat">Strategy: decide <b id="plStratV">2.0 µs</b></label>
+          <input type="range" id="plStrat" min="1" max="120" value="20" aria-label="Strategy service time in tenths of a microsecond"/></div>
+        <div class="ctl"><label for="plGw">Gateway: encode + send <b id="plGwV">1.5 µs</b></label>
+          <input type="range" id="plGw" min="1" max="60" value="15" aria-label="Gateway service time in tenths of a microsecond"/></div>
+      </div>
+      <div class="panel tight"><h3>End to end</h3>
+        <div class="big" id="plE2E">—</div>
+        <div class="bigsub">tick-to-trade, mean</div>
+        <div class="stats" style="margin-top:11px">
+          <div class="stat"><div class="sl">Service only</div><div class="sv" id="plSvc">—</div></div>
+          <div class="stat"><div class="sl">Queueing</div><div class="sv warn" id="plQ">—</div></div>
+          <div class="stat"><div class="sl">Bottleneck</div><div class="sv" id="plBn">—</div></div>
+          <div class="stat"><div class="sl">Max sustainable</div><div class="sv acc" id="plCap">—</div></div>
+        </div>
+      </div>
+      <div class="note" id="plNote"></div>
+    </div>
+  </div>
+  <div class="note" style="margin-top:14px"><b>Read the lesson, not the numbers.</b> Two things are
+  always true in this widget. First, only the slowest stage sets your capacity — speeding up the other
+  three changes nothing once one is saturated. Second, latency does not rise gently as you approach
+  capacity; it stays flat, then goes vertical. That knee is why the grade is p99.9 and not the mean:
+  your median lives on the flat part and your tail lives on the cliff.</div>
+
+  <h3 style="margin-top:32px">Back-pressure: what a full ring is <em>for</em></h3>
+  <div class="grid3" style="margin-top:12px">
+    <div class="panel"><h4>Drop the newest</h4>
+      <p class="sub">Refuse the push and count it. Cheapest, and correct for anything idempotent or
+      re-sent. Wrong for a stream of incremental book deltas — skip one and your book is silently
+      diverged from the venue's.</p></div>
+    <div class="panel"><h4>Drop the oldest</h4>
+      <p class="sub">Overwrite the stale entry. Right when only the latest value matters — a top-of-book
+      quote, a mark price. The consumer always sees fresh data and you never queue work you would throw
+      away anyway.</p></div>
+    <div class="panel"><h4>Coalesce</h4>
+      <p class="sub">Merge on the way in: keep one slot per symbol and update it in place. Turns a burst
+      of 40 updates on one name into one unit of consumer work. This is the answer that actually holds a
+      p99.9 through a message storm.</p></div>
+  </div>
+  <p class="sub" style="margin-top:11px">What none of the three is: growing the queue. An unbounded queue
+  does not fix a slow consumer, it <em class="hi">hides</em> one — converting a throughput problem you
+  could have measured into a memory-and-latency blowout you discover in production. A bounded ring turns
+  the same event into an explicit decision at the moment it happens, with a counter you can graph.</p>
+
+  <h3 style="margin-top:32px">Busy-spin, yield, or sleep — pick on purpose</h3>
+  <p>Your consumer pops and finds the ring empty. What now? This is the trade you are actually making
+  when you write <code>while (!q.pop(x)) {}</code>, and it is a real trade: latency against a whole core.</p>
+
+  <div class="split-r" style="margin-top:14px">
+    <div class="panel">
+      <h3>Wake strategy</h3>
+      <div class="sw" role="group" aria-label="Choose the consumer wait strategy" style="margin-bottom:14px">
+        <button id="wtSpin" type="button" aria-pressed="true">busy-spin</button>
+        <button id="wtPause" type="button" aria-pressed="false">spin + pause</button>
+        <button id="wtYield" type="button" aria-pressed="false">yield()</button>
+        <button id="wtSleep" type="button" aria-pressed="false">sleep_for(1ms)</button>
+        <button id="wtCv" type="button" aria-pressed="false">condition_variable</button>
+      </div>
+      <div class="bars" id="wtBars"></div>
+      <pre class="code" id="wtCode" style="margin-top:14px">—</pre>
+    </div>
+    <div class="stack">
+      <div class="panel tight"><h3>Cost of this choice</h3>
+        <div class="stats">
+          <div class="stat"><div class="sl">Wake latency (p50)</div><div class="sv acc" id="wtP50">—</div></div>
+          <div class="stat"><div class="sl">Wake latency (p99.9)</div><div class="sv" id="wtP999">—</div></div>
+          <div class="stat"><div class="sl">CPU while idle</div><div class="sv" id="wtCpu">—</div></div>
+          <div class="stat"><div class="sl">Cores you must own</div><div class="sv" id="wtCore">—</div></div>
+        </div>
+      </div>
+      <div class="panel tight"><h3>When it is the right answer</h3>
+        <p class="sub" id="wtWhen">—</p>
+      </div>
+      <div class="note" id="wtNote"></div>
+    </div>
+  </div>
+  <p class="sub" style="margin-top:10px">The honest summary: busy-spin buys you roughly a hundred
+  nanoseconds of wake latency for the price of one core burning at 100&#8239;% forever. That is a good
+  trade for a market-data consumer on a pinned core and a terrible one for a logging thread. Most bots
+  need exactly one spinning thread; the others should sleep.</p>
+</section>
+
+<!-- ══════════════ PITFALLS ══════════════ -->
+<section id="pitfalls">
+  <div class="kicker">Part 4</div>
+  <h2><span class="secnum">4</span>Five ways this goes wrong</h2>
+  <p class="lead">Every one of these has shipped in a submission, and four of the five pass a
+  single-threaded test suite. Open them.</p>
+
+  <details class="pit"><summary>Everything is <code>relaxed</code> and the single-threaded tests pass</summary>
+    <div class="body">
+      <p>This is the most common failure and it is invisible until TSan. With
+      <code>relaxed</code> on both the store to <code>tail_</code> and the load of it, nothing orders the
+      payload write against the index publication. The consumer is permitted to see
+      <code>tail_ == 1</code> and read an uninitialised slot. On x86-64 you will probably never observe
+      it, because the hardware happens not to reorder store-store — which is exactly what makes it
+      dangerous: it is a data race that only shows up on ARM, or after the compiler hoists a load next
+      release.</p>
+      <p><code>make spsc</code> is green. <code>basic, empty_pop, full, fifo, wrap</code> all pass. The
+      <code>tsan</code> grade is the one that fails, and the correct response is not to weaken the test.</p>
+      <p class="fix">Fix: <code>release</code> on each thread's store to its own counter,
+      <code>acquire</code> on each thread's load of the other's. Two words. Then re-run
+      <code>g++ -O1 -g -pthread -fsanitize=thread</code> and require zero ThreadSanitizer warnings.</p>
+    </div></details>
+
+  <details class="pit"><summary>Everything is <code>seq_cst</code>, so it is &ldquo;definitely safe&rdquo;</summary>
+    <div class="body">
+      <p>The opposite reflex, and it is correct — just slow. <code>seq_cst</code> demands a single total
+      order across all sequentially-consistent operations in the program, which on x86-64 turns your free
+      release store into a locked read-modify-write and drains the store buffer. You have added tens of
+      nanoseconds to an operation whose entire budget was a few.</p>
+      <p>Worse, it hides your reasoning. A reviewer cannot tell which orderings you needed and which you
+      panicked into, so the next person to touch the file has to redo the analysis from scratch.</p>
+      <p class="fix">Fix: use the weakest ordering you can <em>justify in a comment</em>. Relaxed for the
+      counter you own, acquire/release for the pairing that publishes the payload. The starter's rubric
+      explicitly checks for &ldquo;not all relaxed, not all seq_cst&rdquo;.</p>
+    </div></details>
+
+  <details class="pit"><summary>Capacity is 1000, and <code>%</code> is on the hot path</summary>
+    <div class="body">
+      <p>A non-power-of-two capacity forces <code>index % cap</code>. Integer division is 20–40 cycles
+      and cannot be pipelined the way a mask can; you have put a division in the innermost loop of your
+      tick path to save a rounding decision at construction time.</p>
+      <p>The related bug: some implementations waste one slot to distinguish full from empty, then use a
+      power of two anyway, and now capacity 1024 stores 1023 items. With monotonic counters you do not
+      need the sacrificial element at all — <code>empty</code> is <code>head == tail</code> and
+      <code>full</code> is <code>tail - head == cap</code>, which are different tests.</p>
+      <p class="fix">Fix: assert the capacity is a power of two in the constructor, store
+      <code>mask_ = cap - 1</code>, and index with <code>&amp;</code>. Keep the counters monotonic and
+      let unsigned wraparound do its (well-defined) job.</p>
+    </div></details>
+
+  <details class="pit"><summary>The two counters are adjacent, so the ring is mysteriously slow</summary>
+    <div class="body">
+      <p>Correct, race-free, TSan-clean — and running at a fraction of its potential throughput because
+      <code>head_</code> and <code>tail_</code> share a 64-byte line. Each producer store invalidates the
+      consumer's cached copy, so every single <code>push</code> and every single <code>pop</code> pays a
+      cross-core coherence miss on data neither thread needed to share.</p>
+      <p>The tell is a throughput number that barely moves when you make the payload smaller, plus a
+      profiler showing time in the atomic load rather than in your code.</p>
+      <p class="fix">Fix: <code>alignas(64)</code> on each counter, and check
+      <code>sizeof</code> afterwards to confirm the padding actually landed. The stretch goal is better
+      still: cache the other side's counter in a plain member and only re-read the atomic when the
+      cached value says you are full or empty.</p>
+    </div></details>
+
+  <details class="pit"><summary>The queue is unbounded, so it &ldquo;never drops anything&rdquo;</summary>
+    <div class="body">
+      <p>It drops nothing and delays everything. A <code>std::deque</code> behind a mutex grows happily
+      during a message storm; each push allocates, the consumer falls further behind, and every tick now
+      waits behind a queue of stale ticks. You are trading on a book that is one second old and your
+      logs show no errors at all.</p>
+      <p>The same bug in a different costume: a bounded ring whose <code>push</code> failure you
+      <code>if (!q.push(v)) { /* try again */ }</code> in a loop. Now the producer — your socket reader —
+      blocks on the consumer, and TCP back-pressure propagates all the way to the venue.</p>
+      <p class="fix">Fix: a fixed ring, an explicit policy on <code>push == false</code> (drop newest,
+      drop oldest, or coalesce), and a counter for how often it fired. If that counter is nonzero in a
+      normal session, your consumer is too slow — fix that, do not enlarge the queue.</p>
+    </div></details>
+</section>
+
+<!-- ══════════════ CHECK ══════════════ -->
+<section id="check">
+  <div class="kicker">Part 5</div>
+  <h2><span class="secnum">5</span>Check yourself</h2>
+  <p class="lead">Three questions, instant feedback, nothing recorded.</p>
+
+  <div class="mcq" data-a="2" data-exp="<b>The release store on tail_ paired with the acquire load of tail_.</b> The producer writes the payload, then release-stores the index; the consumer acquire-loads the index, and if it sees the new value it is guaranteed to see the payload write that preceded the store. Take either half away and the payload read is a data race — permitted to return anything, and reported by ThreadSanitizer. The relaxed loads of each thread's own counter are not part of the argument at all, because each counter has exactly one writer; and seq_cst would work but only by being strictly stronger than needed.">
+    <p class="q"><span>Q1</span>In an SPSC ring, which single pairing makes <code>out = buf_[h &amp; mask_]</code> a race-free read?</p>
+    <div class="opts">
+      <button class="opt" type="button">The <code>relaxed</code> load of <code>head_</code> in <code>pop</code> — the consumer owns it</button>
+      <button class="opt" type="button">The power-of-two mask, which keeps the two threads on different slots</button>
+      <button class="opt" type="button">The producer's <code>release</code> store to <code>tail_</code> and the consumer's <code>acquire</code> load of it</button>
+      <button class="opt" type="button">Nothing — you need <code>seq_cst</code> on all four operations for the read to be defined</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+
+  <div class="mcq" data-a="1" data-exp="<b>It never CASes, and it never frees a node.</b> ABA needs two ingredients: a compare-exchange that treats &ldquo;same value&rdquo; as &ldquo;unchanged&rdquo;, and a reclamation scheme that lets a freed node's address be handed out again while another thread still holds it. An SPSC ring has neither — each index has one writer so no retry loop exists, and the backing array is allocated once and never freed. This is the deeper reason to prefer rings over lock-free lists: the genuinely hard part of lock-free programming is memory reclamation (hazard pointers, epochs, tagged pointers), and a ring simply has no nodes to reclaim. Note that alignas(64) is about false sharing, which is a performance issue, not a correctness one.">
+    <p class="q"><span>Q2</span>Why is the ABA problem irrelevant to an SPSC ring buffer?</p>
+    <div class="opts">
+      <button class="opt" type="button">Because <code>alignas(64)</code> keeps the two indices in separate cache lines</button>
+      <button class="opt" type="button">Because there is no CAS and no node is ever freed, so there is nothing to reuse behind a stale pointer</button>
+      <button class="opt" type="button">Because monotonic counters are unsigned, and unsigned overflow is well defined</button>
+      <button class="opt" type="button">It is not irrelevant — you still need a tagged pointer on <code>tail_</code></button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+
+  <div class="mcq" data-a="3" data-exp="<b>Enlarging it moves the delay from a drop counter into your latency.</b> The consumer's service rate is unchanged, so the arrival rate still exceeds it; the only thing a bigger buffer buys is more places to store work you are already late on. Queueing delay grows with queue occupancy, so a 1M-entry ring at saturation is roughly a thousand times the delay of a 1024-entry one — you converted a visible, countable drop into an invisible second of staleness. The fix is on the consumer side (make the stage faster, or coalesce so one pop covers many updates) or an explicit shed policy. Bounded queues are not a limitation you tolerate; they are the mechanism that makes overload observable.">
+      <p class="q"><span>Q3</span>Your ring's <code>push</code> returns <code>false</code> a few thousand times per session. A teammate proposes growing the capacity from 1,024 to 1,048,576. What actually happens?</p>
+    <div class="opts">
+      <button class="opt" type="button">The drops stop and the tail latency improves, since fewer messages are lost</button>
+      <button class="opt" type="button">Nothing measurable — capacity does not affect a lock-free ring's behaviour</button>
+      <button class="opt" type="button">Throughput rises because the mask covers more bits</button>
+      <button class="opt" type="button">The drop counter goes to zero and the queueing delay rises to match — the same lateness, now unlogged</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+</section>
+
+<!-- ══════════════ NEXT ══════════════ -->
+<section id="next">
+  <div class="kicker">Part 6</div>
+  <h2><span class="secnum">6</span>Do the work</h2>
+  <div class="grid2" style="margin-top:14px">
+    <div class="panel"><h4>In the lab (~45–60 min)</h4><ul class="plain">
+      <li>Finish <code>include/spsc_ring.hpp</code> until all seven grades pass:
+      <code>basic, empty_pop, full, fifo, wrap, concurrent, tsan</code>. <code>make spsc</code> gets you
+      the first five.</li>
+      <li>Run the two-thread build and record <code>spsc_ops_per_sec</code>. Then run the
+      <code>-fsanitize=thread</code> build with <code>SPSC_N=200000</code> and require zero warnings.</li>
+      <li>Deliberately break it: change one <code>release</code> to <code>relaxed</code>, confirm the
+      single-threaded tests still pass, and confirm TSan catches it. That contrast is the lesson.</li>
+      <li>Remove the <code>alignas(64)</code>, re-measure throughput, put it back. Report the factor you
+      saw and your machine's line size.</li>
+    </ul></div>
+    <div class="panel"><h4>After the session</h4><ul class="plain">
+      <li>Wire the ring into the bot: socket reader pushes decoded ticks on one thread, strategy pops on
+      another. The ring <em>is</em> your tick-to-trade queue.</li>
+      <li>Give <code>push == false</code> a real policy — drop newest, drop oldest, or coalesce per
+      symbol — plus a counter. Graph the counter.</li>
+      <li>Stretch: cache the other side's counter in a plain member and only re-read the atomic when the
+      cached value claims full or empty. Re-measure ops/s; keep it TSan-clean.</li>
+      <li>Turn in a working SPSC queue plus a throughput test reporting msgs/s and a p99.9 under load,
+      against a mutex-queue baseline. Due at the start of the next session.</li>
+    </ul></div>
+  </div>
+  <div class="nextgrid" style="margin-top:18px">
+    <a class="nextcard" href="https://github.com/sdonadio/hft-cpp-starter-columbia"><div class="nl">Get the code</div>
+      <div class="nt">15-week track starter</div>
+      <div class="nd">Header stubs, the autograder and the C++ arena client, one topic per session.</div></a>
+    <a class="nextcard" href="https://github.com/sdonadio/hft-cpp-starter-uchicago"><div class="nl">Get the code</div>
+      <div class="nt">9-session track starter</div>
+      <div class="nd">The same stubs and the same grader, packaged for the condensed nine-session schedule.</div></a>
+    <a class="nextcard" href="week9.html"><div class="nl">Back</div>
+      <div class="nt">← Week 9 · Concurrency I — Atomics &amp; Memory Models</div>
+      <div class="nd">Where acquire and release came from, and why a mutex is a tail-latency time bomb.</div></a>
+    <a class="nextcard" href="week11.html"><div class="nl">Next</div>
+      <div class="nt">Week 11 · Network Protocols &amp; Market Data →</div>
+      <div class="nd">Your ring is the seam between the wire and the strategy. Now make the wire fast.</div></a>
+  </div>
+</section>
+
+
+<footer>Low-Latency Trading Arena · an interactive companion for a course on low-latency trading systems in C++ · <a href="https://github.com/sdonadio/low-latency-trading-arena">Source</a></footer>
+
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════
+   Week 10 — Concurrency II · Lock-Free Pipelines
+   ════════════════════════════════════════════════════════════════ */
+var $ = function (id) { return document.getElementById(id); };
+/* SVG namespace taken from the document so no absolute URL appears in this file */
+var SVGNS = $("fsSvg").namespaceURI;
+function mk(tag, attrs, txt) {
+  var e = document.createElementNS(SVGNS, tag), k;
+  for (k in attrs) if (Object.prototype.hasOwnProperty.call(attrs, k)) e.setAttribute(k, attrs[k]);
+  if (txt !== undefined) e.textContent = txt;
+  return e;
+}
+function clear(n) { while (n.firstChild) n.removeChild(n.firstChild); }
+function f1(x) { return (Math.round(x * 10) / 10).toFixed(1); }
+function f2(x) { return (Math.round(x * 100) / 100).toFixed(2); }
+
+/* ─────────────────────────────────────────────────────────────────
+   1 · SPSC ring animator
+   ───────────────────────────────────────────────────────────────── */
+var RG_CAP = 8, RG_MASK = 7;
+var rg = { head: 0, tail: 0, buf: new Array(RG_CAP), next: 101, log: [], last: -1 };
+
+function rgRender() {
+  var cells = $("rgCells"), i, occ = {}, j;
+  clear(cells);
+  for (j = rg.head; j < rg.tail; j++) occ[j & RG_MASK] = rg.buf[j & RG_MASK];
+  for (i = 0; i < RG_CAP; i++) {
+    var d = document.createElement("div");
+    d.className = "cell" + (occ[i] !== undefined ? " used" : "") + (i === rg.last ? " justw" : "");
+    var ix = document.createElement("span"); ix.className = "ix"; ix.textContent = i;
+    d.appendChild(ix);
+    var v = document.createElement("span");
+    v.textContent = occ[i] !== undefined ? occ[i] : "·";
+    d.appendChild(v);
+    if ((rg.head & RG_MASK) === i) {
+      var ph = document.createElement("span"); ph.className = "ptr h"; ph.textContent = "head"; d.appendChild(ph);
+    }
+    if ((rg.tail & RG_MASK) === i) {
+      var pt = document.createElement("span"); pt.className = "ptr t"; pt.textContent = "tail"; d.appendChild(pt);
+    }
+    cells.appendChild(d);
+  }
+  var size = rg.tail - rg.head;
+  $("rgH").textContent = rg.head;
+  $("rgT").textContent = rg.tail;
+  $("rgSz").textContent = size + " / " + RG_CAP;
+  var st = $("rgSt");
+  if (size === 0) { st.textContent = "empty"; st.className = "sv ok"; }
+  else if (size === RG_CAP) { st.textContent = "FULL"; st.className = "sv bad"; }
+  else { st.textContent = "ready"; st.className = "sv acc"; }
+  $("rgPush").disabled = (size === RG_CAP);
+  $("rgPop").disabled = (size === 0);
+  $("rgBurst").disabled = (size === RG_CAP);
+  $("rgMath").textContent =
+    "head        = " + rg.head + "\n" +
+    "tail        = " + rg.tail + "\n" +
+    "mask        = cap - 1 = " + RG_MASK + "  (0b111)\n" +
+    "tail & mask = " + rg.tail + " & " + RG_MASK + " = " + (rg.tail & RG_MASK) + "   <- next write slot\n" +
+    "head & mask = " + rg.head + " & " + RG_MASK + " = " + (rg.head & RG_MASK) + "   <- next read slot\n" +
+    "size        = tail - head = " + size + "\n" +
+    "empty       = (head == tail)         = " + (size === 0) + "\n" +
+    "full        = (tail - head == cap)   = " + (size === RG_CAP);
+  var note = $("rgNote");
+  if (size === RG_CAP) {
+    note.innerHTML = "<b>Full.</b> <code>push</code> returns <code>false</code> — and that return value " +
+      "is the entire back-pressure mechanism. The producer must now decide: drop this message, overwrite " +
+      "the oldest, or coalesce it into a slot that is already queued. What it must <em>not</em> do is spin " +
+      "until space appears, because that turns a slow consumer into a stalled socket reader.";
+  } else if (size === 0) {
+    note.innerHTML = "<b>Empty.</b> <code>pop</code> returns <code>false</code>. The consumer's choice here " +
+      "is the busy-spin / yield / sleep trade-off in Part 3 — and note that <code>head == tail</code> is a " +
+      "different test from <code>tail - head == cap</code>, which is why monotonic counters need no " +
+      "sacrificial slot.";
+  } else {
+    note.innerHTML = "<b>" + size + " in flight.</b> The counters have advanced to " + rg.head + " and " +
+      rg.tail + " and will keep advancing forever — they are never reduced modulo the capacity. Only the " +
+      "<em>index</em> is masked, at the moment of access.";
+  }
+  var lg = $("rgLog"); clear(lg);
+  rg.log.slice(-5).forEach(function (line, i, a) {
+    var e = document.createElement("div");
+    e.className = i === a.length - 1 ? "on" : "past";
+    e.textContent = line;
+    lg.appendChild(e);
+  });
+}
+function rgPush() {
+  if (rg.tail - rg.head === RG_CAP) { rg.log.push("push -> false   // FULL, nothing written"); rg.last = -1; rgRender(); return; }
+  var slot = rg.tail & RG_MASK, v = rg.next++;
+  rg.buf[slot] = v; rg.last = slot;
+  rg.log.push("buf_[" + rg.tail + " & 7] = buf_[" + slot + "] = " + v + " ; tail_.store(" + (rg.tail + 1) + ", release)");
+  rg.tail++;
+  rgRender();
+}
+function rgPop() {
+  if (rg.head === rg.tail) { rg.log.push("pop -> false    // EMPTY, out untouched"); rg.last = -1; rgRender(); return; }
+  var slot = rg.head & RG_MASK, v = rg.buf[slot];
+  rg.log.push("out = buf_[" + rg.head + " & 7] = buf_[" + slot + "] = " + v + " ; head_.store(" + (rg.head + 1) + ", release)");
+  rg.head++; rg.last = -1;
+  rgRender();
+}
+$("rgPush").addEventListener("click", rgPush);
+$("rgPop").addEventListener("click", rgPop);
+$("rgBurst").addEventListener("click", function () { var i; for (i = 0; i < 5; i++) rgPush(); });
+$("rgReset").addEventListener("click", function () {
+  rg.head = 0; rg.tail = 0; rg.next = 101; rg.buf = new Array(RG_CAP); rg.log = ["// reset — head = tail = 0"]; rg.last = -1;
+  rgRender();
+});
+rg.log.push("// empty ring — press push");
+rgRender();
+
+/* ─────────────────────────────────────────────────────────────────
+   2 · False sharing: head and tail in one line vs padded
+   ───────────────────────────────────────────────────────────────── */
+var FS = {
+  pad: {
+    thru: 182, ns: 5.5, size: "192 B", coh: "≈ 0 / op",
+    code: "struct SPSCRing {\n" +
+          "  alignas(64) std::atomic<std::size_t> head_{0};  // consumer\n" +
+          "  alignas(64) std::atomic<std::size_t> tail_{0};  // producer\n" +
+          "  // static_assert(sizeof(*this) % 64 == 0);\n" +
+          "};  // each counter owns a 64-byte line",
+    note: "<b>Padded.</b> The producer's store to <code>tail_</code> dirties a line the consumer never " +
+          "reads, and vice versa. Each core keeps its own line in the Modified state and the two threads " +
+          "stop interacting through the coherence protocol entirely. You paid 112 bytes of padding for " +
+          "roughly a 5× throughput win — the best bytes-per-nanosecond trade in the course."
+  },
+  shared: {
+    thru: 34, ns: 29.4, size: "80 B", coh: "2 transfers / op",
+    code: "struct SPSCRing {\n" +
+          "  std::atomic<std::size_t> head_{0};   // bytes  0..7\n" +
+          "  std::atomic<std::size_t> tail_{0};   // bytes  8..15\n" +
+          "};  // BOTH counters in cache line 0 — false sharing",
+    note: "<b>Same line.</b> Nothing is incorrect: the values are right, the ordering is right, TSan is " +
+          "silent. But every <code>push</code> invalidates the consumer's copy of line 0 and every " +
+          "<code>pop</code> invalidates the producer's, so the two cores hand one line back and forth on " +
+          "every single operation. You have built a lock-free queue and then serialized it through the " +
+          "cache. This is a <em>performance</em> bug that no correctness test can see."
+  }
+};
+var fsMode = "pad";
+function fsRender() {
+  var d = FS[fsMode], svg = $("fsSvg"), i, x0 = 30, w = 56, y;
+  clear(svg);
+  svg.appendChild(mk("text", { x: 30, y: 16, fill: "#9aa0a6", "font-size": "10.5", "font-family": "monospace" }, "cache line 0  (bytes 0–63)"));
+  svg.appendChild(mk("text", { x: 30, y: 116, fill: "#9aa0a6", "font-size": "10.5", "font-family": "monospace" }, "cache line 1  (bytes 64–127)"));
+  var lines = [[0, 24], [1, 124]];
+  lines.forEach(function (L) {
+    var ln = L[0]; y = L[1];
+    svg.appendChild(mk("rect", { x: x0 - 4, y: y - 4, width: w * 8 + 8, height: 44, rx: 7,
+      fill: "none", stroke: "#333a47", "stroke-width": "1" }));
+    for (i = 0; i < 8; i++) {
+      var occupant = null;
+      if (fsMode === "shared") { if (ln === 0 && i === 0) occupant = "head_"; if (ln === 0 && i === 1) occupant = "tail_"; }
+      else { if (ln === 0 && i === 0) occupant = "head_"; if (ln === 1 && i === 0) occupant = "tail_"; }
+      var fill = occupant === "head_" ? "rgba(63,185,80,.34)" : occupant === "tail_" ? "rgba(108,182,255,.34)" : "#0b0e14";
+      var stroke = occupant ? (occupant === "head_" ? "#3fb950" : "#6cb6ff") : "#272c36";
+      svg.appendChild(mk("rect", { x: x0 + i * w, y: y, width: w - 4, height: 36, rx: 5, fill: fill, stroke: stroke, "stroke-width": "1" }));
+      svg.appendChild(mk("text", { x: x0 + i * w + (w - 4) / 2, y: y + 22, fill: occupant ? "#fff" : "#5f6673",
+        "font-size": occupant ? "11" : "9.5", "font-family": "monospace", "text-anchor": "middle" },
+        occupant ? occupant : "—"));
+    }
+  });
+  if (fsMode === "shared") {
+    svg.appendChild(mk("path", { d: "M 92 68 C 92 88 92 88 92 96", stroke: "#f85149", "stroke-width": "1.6", fill: "none" }));
+    svg.appendChild(mk("text", { x: 104, y: 88, fill: "#f85149", "font-size": "10.5", "font-family": "monospace" },
+      "both cores fight for line 0 — invalidation on every op"));
+  } else {
+    svg.appendChild(mk("text", { x: 30, y: 88, fill: "#3fb950", "font-size": "10.5", "font-family": "monospace" },
+      "disjoint lines — no cross-core invalidation"));
+  }
+  svg.appendChild(mk("text", { x: 30, y: 178, fill: "#5f6673", "font-size": "9.5", "font-family": "monospace" },
+    "one square = 8 bytes = one std::size_t"));
+
+  var bars = $("fsBars"); clear(bars);
+  [["alignas(64) each", FS.pad.thru, "#7c3aed"], ["Same cache line", FS.shared.thru, "#f85149"]].forEach(function (b) {
+    var row = document.createElement("div"); row.className = "bar";
+    var l = document.createElement("div"); l.className = "bl"; l.textContent = b[0];
+    var t = document.createElement("div"); t.className = "bt";
+    var i2 = document.createElement("i"); i2.style.background = b[2];
+    i2.style.width = (b[1] / 182 * 100) + "%"; t.appendChild(i2);
+    var v = document.createElement("div"); v.className = "bv"; v.textContent = b[1] + " M ops/s";
+    row.appendChild(l); row.appendChild(t); row.appendChild(v);
+    bars.appendChild(row);
+  });
+  $("fsThru").textContent = d.thru + " M ops/s";
+  $("fsNs").textContent = f1(d.ns) + " ns";
+  $("fsSize").textContent = d.size;
+  $("fsCoh").textContent = d.coh;
+  $("fsCode").textContent = d.code;
+  $("fsNote").innerHTML = d.note;
+  $("fsPad").setAttribute("aria-pressed", fsMode === "pad" ? "true" : "false");
+  $("fsShared").setAttribute("aria-pressed", fsMode === "shared" ? "true" : "false");
+}
+$("fsPad").addEventListener("click", function () { fsMode = "pad"; fsRender(); });
+$("fsShared").addEventListener("click", function () { fsMode = "shared"; fsRender(); });
+fsRender();
+
+/* ─────────────────────────────────────────────────────────────────
+   3 · Permitted-readings visualiser for the release/acquire pairing
+   ───────────────────────────────────────────────────────────────── */
+var MO_COST = {
+  relaxed: { x86: "0 ns (plain mov)", arm: "0 ns (str / ldr)" },
+  release: { x86: "0 ns (plain mov)", arm: "≈ 2 ns (stlr)" },
+  acquire: { x86: "0 ns (plain mov)", arm: "≈ 2 ns (ldar)" },
+  seq_cst: { x86: "≈ 20 ns (locked xchg)", arm: "≈ 3 ns (stlr + dmb)" }
+};
+function moRender() {
+  var st = $("moStore").value, ld = $("moLoad").value;
+  var pub = (st === "release" || st === "seq_cst");
+  var obs = (ld === "acquire" || ld === "seq_cst");
+  var safe = pub && obs;
+  var svg = $("moSvg"); clear(svg);
+  svg.appendChild(mk("text", { x: 14, y: 20, fill: "#c4b5fd", "font-size": "11", "font-weight": "700", "font-family": "monospace" }, "producer thread"));
+  svg.appendChild(mk("text", { x: 14, y: 132, fill: "#c4b5fd", "font-size": "11", "font-weight": "700", "font-family": "monospace" }, "consumer thread"));
+  svg.appendChild(mk("line", { x1: 14, y1: 44, x2: 526, y2: 44, stroke: "#272c36", "stroke-width": "1" }));
+  svg.appendChild(mk("line", { x1: 14, y1: 156, x2: 526, y2: 156, stroke: "#272c36", "stroke-width": "1" }));
+  function evt(x, y, w, label, col) {
+    svg.appendChild(mk("rect", { x: x, y: y, width: w, height: 26, rx: 6, fill: "rgba(124,58,237,.22)", stroke: col, "stroke-width": "1.2" }));
+    svg.appendChild(mk("text", { x: x + w / 2, y: y + 17, fill: "#e8e6e3", "font-size": "10", "font-family": "monospace", "text-anchor": "middle" }, label));
+  }
+  evt(30, 31, 148, "buf_[0] = 42", "#c4b5fd");
+  evt(206, 31, 196, "tail_.store(1, " + st + ")", pub ? "#3fb950" : "#f85149");
+  evt(206, 143, 190, "tail_.load(" + ld + ") == 1", obs ? "#3fb950" : "#f85149");
+  evt(424, 143, 96, "read buf_[0]", safe ? "#3fb950" : "#f85149");
+  if (safe) {
+    svg.appendChild(mk("path", { d: "M 304 57 L 304 143", stroke: "#3fb950", "stroke-width": "1.8", fill: "none", "stroke-dasharray": "0" }));
+    svg.appendChild(mk("polygon", { points: "300,136 308,136 304,145", fill: "#3fb950" }));
+    svg.appendChild(mk("text", { x: 314, y: 96, fill: "#3fb950", "font-size": "10.5", "font-weight": "700", "font-family": "monospace" }, "synchronizes-with"));
+    svg.appendChild(mk("text", { x: 314, y: 111, fill: "#9aa0a6", "font-size": "9.5", "font-family": "monospace" }, "buf_[0] = 42 happens-before read buf_[0]"));
+    svg.appendChild(mk("text", { x: 424, y: 186, fill: "#3fb950", "font-size": "10", "font-weight": "700", "font-family": "monospace" }, "must read 42"));
+  } else {
+    svg.appendChild(mk("path", { d: "M 304 57 L 304 143", stroke: "#f85149", "stroke-width": "1.4", fill: "none", "stroke-dasharray": "4 4" }));
+    svg.appendChild(mk("text", { x: 314, y: 96, fill: "#f85149", "font-size": "10.5", "font-weight": "700", "font-family": "monospace" }, "no synchronizes-with edge"));
+    svg.appendChild(mk("text", { x: 314, y: 111, fill: "#9aa0a6", "font-size": "9.5", "font-family": "monospace" },
+      pub ? "the acquire side is missing" : "the release side is missing"));
+    svg.appendChild(mk("text", { x: 396, y: 186, fill: "#f85149", "font-size": "10", "font-weight": "700", "font-family": "monospace" }, "may read 42 — or anything at all"));
+  }
+  var v = $("moVerdict");
+  v.textContent = safe ? "RACE-FREE — this pairing is enough" : "DATA RACE — undefined behaviour";
+  v.className = "verdict " + (safe ? "met" : "miss");
+  var rows = [
+    ["0 (stale)", "nothing — pop() returns false", "fine either way"],
+    ["1 (fresh)", safe ? "42, and only 42" : "42, or the uninitialised slot", safe ? "correct" : "UB"],
+    ["1 (fresh), reordered", safe ? "impossible — the store is ordered after the payload write" : "permitted — the index may be published first", safe ? "excluded" : "the bug"]
+  ];
+  var tb = $("moTable").querySelector("tbody"); clear(tb);
+  rows.forEach(function (r) {
+    var tr = document.createElement("tr"), i;
+    for (i = 0; i < 3; i++) {
+      var td = document.createElement("td");
+      if (i === 0) td.className = "n";
+      td.textContent = r[i];
+      tr.appendChild(td);
+    }
+    tb.appendChild(tr);
+  });
+  $("moSafe").textContent = safe ? "yes" : "no";
+  $("moSafe").className = "sv " + (safe ? "ok" : "bad");
+  $("moTsan").textContent = safe ? "clean" : "warns";
+  $("moTsan").className = "sv " + (safe ? "ok" : "bad");
+  $("moCost").textContent = MO_COST[st].x86;
+  $("moArm").textContent = MO_COST[st].arm;
+  var note = $("moNote");
+  if (!pub && !obs) {
+    note.innerHTML = "<b>Both halves missing.</b> This is the version that passes every single-threaded " +
+      "test and fails the <code>tsan</code> grade. On x86-64 you may never observe the bug, because TSO " +
+      "does not reorder store-store — which is precisely why you must not rely on it.";
+  } else if (!pub) {
+    note.innerHTML = "<b>Acquire alone does nothing.</b> An acquire load only orders operations after it " +
+      "against a <em>release</em> store it reads from. With a relaxed store there is no release to pair " +
+      "with, so no happens-before edge exists and the payload read is still a race.";
+  } else if (!obs) {
+    note.innerHTML = "<b>Release alone does nothing.</b> The release store orders the payload write before " +
+      "itself, but a relaxed load creates no edge on the reader's side — the consumer's subsequent read " +
+      "of <code>buf_</code> may be hoisted above it by the compiler alone, before any hardware gets involved.";
+  } else if (st === "seq_cst" || ld === "seq_cst") {
+    note.innerHTML = "<b>Correct, and stronger than needed.</b> <code>seq_cst</code> buys a single total " +
+      "order across all seq_cst operations in the program — a property this queue never uses. On x86-64 " +
+      "the seq_cst <em>store</em> is the expensive half: it becomes a locked read-modify-write that drains " +
+      "the store buffer, turning a free instruction into tens of nanoseconds.";
+  } else {
+    note.innerHTML = "<b>This is the answer.</b> Release on the producer's store, acquire on the consumer's " +
+      "load — the minimum that creates the happens-before edge, and free on x86-64. Note the starter's " +
+      "rubric checks for exactly this: <em>not all relaxed, not all seq_cst</em>.";
+  }
+}
+$("moStore").addEventListener("change", moRender);
+$("moLoad").addEventListener("change", moRender);
+moRender();
+
+/* ─────────────────────────────────────────────────────────────────
+   4 · Contention: ns per enqueue vs producer count
+   ───────────────────────────────────────────────────────────────── */
+function csAttempts(n) { return 1 + (n - 1) * 0.58; }
+function csMpsc(n) { return 18 + (csAttempts(n) - 1) * 21; }
+function csMutex(n) { return n === 1 ? 42 : 42 + (n - 1) * 96; }
+var CS_SPSC = 5.5;
+function csRender() {
+  var n = parseInt($("csN").value, 10);
+  $("csNV").textContent = n;
+  var svg = $("csSvg"), W = 540, H = 220, L = 46, R = 14, T = 14, B = 34;
+  clear(svg);
+  var lo = Math.log10(4), hi = Math.log10(2000);
+  function px(i) { return L + (i - 1) / 15 * (W - L - R); }
+  function py(ns) { return T + (1 - (Math.log10(ns) - lo) / (hi - lo)) * (H - T - B); }
+  [5, 10, 50, 100, 500, 1000].forEach(function (g) {
+    svg.appendChild(mk("line", { x1: L, y1: py(g), x2: W - R, y2: py(g), stroke: "#272c36", "stroke-width": "1" }));
+    svg.appendChild(mk("text", { x: L - 6, y: py(g) + 3.5, fill: "#5f6673", "font-size": "9", "font-family": "monospace", "text-anchor": "end" }, g));
+  });
+  svg.appendChild(mk("text", { x: 6, y: 11, fill: "#5f6673", "font-size": "9", "font-family": "monospace" }, "ns/op"));
+  [1, 4, 8, 12, 16].forEach(function (g) {
+    svg.appendChild(mk("text", { x: px(g), y: H - 16, fill: "#5f6673", "font-size": "9", "font-family": "monospace", "text-anchor": "middle" }, g));
+  });
+  svg.appendChild(mk("text", { x: (L + W - R) / 2, y: H - 3, fill: "#5f6673", "font-size": "9", "font-family": "monospace", "text-anchor": "middle" }, "concurrent producer threads"));
+  function series(fn, col, dash) {
+    var d = "", i;
+    for (i = 1; i <= 16; i++) d += (i === 1 ? "M " : " L ") + f1(px(i)) + " " + f1(py(fn(i)));
+    var p = mk("path", { d: d, stroke: col, "stroke-width": "1.9", fill: "none" });
+    if (dash) p.setAttribute("stroke-dasharray", "5 4");
+    svg.appendChild(p);
+  }
+  series(function () { return CS_SPSC; }, "#7c3aed", true);
+  series(csMpsc, "#d29922", false);
+  series(csMutex, "#f85149", false);
+  svg.appendChild(mk("circle", { cx: px(1), cy: py(CS_SPSC), r: 4.5, fill: "#7c3aed", stroke: "#0f1115", "stroke-width": "1.5" }));
+  svg.appendChild(mk("text", { x: px(1) + 9, y: py(CS_SPSC) + 3, fill: "#c4b5fd", "font-size": "9.5", "font-family": "monospace" }, "SPSC: valid only here"));
+  svg.appendChild(mk("line", { x1: px(n), y1: T, x2: px(n), y2: H - B, stroke: "#c4b5fd", "stroke-width": "1", "stroke-dasharray": "3 3" }));
+  svg.appendChild(mk("circle", { cx: px(n), cy: py(csMpsc(n)), r: 4, fill: "#d29922" }));
+  svg.appendChild(mk("circle", { cx: px(n), cy: py(csMutex(n)), r: 4, fill: "#f85149" }));
+
+  $("csMpsc").textContent = f1(csMpsc(n)) + " ns";
+  $("csTry").textContent = f2(csAttempts(n));
+  $("csMx").textContent = Math.round(csMutex(n)) + " ns";
+  $("csRel").textContent = f1(csMpsc(n) / CS_SPSC) + "×";
+  var note = $("csNote");
+  if (n === 1) {
+    note.innerHTML = "<b>One producer.</b> The CAS succeeds first try every time, yet MPSC still costs " +
+      "about 3× SPSC — you are paying for a locked read-modify-write and a second atomic (the per-slot " +
+      "sequence stamp) that the single-writer design does not need. <em class='hi'>If you have one " +
+      "producer, do not use an MPSC queue.</em>";
+  } else if (n <= 4) {
+    note.innerHTML = "<b>Mild contention.</b> " + f2(csAttempts(n)) + " attempts per enqueue on average. " +
+      "The CAS loop is still cheap, and it is comfortably ahead of the mutex because the loser retries in " +
+      "user space instead of parking in the kernel.";
+  } else {
+    note.innerHTML = "<b>Real contention.</b> " + f2(csAttempts(n)) + " attempts per enqueue: every failed " +
+      "CAS is a cache line pulled from another core and thrown away. The mutex is worse still — but note " +
+      "that neither curve is the interesting answer. <em class='hi'>Shard instead:</em> give each producer " +
+      "its own SPSC ring and have the consumer round-robin them. " + n + " wait-free rings beat one " +
+      "contended lock-free queue at every count on this chart.";
+  }
+}
+$("csN").addEventListener("input", csRender);
+csRender();
+
+/* ─────────────────────────────────────────────────────────────────
+   5 · ABA stepper
+   ───────────────────────────────────────────────────────────────── */
+var ABA = [
+  { line: "T1: node* old = head.load();           // old == A",
+    stack: ["A", "B", "C"], t1: "A", t1next: null, owns: "",
+    title: "Thread 1 reads the head", desc: "T1 wants to pop. It reads head and gets the address of node A." },
+  { line: "T1: node* nxt = old->next;             // nxt == B",
+    stack: ["A", "B", "C"], t1: "A", t1next: "B", owns: "",
+    title: "Thread 1 reads A's successor", desc: "T1 now intends to CAS head from A to B. It holds two addresses: A and B." },
+  { line: "T1: --- descheduled here ---           // preempted",
+    stack: ["A", "B", "C"], t1: "A", t1next: "B", owns: "",
+    title: "Thread 1 loses its core", desc: "A page fault, a timer interrupt, a higher-priority thread — the window is only nanoseconds wide, and at ten million ops per second it opens often." },
+  { line: "T2: pop() -> A                         // head = B",
+    stack: ["B", "C"], t1: "A", t1next: "B", owns: "A",
+    title: "Thread 2 pops A", desc: "T2 runs the same algorithm successfully. head is now B; T2 owns node A." },
+  { line: "T2: pop() -> B                         // head = C",
+    stack: ["C"], t1: "A", t1next: "B", owns: "A, B",
+    title: "Thread 2 pops B", desc: "T2 pops again and owns both A and B. T1's cached nxt pointer now refers to a node that is no longer in the stack." },
+  { line: "T2: delete B;                          // B is freed",
+    stack: ["C"], t1: "A", t1next: "B", owns: "A", freed: "B",
+    title: "Thread 2 frees B", desc: "The allocator reclaims B's memory. T1 is still holding B's address, and has no way to know." },
+  { line: "T2: push(A);                           // head = A, A->next = C",
+    stack: ["A", "C"], t1: "A", t1next: "B", owns: "", freed: "B",
+    title: "Thread 2 pushes A back — value A again", desc: "This is the second A in A-B-A. head holds the same address it held in step 1, but A's successor is now C, not B." },
+  { line: "T1: head.compare_exchange(old, nxt);   // SUCCEEDS",
+    stack: ["B?", "?"], t1: "A", t1next: "B", owns: "", freed: "B", broken: true,
+    title: "The CAS succeeds, and the stack is destroyed", desc: "head still equalled A, so the compare passed. head now points at freed memory, and C — which was reachable a moment ago — is leaked. No thread did anything wrong locally; the bug is that CAS compares values, not histories." }
+];
+var abaI = 0;
+function abaRender() {
+  var s = ABA[abaI], box = $("abaSteps"), i;
+  clear(box);
+  for (i = 0; i < ABA.length; i++) {
+    var d = document.createElement("div");
+    d.className = i === abaI ? "on" : (i < abaI ? "past" : "");
+    d.textContent = ABA[i].line;
+    box.appendChild(d);
+  }
+  $("abaCount").textContent = "step " + (abaI + 1) + " / " + ABA.length;
+  $("abaPrev").disabled = abaI === 0;
+  $("abaNext").disabled = abaI === ABA.length - 1;
+  $("abaTitle").textContent = s.title;
+  $("abaDesc").textContent = s.desc;
+  var svg = $("abaSvg"); clear(svg);
+  svg.appendChild(mk("text", { x: 10, y: 18, fill: "#c4b5fd", "font-size": "10.5", "font-weight": "700", "font-family": "monospace" }, "head"));
+  var x = 66, y = 34, w = 62, gap = 34;
+  s.stack.forEach(function (nm, k) {
+    var bad = s.broken && k === 0;
+    svg.appendChild(mk("rect", { x: x, y: y, width: w, height: 38, rx: 6,
+      fill: bad ? "rgba(248,81,73,.22)" : "rgba(124,58,237,.24)",
+      stroke: bad ? "#f85149" : "#c4b5fd", "stroke-width": "1.4" }));
+    svg.appendChild(mk("text", { x: x + w / 2, y: y + 24, fill: "#fff", "font-size": "14", "font-weight": "700", "font-family": "monospace", "text-anchor": "middle" }, nm));
+    if (k < s.stack.length - 1) {
+      svg.appendChild(mk("line", { x1: x + w, y1: y + 19, x2: x + w + gap - 6, y2: y + 19, stroke: "#5f6673", "stroke-width": "1.4" }));
+      svg.appendChild(mk("polygon", { points: (x + w + gap - 8) + "," + (y + 15) + " " + (x + w + gap - 8) + "," + (y + 23) + " " + (x + w + gap - 1) + "," + (y + 19), fill: "#5f6673" }));
+    }
+    x += w + gap;
+  });
+  svg.appendChild(mk("line", { x1: 34, y1: 24, x2: 60, y2: 48, stroke: "#c4b5fd", "stroke-width": "1.4" }));
+  svg.appendChild(mk("text", { x: 10, y: 106, fill: "#9aa0a6", "font-size": "10", "font-family": "monospace" },
+    "T1 holds:  old = " + s.t1 + (s.t1next ? " ,  nxt = " + s.t1next : "")));
+  svg.appendChild(mk("text", { x: 10, y: 124, fill: s.owns ? "#d29922" : "#5f6673", "font-size": "10", "font-family": "monospace" },
+    "T2 owns:   " + (s.owns || "—")));
+  svg.appendChild(mk("text", { x: 10, y: 142, fill: s.freed ? "#f85149" : "#5f6673", "font-size": "10", "font-family": "monospace" },
+    "freed:     " + (s.freed || "—")));
+  if (s.broken) svg.appendChild(mk("text", { x: 250, y: 142, fill: "#f85149", "font-size": "10.5", "font-weight": "700", "font-family": "monospace" }, "head -> freed memory; C leaked"));
+}
+$("abaNext").addEventListener("click", function () { if (abaI < ABA.length - 1) { abaI++; abaRender(); } });
+$("abaPrev").addEventListener("click", function () { if (abaI > 0) { abaI--; abaRender(); } });
+$("abaReset").addEventListener("click", function () { abaI = 0; abaRender(); });
+abaRender();
+
+/* ─────────────────────────────────────────────────────────────────
+   6 · Pipeline stage widget (4 stages joined by rings)
+   ───────────────────────────────────────────────────────────────── */
+var PL_STAGES = [
+  { id: "plFeed", name: "Feed handler", desc: "decode the frame off the socket" },
+  { id: "plBook", name: "Book builder", desc: "apply the delta to the local book" },
+  { id: "plStrat", name: "Strategy", desc: "signal, sizing, risk check" },
+  { id: "plGw", name: "Order gateway", desc: "encode + write to the socket" }
+];
+function plRender() {
+  var rate = parseInt($("plRate").value, 10);              /* k msgs per second */
+  var lam = rate / 1000;                                    /* msgs per microsecond */
+  $("plRateV").textContent = rate + " k/s";
+  var svc = PL_STAGES.map(function (s) {
+    var v = parseInt($(s.id).value, 10) / 10;               /* microseconds */
+    $(s.id + "V").textContent = f1(v) + " µs";
+    return v;
+  });
+  var maxS = Math.max.apply(null, svc);
+  var bnIdx = svc.indexOf(maxS);
+  var totalSvc = svc.reduce(function (a, b) { return a + b; }, 0);
+  var q = [], occ = [], sat = false, i;
+  for (i = 0; i < 4; i++) {
+    var rho = svc[i] * lam;
+    if (rho >= 0.995) { sat = true; q.push(Infinity); occ.push(Infinity); }
+    else { q.push(rho / (1 - rho) * svc[i]); occ.push(rho * rho / (1 - rho)); }
+  }
+  var totalQ = sat ? Infinity : q.reduce(function (a, b) { return a + b; }, 0);
+  var pipe = $("plPipe"); clear(pipe);
+  for (i = 0; i < 4; i++) {
+    var rho2 = svc[i] * lam;
+    var row = document.createElement("div");
+    row.className = "stage" + (rho2 >= 0.995 ? " hot" : "");
+    var left = document.createElement("div");
+    var nm = document.createElement("div"); nm.className = "sn"; nm.textContent = (i + 1) + " · " + PL_STAGES[i].name;
+    var de = document.createElement("div"); de.className = "sd"; de.textContent = PL_STAGES[i].desc;
+    left.appendChild(nm); left.appendChild(de);
+    var bar = document.createElement("div"); bar.className = "bt";
+    bar.style.position = "relative"; bar.style.height = "20px"; bar.style.borderRadius = "5px";
+    bar.style.background = "#0b0e14"; bar.style.border = "1px solid var(--line)"; bar.style.overflow = "hidden";
+    var fill = document.createElement("i");
+    fill.style.display = "block"; fill.style.height = "100%";
+    fill.style.width = Math.min(100, svc[i] / 12 * 100) + "%";
+    fill.style.background = rho2 >= 0.995 ? "var(--bad)" : rho2 > 0.5 ? "var(--warn)" : "rgba(124,58,237,.55)";
+    bar.appendChild(fill);
+    var lbl = document.createElement("div");
+    lbl.style.cssText = "position:absolute;right:7px;top:1px;font-family:var(--mono);font-size:10.5px;color:#e8e6e3";
+    lbl.textContent = f1(svc[i]) + " µs  ·  ρ = " + (rho2 >= 0.995 ? "≥ 1.00" : f2(rho2));
+    bar.appendChild(lbl);
+    row.appendChild(left); row.appendChild(bar);
+    pipe.appendChild(row);
+    if (i < 3) {
+      var b = document.createElement("div");
+      var o = occ[i];
+      b.className = "qbadge" + (o === Infinity ? " bad" : o > 3 ? " bad" : o > 0.8 ? " warn" : "");
+      b.textContent = "↓  SPSC ring " + (i + 1) + "→" + (i + 2) + "   ·   mean depth " +
+        (o === Infinity ? "unbounded — this ring overflows" : f2(o) + " msgs") +
+        (o === Infinity ? "" : "   ·   queue delay " + f1(q[i] * 1000) + " ns");
+      pipe.appendChild(b);
+    }
+  }
+  $("plSvc").textContent = f1(totalSvc) + " µs";
+  $("plQ").textContent = sat ? "unbounded" : f1(totalQ) + " µs";
+  $("plE2E").textContent = sat ? "∞" : f1(totalSvc + totalQ) + " µs";
+  $("plBn").textContent = (bnIdx + 1) + " · " + PL_STAGES[bnIdx].name.split(" ")[0];
+  $("plCap").textContent = Math.round(1000 / maxS) + " k/s";
+  var note = $("plNote");
+  if (sat) {
+    note.innerHTML = "<b>Saturated.</b> Stage " + (bnIdx + 1) + " (" + PL_STAGES[bnIdx].name + ") needs " +
+      f1(maxS) + " µs per message but messages arrive every " + f1(1 / lam) + " µs. Its ring fills, " +
+      "<code>push</code> starts returning <code>false</code>, and your back-pressure policy is now the " +
+      "only thing standing between you and a book that is seconds stale. Speeding up any <em>other</em> " +
+      "stage changes nothing.";
+  } else if (totalQ > totalSvc) {
+    note.innerHTML = "<b>Queueing now dominates.</b> You are spending " + f1(totalQ) + " µs waiting and " +
+      f1(totalSvc) + " µs working. Above about ρ = 0.5 the <code>ρ/(1−ρ)</code> term takes over, which is " +
+      "why capacity planning in a trading system targets 30–50&#8239;% utilisation and not 90&#8239;%.";
+  } else {
+    note.innerHTML = "<b>Comfortable.</b> Queues are nearly empty, so end-to-end latency is essentially the " +
+      "sum of the four service times. Capacity is " + Math.round(1000 / maxS) + " k/s, set entirely by " +
+      PL_STAGES[bnIdx].name + " — push the rate up and watch which ring fills first.";
+  }
+}
+["plRate", "plFeed", "plBook", "plStrat", "plGw"].forEach(function (id) {
+  $(id).addEventListener("input", plRender);
+});
+plRender();
+
+/* ─────────────────────────────────────────────────────────────────
+   7 · Busy-spin vs yield vs sleep
+   ───────────────────────────────────────────────────────────────── */
+var WT = {
+  wtSpin: { name: "busy-spin", p50: 60, p999: 420, cpu: "100 %", core: "1, pinned & isolated",
+    code: "// hottest, greediest\nwhile (!ring.pop(tick)) { }        // tight retry loop\nhandle(tick);",
+    when: "The market-data consumer on a dedicated, isolated core with a shielded IRQ set. This is the only " +
+      "wait strategy that keeps the wake-up inside a cache-warm loop, and it is the reason production feed " +
+      "handlers idle at 100 % CPU by design.",
+    note: "<b>You are buying nanoseconds with a core.</b> Nothing else in this table gets under a " +
+      "microsecond, and nothing else costs a whole CPU. Make the trade once, on the one thread where " +
+      "tick-to-trade is measured — and pin it, or the scheduler will migrate it and hand you a cold cache " +
+      "in your p99.9." },
+  wtPause: { name: "spin + pause", p50: 72, p999: 300, cpu: "100 %", core: "1, pinned (SMT-friendlier)",
+    code: "#include <emmintrin.h>\nwhile (!ring.pop(tick)) _mm_pause();   // hint the core\nhandle(tick);",
+    when: "The same place as a bare spin, and it is almost always the better default. <code>pause</code> " +
+      "tells the core you are in a spin-wait, which frees pipeline resources for the sibling hyperthread " +
+      "and drops the memory-order-violation penalty when the loop finally exits.",
+    note: "<b>Nearly free, strictly better.</b> The p50 is a hair worse because the hint costs a few dozen " +
+      "cycles; the p99.9 is better because you stop fighting the sibling thread and the core exits the loop " +
+      "faster. On ARM64 the equivalent is <code>__builtin_arm_yield()</code> / the <code>yield</code> " +
+      "instruction." },
+  wtYield: { name: "yield()", p50: 1200, p999: 62000, cpu: "≈ 95 %", core: "shared, unpinned",
+    code: "while (!ring.pop(tick))\n  std::this_thread::yield();       // syscall into the scheduler\nhandle(tick);",
+    when: "Almost nowhere on a hot path. It is a reasonable middle rung inside a backoff ladder — spin N " +
+      "times, then pause M times, then yield — for a queue that is usually busy but occasionally idle for " +
+      "milliseconds.",
+    note: "<b>The worst of both worlds if used alone.</b> It still burns most of a core, because it returns " +
+      "immediately whenever nothing else is runnable, yet it hands control to the scheduler and so exposes " +
+      "you to a full timeslice of delay when something else <em>is</em>. That 62 µs p99.9 is a scheduler " +
+      "quantum leaking into your tail." },
+  wtSleep: { name: "sleep_for(1ms)", p50: 1050000, p999: 2100000, cpu: "≈ 0.1 %", core: "none",
+    code: "using namespace std::chrono_literals;\nwhile (!ring.pop(tick))\n  std::this_thread::sleep_for(1ms);\nhandle(tick);",
+    when: "Cold paths only: log flushing, metrics upload, position reconciliation, a heartbeat. Anywhere a " +
+      "millisecond of latency is invisible and a core is worth more than the wake-up time.",
+    note: "<b>A thousand times cheaper and twenty thousand times slower.</b> The p50 is not 1 ms but " +
+      "slightly more, because <code>sleep_for</code> guarantees a minimum, not a maximum — and the p99.9 is " +
+      "roughly two quanta once the timer expiry lands behind another runnable thread. Correct for cold " +
+      "paths; fatal on a tick path." },
+  wtCv: { name: "condition_variable", p50: 3100, p999: 84000, cpu: "≈ 0 %", core: "none",
+    code: "std::unique_lock<std::mutex> lk(m_);\ncv_.wait(lk, [&]{ return !ring.empty(); });\nring.pop(tick);   // note: a mutex is back",
+    when: "A worker pool that must not spin, where a few microseconds of wake latency is acceptable and " +
+      "throughput matters more than tail latency. Also the right answer for anything that idles for seconds " +
+      "at a time and must wake promptly when work arrives.",
+    note: "<b>You just put the mutex back.</b> A condition variable needs one, and the notifying thread now " +
+      "takes a lock on your hot path — the exact tail-latency exposure the lock-free ring existed to remove. " +
+      "It is a fine mechanism; it just belongs on the other side of the pipeline from the tick path." }
+};
+var wtKeys = ["wtSpin", "wtPause", "wtYield", "wtSleep", "wtCv"];
+var wtSel = "wtSpin";
+function nsFmt(ns) {
+  if (ns < 1000) return Math.round(ns) + " ns";
+  if (ns < 1000000) return f1(ns / 1000) + " µs";
+  return f2(ns / 1000000) + " ms";
+}
+function wtRender() {
+  var d = WT[wtSel];
+  wtKeys.forEach(function (k) { $(k).setAttribute("aria-pressed", k === wtSel ? "true" : "false"); });
+  var bars = $("wtBars"); clear(bars);
+  var lo = Math.log10(50), hi = Math.log10(2200000);
+  wtKeys.forEach(function (k) {
+    var w = WT[k], row = document.createElement("div"); row.className = "bar";
+    var l = document.createElement("div"); l.className = "bl"; l.textContent = w.name;
+    if (k === wtSel) l.style.color = "var(--ink)";
+    var t = document.createElement("div"); t.className = "bt";
+    var i = document.createElement("i");
+    i.style.background = k === wtSel ? "#7c3aed" : "#3a3f4d";
+    i.style.width = ((Math.log10(w.p50) - lo) / (hi - lo) * 100) + "%";
+    t.appendChild(i);
+    var v = document.createElement("div"); v.className = "bv"; v.textContent = nsFmt(w.p50);
+    row.appendChild(l); row.appendChild(t); row.appendChild(v);
+    bars.appendChild(row);
+  });
+  var cap = document.createElement("div");
+  cap.className = "sub"; cap.style.marginTop = "6px";
+  cap.textContent = "median wake latency, log scale — 50 ns to 2 ms";
+  bars.appendChild(cap);
+  $("wtCode").textContent = d.code;
+  $("wtP50").textContent = nsFmt(d.p50);
+  $("wtP999").textContent = nsFmt(d.p999);
+  $("wtCpu").textContent = d.cpu;
+  $("wtCore").textContent = d.core;
+  $("wtWhen").innerHTML = d.when;
+  $("wtNote").innerHTML = d.note;
+}
+wtKeys.forEach(function (k) {
+  $(k).addEventListener("click", function () { wtSel = k; wtRender(); });
+});
+wtRender();
+
+/* ── MCQ engine (shared across week pages) ───────────────────── */
+Array.prototype.forEach.call(document.querySelectorAll(".mcq"), function (q) {
+  var answer = parseInt(q.getAttribute("data-a"), 10);
+  var opts = Array.prototype.slice.call(q.querySelectorAll(".opt"));
+  var fb = q.querySelector(".fb");
+  opts.forEach(function (o, i) {
+    o.addEventListener("click", function () {
+      if (q.dataset.done === "1") return;
+      q.dataset.done = "1";
+      var right = i === answer;
+      opts.forEach(function (b, j) {
+        b.disabled = true;
+        if (j === answer) b.classList.add("right");
+        else if (j === i) b.classList.add("wrong");
+        else b.classList.add("dim");
+      });
+      fb.innerHTML = (right ? "<b>Correct.</b> " : "<b>Not quite.</b> ") + q.getAttribute("data-exp");
+      fb.className = "fb show " + (right ? "good" : "poor");
+    });
+  });
+});
+</script>
+</body>
+</html>

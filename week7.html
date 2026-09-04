@@ -1,0 +1,1688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" href="data:," />
+<title>Week 7 · Data Structures for HFT — The Order Book — Low-Latency Trading Arena</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    /* ── Low-Latency Trading Arena · shared palette (identical on every page) ── */
+    --accent:       #7c3aed;
+    --accent-2:     #c4b5fd;
+    --accent-3:     #ede9fe;
+    --accent-rgb:   124,58,237;
+    --accent-2-rgb: 196,181,253;
+    --bg:           #0f1115;
+    --panel:        #181b22;
+    --panel2:       #1e222b;
+    --panel-2:      #13161b;
+    --ink:          #e8e6e3;
+    --ink-dim:      #c6c3bf;
+    --ink-mute:     #6f757f;
+    --muted:        #9aa0a6;
+    --dim:          #5f6673;
+    --line:         #272c36;
+    --line-2:       #333a47;
+    --border:       #272c36;
+    --ok:           #3fb950;
+    --warn:         #d29922;
+    --bad:          #f85149;
+    --info:         #6cb6ff;
+    --sky:          #58a6ff;
+    --violet:       #a78bfa;
+    --teal:         #2dd4bf;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.62;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent-2);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  /* ── nav / footer ─────────────────────────────────────────── */
+  nav.top{position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+    padding:11px 22px;background:rgba(15,17,21,.94);border-bottom:1px solid var(--line)}
+  nav.top>a:first-child{font-weight:800;letter-spacing:-.2px;color:var(--ink);font-size:14.5px;
+    border-left:3px solid var(--accent);padding-left:10px}
+  nav.top .crumbs{font-size:12px;color:var(--muted)}
+  nav.top .crumbs b{color:var(--ink);font-weight:700}
+  footer{border-top:1px solid var(--line);background:var(--panel);
+    padding:26px 22px 34px;text-align:center;font-size:11.5px;color:var(--dim);letter-spacing:.3px}
+
+  /* ── sections & typography ────────────────────────────────── */
+  section{max-width:1180px;margin:0 auto;padding:36px 22px 42px;border-top:1px solid var(--line)}
+  section#hero{border-top:none}
+  .kicker{font-size:10.5px;font-weight:800;letter-spacing:1.9px;text-transform:uppercase;color:var(--accent-2)}
+  h1{font-size:clamp(26px,4.2vw,40px);font-weight:800;letter-spacing:-.9px;line-height:1.13;margin:10px 0 6px}
+  h2{font-size:21px;font-weight:700;letter-spacing:-.3px;margin:4px 0 4px}
+  h3{font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);margin-bottom:11px}
+  h4{font-size:13.5px;font-weight:700;margin-bottom:5px}
+  p{margin:9px 0;max-width:82ch}
+  .lead{color:var(--muted);font-size:15px;max-width:84ch}
+  .sub{color:var(--muted);font-size:12.5px}
+  strong{color:#fff;font-weight:650}
+  em.hi{color:var(--accent-2);font-style:normal;font-weight:600}
+  code,.mono{font-family:var(--mono);font-size:12.5px}
+  code{background:rgba(var(--accent-2-rgb),.13);color:#ddd4fb;padding:1px 5px;border-radius:4px}
+  ul.you{list-style:none;margin:16px 0 0;display:grid;gap:8px}
+  ul.you li{position:relative;padding-left:26px;font-size:13.5px;color:var(--ink);max-width:78ch}
+  ul.you li::before{content:"";position:absolute;left:4px;top:8px;width:8px;height:8px;border-radius:2px;
+    background:var(--accent);box-shadow:0 0 0 3px rgba(var(--accent-rgb),.22)}
+  ul.plain{list-style:none;display:grid;gap:7px;font-size:13px;color:var(--muted)}
+  ul.plain li{padding-left:16px;position:relative}
+  ul.plain li::before{content:"\2022";position:absolute;left:2px;color:var(--accent-2)}
+
+  /* ── panels & layout ──────────────────────────────────────── */
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .panel.tight{padding:13px 14px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;align-items:start}
+  .split{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:18px;align-items:start}
+  .split-r{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:18px;align-items:start}
+  .stack{display:grid;gap:14px}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+
+  /* ── controls ─────────────────────────────────────────────── */
+  .btn{font-family:inherit;font-size:12px;font-weight:650;cursor:pointer;color:var(--ink);
+    background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:7px 14px;transition:.15s}
+  .btn:hover:not(:disabled){border-color:var(--accent-2);color:#fff}
+  .btn:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .btn:disabled{opacity:.35;cursor:not-allowed}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.primary:hover:not(:disabled){filter:brightness(1.25)}
+  .btn.on{background:rgba(var(--accent-rgb),.28);border-color:var(--accent-2);color:#fff}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+  .tab{font-family:inherit;font-size:12px;font-weight:650;cursor:pointer;color:var(--muted);
+    background:transparent;border:1px solid var(--line);border-radius:20px;padding:6px 14px;transition:.15s}
+  .tab:hover{color:var(--ink)}
+  .tab[aria-selected="true"]{background:rgba(var(--accent-rgb),.3);border-color:var(--accent-2);color:#fff}
+  .tab:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .ctl{display:grid;gap:4px;margin-bottom:12px}
+  .ctl label{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);
+    display:flex;justify-content:space-between;gap:10px}
+  .ctl label b{font-family:var(--mono);color:var(--accent-2);font-size:12px;text-transform:none;letter-spacing:0}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:3px;
+    background:#2b313d;outline:none;cursor:pointer}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;
+    background:var(--accent-2);border:2px solid var(--bg);cursor:pointer}
+  input[type=range]::-moz-range-thumb{width:15px;height:15px;border-radius:50%;background:var(--accent-2);
+    border:2px solid var(--bg);cursor:pointer}
+  input[type=range]:focus-visible{box-shadow:0 0 0 3px rgba(var(--accent-2-rgb),.4)}
+  select,textarea,input[type=text]{font-family:var(--mono);font-size:12.5px;color:var(--ink);
+    background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:7px 9px;width:100%}
+  select:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px solid var(--accent-2);outline-offset:1px}
+  textarea{line-height:1.55;resize:vertical}
+
+  /* ── stats / pills / code ─────────────────────────────────── */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:1px;
+    background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .stat{background:var(--panel);padding:10px 12px}
+  .stat .sl{font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--dim)}
+  .stat .sv{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--ink);margin-top:3px}
+  .stat .sv.ok{color:var(--ok)} .stat .sv.bad{color:var(--bad)} .stat .sv.warn{color:var(--warn)}
+  .stat .sv.acc{color:var(--accent-2)}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;letter-spacing:.5px;
+    padding:3px 9px;border-radius:20px;border:1px solid var(--line);color:var(--muted)}
+  .pill.ok{color:var(--ok);border-color:rgba(63,185,80,.5);background:rgba(63,185,80,.1)}
+  .pill.bad{color:var(--bad);border-color:rgba(248,81,73,.5);background:rgba(248,81,73,.1)}
+  .pill.warn{color:var(--warn);border-color:rgba(210,153,34,.5);background:rgba(210,153,34,.1)}
+  .pill.acc{color:var(--accent-2);border-color:rgba(var(--accent-2-rgb),.5);background:rgba(var(--accent-rgb),.18)}
+  pre.code{font-family:var(--mono);font-size:11.8px;line-height:1.62;background:#0b0e14;color:#dbe3ea;
+    border:1px solid var(--line);border-radius:10px;padding:13px 14px;overflow-x:auto;white-space:pre}
+  pre.code .k{color:#6cb6ff} pre.code .s{color:#8ddb8c} pre.code .c{color:#6b7484;font-style:italic}
+  pre.code .n{color:#e0b070} pre.code .b{color:#ddd4fb;font-weight:700}
+  .note{border-left:3px solid var(--accent);background:rgba(var(--accent-rgb),.12);border-radius:0 8px 8px 0;
+    padding:10px 13px;font-size:12.5px;color:var(--muted)}
+  .note b{color:var(--ink)}
+  .log{font-family:var(--mono);font-size:11.5px;max-height:230px;overflow-y:auto;display:grid;gap:5px}
+  .log div{background:var(--panel2);border-left:3px solid var(--line);border-radius:0 6px 6px 0;padding:6px 9px;color:var(--muted)}
+  .log div.hl{border-left-color:var(--accent-2);color:var(--ink);background:rgba(var(--accent-rgb),.15)}
+  .log div.ok{border-left-color:var(--ok)} .log div.bad{border-left-color:var(--bad)}
+  svg{display:block;max-width:100%;height:auto}
+  .svgwrap{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px;overflow-x:auto}
+  table.t{width:100%;border-collapse:collapse;font-size:12px}
+  table.t th{font-size:9.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--dim);
+    text-align:left;padding:0 8px 7px;border-bottom:1px solid var(--line)}
+  table.t td{padding:7px 8px;border-bottom:1px solid rgba(39,44,54,.6);color:var(--muted);font-family:var(--mono);font-size:11.8px}
+  table.t td.n{color:var(--ink);font-weight:600}
+
+  /* ── pitfalls ─────────────────────────────────────────────── */
+  details.pit{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:10px;overflow:hidden}
+  details.pit>summary{cursor:pointer;padding:12px 15px;font-size:13.5px;font-weight:650;color:var(--ink);
+    list-style:none;display:flex;gap:11px;align-items:flex-start}
+  details.pit>summary::-webkit-details-marker{display:none}
+  details.pit>summary::before{content:"\25B8";color:var(--accent-2);font-size:12px;line-height:1.5;transition:.2s}
+  details.pit[open]>summary::before{transform:rotate(90deg)}
+  details.pit>summary:focus-visible{outline:2px solid var(--accent-2);outline-offset:-2px}
+  details.pit .body{padding:0 15px 15px 39px;font-size:13px;color:var(--muted);display:grid;gap:9px}
+  details.pit .body .fix{color:var(--ok);font-weight:600}
+
+  /* ── MCQ ──────────────────────────────────────────────────── */
+  .mcq{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 17px;margin-bottom:13px}
+  .mcq .q{font-size:13.8px;font-weight:650;color:var(--ink);margin:0 0 11px;max-width:84ch}
+  .mcq .q span{color:var(--accent-2);font-family:var(--mono);margin-right:7px}
+  .opts{display:grid;gap:7px}
+  .opt{text-align:left;font-family:inherit;font-size:13px;cursor:pointer;color:var(--muted);
+    background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:9px 12px;transition:.15s}
+  .opt:hover:not(:disabled){border-color:var(--accent-2);color:var(--ink)}
+  .opt:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .opt.right{border-color:var(--ok);background:rgba(63,185,80,.13);color:#bce8c4}
+  .opt.wrong{border-color:var(--bad);background:rgba(248,81,73,.12);color:#f4b6b1}
+  .opt.dim{opacity:.5}
+  .fb{margin-top:11px;font-size:12.5px;line-height:1.6;color:var(--muted);display:none;
+    border-left:3px solid var(--line);padding-left:11px}
+  .fb.show{display:block}
+  .fb.show.good{border-left-color:var(--ok)} .fb.show.poor{border-left-color:var(--bad)}
+  .fb b{color:var(--ink)}
+
+  /* ── next ─────────────────────────────────────────────────── */
+  .nextgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+  .nextcard{display:block;background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:15px 17px;transition:.18s;color:inherit}
+  .nextcard:hover{border-color:var(--accent-2);transform:translateY(-2px);text-decoration:none}
+  .nextcard .nl{font-size:10px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--accent-2)}
+  .nextcard .nt{font-size:14.5px;font-weight:700;color:var(--ink);margin-top:5px}
+  .nextcard .nd{font-size:12px;color:var(--muted);margin-top:5px}
+
+  @media (max-width:720px){
+    .grid2,.grid3,.split,.split-r{grid-template-columns:1fr}
+    section{padding:26px 15px 32px}
+    nav.top{padding:10px 15px;gap:8px}
+    nav.top .crumbs{font-size:11px}
+    p,.lead{max-width:none}
+  }
+
+
+  /* ── week-page shared ─────────────────────────────────────── */
+  #hero{padding:52px 22px 40px;
+    background:radial-gradient(ellipse 820px 340px at 22% -14%,rgba(var(--accent-rgb),.3),transparent 66%)}
+  #hero .wk{font-family:var(--mono);font-size:12px;letter-spacing:2px;color:var(--accent-2);font-weight:700}
+  #hero h1{max-width:24ch}
+  #hero .promise{font-size:16.5px;color:var(--ink);max-width:74ch;margin-top:10px;line-height:1.55}
+  .secnum{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;
+    background:rgba(var(--accent-rgb),.35);border:1px solid var(--accent-2);color:#fff;font-family:var(--mono);
+    font-size:11px;font-weight:700;margin-right:9px;vertical-align:2px}
+  .sw{display:inline-flex;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex-wrap:wrap}
+  .sw button{font-family:inherit;font-size:11.5px;font-weight:650;cursor:pointer;color:var(--muted);
+    background:var(--panel2);border:none;padding:7px 13px;transition:.15s}
+  .sw button[aria-pressed="true"]{background:rgba(var(--accent-rgb),.32);color:#fff}
+  .sw button:focus-visible{outline:2px solid var(--accent-2);outline-offset:-2px}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-top:10px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
+
+
+
+  /* ── week-7 specifics ─────────────────────────────────────── */
+  canvas{display:block;width:100%;height:auto;border-radius:10px;background:#0b0e14;border:1px solid var(--line)}
+  .lanes{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:12px;color:var(--muted)}
+  .kv b{color:var(--ink);font-weight:600}
+  .bookbtns{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:7px}
+  .dsrow{display:grid;grid-template-columns:minmax(0,150px) minmax(0,1fr);gap:10px;align-items:center;margin-bottom:7px}
+  .dsrow .dsn{font-size:11.5px;font-weight:700;color:var(--ink);line-height:1.3}
+  .dsrow .dsn em{display:block;font-style:normal;font-family:var(--mono);font-size:10px;color:var(--dim)}
+  .bar{height:20px;border-radius:4px;background:var(--panel2);position:relative;overflow:hidden}
+  .bar i{position:absolute;left:0;top:0;bottom:0;border-radius:4px;display:block}
+  .bar span{position:absolute;right:6px;top:1px;font-family:var(--mono);font-size:10.5px;color:var(--ink)}
+  @media (max-width:720px){ .dsrow{grid-template-columns:minmax(0,1fr)} }
+  /* ── mobile guard (identical on every page): single column under 720px,
+        no horizontal overflow. Must stay last in the sheet. ───────────── */
+  @media (max-width:720px){
+    .grid2,.grid3,.grid2.narrow-right,.split,.split-r,.codepair,
+    .nextgrid,.dash,.toggles,.lanes,.weeknav,.weeks,.roles,.stack{
+      grid-template-columns:minmax(0,1fr)}
+    [class*="grid"]>*,.stack>*,.wrap>*,.panel,.panel.tight,.nextcard,.wk,.row>*{min-width:0}
+    pre,pre.code,.svgwrap,svg,canvas,table,select,input,textarea,.mono{max-width:100%}
+    pre,pre.code,.svgwrap,.tablewrap{overflow-x:auto}
+    code,.mono{overflow-wrap:anywhere}
+    .ctl,.ctl>*,.controls>*,.row,.legend>*{min-width:0}
+    .ctl{flex-wrap:wrap} .ctl select,.ctl input[type=range]{flex:1 1 100%;width:100%}
+    p,.lead,.sub,.promise{max-width:none}
+  }
+</style>
+</head>
+<body>
+
+<nav class="top"><a href="index.html">Low-Latency Trading Arena</a><span class="crumbs"><a href="week6.html">← Week 6</a> · <b>Week 7 · Data Structures for HFT — The Order Book</b> · <a href="week8.html">Week 8 →</a></span></nav>
+
+<!-- ══════════════ HERO ══════════════ -->
+<section id="hero">
+  <div class="wk">WEEK 7 · 15-WEEK TRACK  ·  SESSION 4 · 9-SESSION TRACK</div>
+  <h1>Data Structures for HFT — The Order Book</h1>
+  <p class="promise">The order book is not a container you look things up in. It is a structure you read
+  <em class="hi">thousands of times per tick</em> from one hot loop — so its memory layout, not its big-O,
+  decides your p99.9. This week you build the flat, price-indexed mirror that makes the best bid a single load.</p>
+  <ul class="you">
+    <li>Name the six operations a book must support — add, cancel, modify, match, best-of-book, queue position — and the cost each one is allowed.</li>
+    <li>Beat <code>std::map</code> with a flat price-indexed array of levels plus intrusive FIFO lists, and say <em>why</em> in cache terms.</li>
+    <li>Size a price band, decide what to do when the market walks out of it, and know when sparsity kills the array.</li>
+    <li>Consume a snapshot-plus-delta feed and refuse to apply a delta after a sequence gap.</li>
+  </ul>
+  <div class="row" style="margin-top:22px">
+    <span class="pill acc">HW7 · <code>include/order_book.hpp</code> — O(1) <code>best_bid()</code> / <code>best_ask()</code></span>
+    <span class="pill">Lab · <code>make book</code> green, plus a benchmark against <code>std::map</code></span>
+    <span class="pill">Week 8 computes signals on top of this book</span>
+  </div>
+</section>
+
+<!-- ══════════════ WHAT ══════════════ -->
+<section id="what">
+  <div class="kicker">Part 1</div>
+  <h2><span class="secnum">1</span>What must an order book actually support?</h2>
+  <p class="lead">Six operations, wildly different budgets. Five of them happen on the wire's schedule;
+  one of them happens on yours, thousands of times per market-data message — and that is the one to design for.</p>
+
+  <div class="split">
+    <div>
+      <p>A central limit order book (CLOB) is resting size at each price, on two sides, ordered by
+      <strong>price-time priority</strong>: a better price fills first, and within one price the earliest
+      arrival fills first. That second half is the part every naive implementation loses — a level is not a
+      number, it is a <em class="hi">FIFO queue</em>, and your position in it is the difference between
+      getting filled and watching the price leave.</p>
+      <p>The asymmetry that drives every design decision this week: <strong>writes are rare, reads are
+      constant</strong>. A busy US equity name sends you tens of thousands of book updates a second — a lot,
+      but each one is one write. Your strategy reads the top of book on <em>every</em> one of them, and often
+      several times per message. So you happily pay a little on <code>add</code> and <code>cancel</code> in
+      order to make <code>best_bid()</code> a compare and a multiply.</p>
+      <p>The starter's contract is deliberately this small — four functions, and the cost of two of them
+      is written into the comment:</p>
+      <pre class="code"><span class="c">// include/order_book.hpp — the HW7 contract. side 'B'=bid, 'S'=ask.</span>
+<span class="k">struct</span> <span class="b">Book</span> {
+    <span class="k">void</span>   add(uint64_t id, <span class="k">char</span> side, <span class="k">double</span> px, uint32_t qty);
+    <span class="k">void</span>   cancel(uint64_t id);
+    <span class="k">double</span> best_bid() <span class="k">const</span>;   <span class="c">// O(1)  &lt;- the hot path</span>
+    <span class="k">double</span> best_ask() <span class="k">const</span>;   <span class="c">// O(1)  &lt;- the hot path</span>
+};
+<span class="k">struct</span> <span class="b">SymMap</span> {                <span class="c">// returns (uint64_t)-1 if absent</span>
+    <span class="k">void</span>     put(<span class="k">const</span> <span class="k">char</span>* sym, uint64_t id);
+    uint64_t get(<span class="k">const</span> <span class="k">char</span>* sym) <span class="k">const</span>;
+};</pre>
+      <div class="note"><b>The exchange is the reference.</b> The arena's Python engine
+      (<code>shared/orderbook.py</code>) is a real CLOB: it keys resting orders on
+      <code>(price, seq, id)</code> — a monotonic sequence number, not a timestamp, so ties are impossible —
+      and exposes <code>queue_position(order_id)</code> returning <code>(qty_ahead, level_qty)</code>. Your
+      C++ book is a <em>local mirror</em> of that, so <code>on_book</code> can decide without asking anyone.</div>
+    </div>
+    <div class="panel">
+      <h3>Six operations, six budgets</h3>
+      <table class="t">
+        <tr><th>Operation</th><th>Frequency</th><th>Budget you should hold</th></tr>
+        <tr><td class="n">best_bid / best_ask</td><td>every read</td><td>O(1), ~1 ns, one L1 load</td></tr>
+        <tr><td class="n">add</td><td>per message</td><td>O(1), one indexed store</td></tr>
+        <tr><td class="n">cancel</td><td>per message</td><td>O(1) common case</td></tr>
+        <tr><td class="n">modify</td><td>per message</td><td>O(1) if size-down, else re-queue</td></tr>
+        <tr><td class="n">match / walk</td><td>on a trade</td><td>O(levels consumed), sequential</td></tr>
+        <tr><td class="n">queue position</td><td>on your ack</td><td>O(orders at your level)</td></tr>
+      </table>
+      <div class="note" style="margin-top:14px"><b>Only one of these is allowed to scan</b> — and it is
+      <code>cancel</code>, and only when the cancel empties the inside level so the touch has to move. Keep
+      the scan off the read path and it never shows up in your p99.9.</div>
+      <div class="stats" style="margin-top:14px">
+        <div class="stat"><div class="sl">L1 hit</div><div class="sv acc">~1 ns</div></div>
+        <div class="stat"><div class="sl">L2 hit</div><div class="sv">~4 ns</div></div>
+        <div class="stat"><div class="sl">LLC hit</div><div class="sv">~14 ns</div></div>
+        <div class="stat"><div class="sl">DRAM</div><div class="sv bad">~90 ns</div></div>
+      </div>
+      <p class="sub" style="margin-top:10px">Every number on this page is quoted against this ladder. A
+      pointer hop that misses to DRAM costs ninety times what the arithmetic around it costs — which is why
+      layout beats asymptotics at the depths a real book runs at.</p>
+    </div>
+  </div>
+
+  <!-- ── WIDGET 1 ─────────────────────────────────────────── -->
+  <div class="panel" style="margin-top:22px">
+    <h3>Widget 1 · a live CLOB with price-time priority</h3>
+    <p class="sub" style="margin-bottom:14px">Post your own order and watch where it lands in the queue.
+    Trades print at the <em>resting</em> order's price, orders fill front-to-back inside a level, and a reprice
+    sends you to the back of the new one. Your order is the violet segment.</p>
+
+    <div class="split">
+      <div>
+        <div class="svgwrap">
+          <svg id="bkLadder" viewBox="0 0 720 400" role="img"
+               aria-label="Order book ladder: each price level drawn as a FIFO queue of resting orders, with your order highlighted"></svg>
+        </div>
+        <div class="legend">
+          <span><i style="background:#3fb950"></i>resting bids</span>
+          <span><i style="background:#f85149"></i>resting asks</span>
+          <span><i style="background:#7c3aed"></i>your order</span>
+          <span><i style="background:#c4b5fd"></i>queue ahead of you</span>
+        </div>
+      </div>
+      <div>
+        <div class="ctl"><label for="bkPx">your price<b id="vbkPx">100.00</b></label>
+          <select id="bkPx" aria-label="Limit price for your order"></select></div>
+        <div class="ctl"><label for="bkQty">your quantity<b id="vbkQty">200</b></label>
+          <input type="range" id="bkQty" min="100" max="1000" step="100" value="200"
+                 aria-label="Quantity of your order in shares" /></div>
+        <div class="row" style="margin-bottom:10px">
+          <span class="sw" role="group" aria-label="Side of your order">
+            <button id="bkSideB" type="button" aria-pressed="true">Buy (bid)</button>
+            <button id="bkSideS" type="button" aria-pressed="false">Sell (ask)</button>
+          </span>
+        </div>
+        <div class="bookbtns" style="margin-bottom:12px">
+          <button class="btn primary" id="bkPost" type="button">Post limit</button>
+          <button class="btn" id="bkCancel" type="button">Cancel yours</button>
+          <button class="btn" id="bkReprice" type="button">Reprice to selected</button>
+          <button class="btn" id="bkFlow" type="button">Other traders post</button>
+          <button class="btn" id="bkMBuy" type="button">Market buy 300</button>
+          <button class="btn" id="bkMSell" type="button">Market sell 300</button>
+          <button class="btn" id="bkReset" type="button">Reset book</button>
+        </div>
+        <div class="stats">
+          <div class="stat"><div class="sl">best bid</div><div class="sv ok" id="bkBid">—</div></div>
+          <div class="stat"><div class="sl">best ask</div><div class="sv bad" id="bkAsk">—</div></div>
+          <div class="stat"><div class="sl">spread</div><div class="sv" id="bkSpr">—</div></div>
+        </div>
+        <div class="stats" style="margin-top:1px">
+          <div class="stat"><div class="sl">qty ahead of you</div><div class="sv acc" id="bkAhead">—</div></div>
+          <div class="stat"><div class="sl">your level qty</div><div class="sv" id="bkLevel">—</div></div>
+          <div class="stat"><div class="sl">you fill after</div><div class="sv" id="bkFillAfter">—</div></div>
+        </div>
+        <div class="note" id="bkVerdict" style="margin-top:12px"></div>
+      </div>
+    </div>
+    <h3 style="margin-top:18px">event log</h3>
+    <div class="log" id="bkLog" role="status" aria-label="Order book event log"></div>
+  </div>
+</section>
+
+<!-- ══════════════ HOW ══════════════ -->
+<section id="how">
+  <div class="kicker">Part 2</div>
+  <h2><span class="secnum">2</span>How does it work? Three layouts, one op stream</h2>
+  <p class="lead">Prices are not arbitrary doubles — they live on a fixed tick grid. That single fact turns
+  "look up a price" into "index an array", and takes the whole ordered-container problem off the table.</p>
+
+  <p>Here are the three candidates, and the honest version of each. A <strong>tree of levels</strong>
+  (<code>std::map&lt;int, Level&gt;</code>) is the obvious answer: sorted, handles any price, O(log n).
+  A <strong>sorted vector of levels</strong> keeps the ordering but makes the storage contiguous, paying a
+  <code>memmove</code> on insert. A <strong>flat price-indexed array</strong> gives up ordering entirely —
+  index <code>= (px − base) / tick</code> — and gets O(1) everything, at the cost of allocating the whole
+  band up front.</p>
+
+  <div class="grid3" style="margin-top:16px">
+    <div class="panel tight"><h4>std::map&lt;int, Level&gt;</h4>
+      <p class="sub">Red-black tree. One heap node per level, ~48 B of payload plus allocator overhead, all
+      scattered. Finding the touch is <code>begin()</code> / <code>rbegin()</code> — cheap in theory, a chain
+      of pointer hops in practice, and every hop is a fresh cache line.</p>
+      <div class="kv" style="margin-top:8px"><b>add</b><span>O(log n) + one malloc</span>
+        <b>bbo</b><span>O(1) call, O(log n) misses</span><b>layout</b><span>pointer chasing</span></div></div>
+    <div class="panel tight"><h4>sorted std::vector&lt;Level&gt;</h4>
+      <p class="sub">Binary search over contiguous memory — the prefetcher cannot help a binary search, but
+      the last three probes land in one line. Insert in the middle shifts everything above it: O(n) bytes of
+      <code>memmove</code>, which is fast per byte and still unbounded.</p>
+      <div class="kv" style="margin-top:8px"><b>add</b><span>O(log n) + O(n) memmove</span>
+        <b>bbo</b><span>O(1), first or last slot</span><b>layout</b><span>contiguous</span></div></div>
+    <div class="panel tight"><h4>flat array + intrusive FIFO</h4>
+      <p class="sub">One <code>std::array&lt;Level, NLEV&gt;</code> per side, indexed by tick. Each level holds
+      aggregate qty plus the head and tail index of an intrusive singly-linked list into one pre-reserved node
+      pool. Cached <code>best_bid_tick</code> makes the touch a scalar read.</p>
+      <div class="kv" style="margin-top:8px"><b>add</b><span>O(1), one indexed store</span>
+        <b>bbo</b><span>O(1), one L1 load</span><b>layout</b><span>contiguous + pooled</span></div></div>
+  </div>
+
+  <!-- ── WIDGET 2 ─────────────────────────────────────────── -->
+  <div class="panel" style="margin-top:22px">
+    <h3>Widget 2 · the data-structure race</h3>
+    <p class="sub" style="margin-bottom:14px">The same op stream through all three layouts. Costs are modelled
+    from the cache ladder above: each structure's hot footprint decides which level it lives in, and the number
+    of distinct cache lines an operation touches decides what it pays. Drag <em>book depth</em> and watch the
+    ranking hold — it never crosses back.</p>
+
+    <div class="split">
+      <div>
+        <div class="ctl"><label for="dsDepth">book depth · occupied price levels per side<b id="vdsDepth">64</b></label>
+          <input type="range" id="dsDepth" min="3" max="13" step="1" value="6"
+                 aria-label="Book depth in occupied price levels per side, logarithmic" /></div>
+        <div class="ctl"><label for="dsBbo">reads per message · <code>best_bid()</code> calls<b id="vdsBbo">4</b></label>
+          <input type="range" id="dsBbo" min="1" max="20" step="1" value="4"
+                 aria-label="Number of best-bid reads per market data message" /></div>
+        <div class="ctl" style="margin-bottom:0"><label for="dsMix">op mix · share of messages that insert a new level<b id="vdsMix">18 %</b></label>
+          <input type="range" id="dsMix" min="0" max="60" step="2" value="18"
+                 aria-label="Percentage of messages that create a new price level" /></div>
+        <div class="stats" style="margin-top:14px">
+          <div class="stat"><div class="sl">messages</div><div class="sv">1 000 000</div></div>
+          <div class="stat"><div class="sl">winner</div><div class="sv acc" id="dsWin">flat array</div></div>
+          <div class="stat"><div class="sl">margin</div><div class="sv ok" id="dsMargin">—</div></div>
+        </div>
+      </div>
+      <div>
+        <h3>ns per operation</h3>
+        <div id="dsBars"></div>
+        <div class="svgwrap" style="margin-top:12px">
+          <svg id="dsTotal" viewBox="0 0 720 150" role="img"
+               aria-label="Total wall time to process one million book messages, per data structure"></svg>
+        </div>
+      </div>
+    </div>
+    <div class="tablewrap" style="margin-top:16px;overflow-x:auto">
+      <table class="t" id="dsTable">
+        <tr><th>structure</th><th>hot footprint</th><th>lives in</th><th>lines / add</th><th>lines / bbo</th>
+          <th>ns / add</th><th>ns / bbo</th><th>1 M messages</th></tr>
+      </table>
+    </div>
+    <div class="note" id="dsVerdict" style="margin-top:14px"></div>
+  </div>
+
+  <!-- ── WIDGET 3 ─────────────────────────────────────────── -->
+  <div class="panel" style="margin-top:22px">
+    <h3>Widget 3 · pointer chasing versus contiguity, one cache line at a time</h3>
+    <p class="sub" style="margin-bottom:14px">Walk <em>k</em> price levels — what a match does when it eats
+    through the book. Memory comes in 64-byte lines whatever you asked for, so the question is never "how many
+    levels" but "how many lines, and could the prefetcher see them coming".</p>
+
+    <div class="split-r">
+      <div>
+        <div class="ctl"><label for="ccK">levels walked<b id="vccK">8</b></label>
+          <input type="range" id="ccK" min="1" max="24" step="1" value="8"
+                 aria-label="Number of price levels walked by the match" /></div>
+        <div class="ctl"><label for="ccSz">bytes per level<b id="vccSz">12 B</b></label>
+          <input type="range" id="ccSz" min="8" max="64" step="4" value="12"
+                 aria-label="Bytes of payload per price level" /></div>
+        <div class="togs" style="margin-top:12px">
+          <label><input type="checkbox" id="ccPref" checked aria-label="Hardware prefetcher enabled" />
+            <span class="sn">hardware prefetcher</span>
+            <span class="sd">Streams ahead on a detected sequential stride. Cannot help a pointer chase — the
+            next address is not known until the current load returns.</span></label>
+        </div>
+        <div class="stats" style="margin-top:12px">
+          <div class="stat"><div class="sl">useful bytes</div><div class="sv" id="ccUse">—</div></div>
+          <div class="stat"><div class="sl">bytes fetched · flat</div><div class="sv acc" id="ccFetchF">—</div></div>
+          <div class="stat"><div class="sl">bytes fetched · tree</div><div class="sv bad" id="ccFetchT">—</div></div>
+        </div>
+        <div class="stats" style="margin-top:1px">
+          <div class="stat"><div class="sl">flat walk</div><div class="sv ok" id="ccNsF">—</div></div>
+          <div class="stat"><div class="sl">tree walk</div><div class="sv bad" id="ccNsT">—</div></div>
+          <div class="stat"><div class="sl">ratio</div><div class="sv acc" id="ccRatio">—</div></div>
+        </div>
+      </div>
+      <div>
+        <div class="svgwrap">
+          <svg id="ccSvg" viewBox="0 0 720 330" role="img"
+               aria-label="Cache line grid comparing a contiguous flat walk against a scattered pointer chase"></svg>
+        </div>
+        <div class="note" id="ccVerdict" style="margin-top:12px"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ WHY ══════════════ -->
+<section id="why">
+  <div class="kicker">Part 3</div>
+  <h2><span class="secnum">3</span>Why it is harder than it looks: bands, sparsity, and gaps</h2>
+  <p class="lead">The flat array is not free and it is not universal. It buys O(1) with memory, and it assumes
+  the market stays inside the band you allocated. Both assumptions have a bill.</p>
+
+  <!-- ── WIDGET 4 ─────────────────────────────────────────── -->
+  <div class="panel" style="margin-top:18px">
+    <h3>Widget 4 · sizing the price band, and the day the market leaves it</h3>
+    <p class="sub" style="margin-bottom:14px">The array must span every price you might see. Widen the band or
+    shrink the tick and the array grows linearly; the occupied levels do not. Push the reference price past the
+    edge and you pay a rebase.</p>
+
+    <div class="split">
+      <div>
+        <div class="row" style="margin-bottom:12px">
+          <span class="sw" role="group" aria-label="Tick size">
+            <button id="pbT1" type="button" aria-pressed="true">$0.01</button>
+            <button id="pbT2" type="button" aria-pressed="false">$0.05</button>
+            <button id="pbT3" type="button" aria-pressed="false">$0.25</button>
+            <button id="pbT4" type="button" aria-pressed="false">$0.0001</button>
+          </span>
+        </div>
+        <div class="ctl"><label for="pbRef">reference price<b id="vpbRef">$100</b></label>
+          <input type="range" id="pbRef" min="1" max="600" step="1" value="100"
+                 aria-label="Reference price in dollars" /></div>
+        <div class="ctl"><label for="pbBand">band half-width, ± % of reference<b id="vpbBand">20 %</b></label>
+          <input type="range" id="pbBand" min="2" max="100" step="2" value="20"
+                 aria-label="Band half width as a percentage of the reference price" /></div>
+        <div class="ctl"><label for="pbOcc">levels actually quoted<b id="vpbOcc">40</b></label>
+          <input type="range" id="pbOcc" min="4" max="400" step="4" value="40"
+                 aria-label="Number of price levels actually carrying resting size" /></div>
+        <div class="ctl" style="margin-bottom:0"><label for="pbMove">price move since you sized the band<b id="vpbMove">0 %</b></label>
+          <input type="range" id="pbMove" min="-60" max="60" step="2" value="0"
+                 aria-label="Percentage move of the price since the band was sized" /></div>
+      </div>
+      <div>
+        <div class="svgwrap">
+          <svg id="pbSvg" viewBox="0 0 720 250" role="img"
+               aria-label="The allocated price band, the occupied levels inside it, and where the current price sits"></svg>
+        </div>
+        <div class="stats" style="margin-top:12px">
+          <div class="stat"><div class="sl">ticks in band</div><div class="sv" id="pbTicks">—</div></div>
+          <div class="stat"><div class="sl">array bytes / side</div><div class="sv acc" id="pbBytes">—</div></div>
+          <div class="stat"><div class="sl">occupancy</div><div class="sv" id="pbOccPct">—</div></div>
+          <div class="stat"><div class="sl">tree bytes / side</div><div class="sv" id="pbTree">—</div></div>
+        </div>
+        <div class="note" id="pbVerdict" style="margin-top:12px"></div>
+      </div>
+    </div>
+    <div class="note" style="margin-top:14px"><b>The escape hatch.</b> Real books keep the flat array for the
+    band around the touch — where all the interesting size is — and a small ordered map for the far tail. You
+    get O(1) where it counts and correctness everywhere else, and the deep levels you almost never read are the
+    only ones that pay for a pointer.</div>
+  </div>
+
+  <!-- ── WIDGET 5 ─────────────────────────────────────────── -->
+  <div class="panel" style="margin-top:22px">
+    <h3>Widget 5 · snapshot, delta, and the sequence gap</h3>
+    <p class="sub" style="margin-bottom:14px">A feed hands you one full snapshot and then a stream of deltas
+    identified by a monotonic sequence number. Deltas are only meaningful <em>in order</em>. Choose what to do
+    when one goes missing, then read how far your book drifts from the exchange's.</p>
+
+    <div class="split">
+      <div>
+        <div class="ctl"><label for="sgGap">packet loss · deltas dropped by the network<b id="vsgGap">4 %</b></label>
+          <input type="range" id="sgGap" min="0" max="20" step="1" value="4"
+                 aria-label="Percentage of delta messages lost" /></div>
+        <div class="ctl"><label for="sgDup">duplicates · A/B feed arbitration<b id="vsgDup">6 %</b></label>
+          <input type="range" id="sgDup" min="0" max="30" step="2" value="6"
+                 aria-label="Percentage of delta messages arriving twice" /></div>
+        <div class="ctl"><label for="sgSnap">snapshot interval, messages<b id="vsgSnap">40</b></label>
+          <input type="range" id="sgSnap" min="10" max="120" step="10" value="40"
+                 aria-label="Number of messages between periodic snapshots" /></div>
+        <div class="ctl"><label for="sgPol">gap policy</label>
+          <select id="sgPol" aria-label="What the feed handler does when it detects a sequence gap">
+            <option value="apply">apply it anyway — keep trading</option>
+            <option value="drop">drop the delta, keep applying the rest</option>
+            <option value="stale" selected>mark stale, wait for the next snapshot</option>
+          </select></div>
+        <div class="row" style="margin-top:12px">
+          <button class="btn primary" id="sgRun" type="button">Run 200 messages</button>
+          <button class="btn" id="sgStep" type="button">Step 1 →</button>
+          <button class="btn" id="sgReset" type="button">Reset</button>
+        </div>
+      </div>
+      <div>
+        <div class="svgwrap">
+          <svg id="sgSvg" viewBox="0 0 720 210" role="img"
+               aria-label="Timeline of feed messages: applied, duplicate, gap, snapshot, and the resulting book divergence"></svg>
+        </div>
+        <div class="stats" style="margin-top:12px">
+          <div class="stat"><div class="sl">applied</div><div class="sv ok" id="sgApplied">0</div></div>
+          <div class="stat"><div class="sl">gaps seen</div><div class="sv warn" id="sgGaps">0</div></div>
+          <div class="stat"><div class="sl">dupes dropped</div><div class="sv" id="sgDupes">0</div></div>
+        </div>
+        <div class="stats" style="margin-top:1px">
+          <div class="stat"><div class="sl">book wrong by</div><div class="sv bad" id="sgWrong">0 levels</div></div>
+          <div class="stat"><div class="sl">time stale</div><div class="sv" id="sgStale">0 %</div></div>
+          <div class="stat"><div class="sl">worst divergence</div><div class="sv" id="sgWorst">0</div></div>
+        </div>
+        <div class="note" id="sgVerdict" style="margin-top:12px"></div>
+      </div>
+    </div>
+    <pre class="code" style="margin-top:14px"><span class="c">// The whole policy, and it is four comparisons. Refusing to guess is the feature.</span>
+<span class="k">struct</span> <span class="b">Feed</span> {
+    uint64_t expected = <span class="n">0</span>;          <span class="c">// next seq we are entitled to apply</span>
+    <span class="k">bool</span>     stale    = <span class="n">true</span>;       <span class="c">// true until a snapshot lands</span>
+    uint64_t gaps     = <span class="n">0</span>;
+
+    <span class="k">void</span> on_snapshot(uint64_t seq) { expected = seq + <span class="n">1</span>; stale = <span class="n">false</span>; }
+
+    <span class="k">bool</span> on_delta(uint64_t seq) {
+        <span class="k">if</span> (stale)           <span class="k">return</span> <span class="n">false</span>;         <span class="c">// waiting for a snapshot</span>
+        <span class="k">if</span> (seq &lt;  expected) <span class="k">return</span> <span class="n">false</span>;         <span class="c">// duplicate: drop, do not re-apply</span>
+        <span class="k">if</span> (seq &gt;  expected) { ++gaps; stale = <span class="n">true</span>;  <span class="c">// GAP: our book is now a guess</span>
+                               <span class="k">return</span> <span class="n">false</span>; }        <span class="c">// re-request instead</span>
+        ++expected; <span class="k">return</span> <span class="n">true</span>;                     <span class="c">// in order: apply it</span>
+    }
+};</pre>
+  </div>
+
+  <div class="panel" style="margin-top:22px">
+    <h3>The whole book, as you will write it</h3>
+    <p class="sub" style="margin-bottom:12px">Flat price-indexed levels, an intrusive FIFO per level over one
+    pre-reserved node pool, cached touch indices, and <code>queue_ahead</code> that walks only your own level.
+    This compiles under <code>clang++ -std=c++20 -O2 -Wall -Wextra</code>.</p>
+    <pre class="code"><span class="k">constexpr</span> <span class="k">double</span> TICK = <span class="n">0.01</span>;
+<span class="k">constexpr</span> <span class="k">int</span>    NLEV = <span class="n">1</span> &lt;&lt; <span class="n">16</span>;              <span class="c">// 65 536 ticks = $655.36, contiguous</span>
+<span class="k">constexpr</span> uint32_t NIL = ~<span class="n">0u</span>;
+
+<span class="k">struct</span> <span class="b">Level</span> { uint32_t qty = <span class="n">0</span>, head = NIL, tail = NIL; };  <span class="c">// aggregate + FIFO ends</span>
+<span class="k">struct</span> <span class="b">Node</span>  { uint32_t qty, next; <span class="k">int</span> tick; <span class="k">char</span> side; };   <span class="c">// intrusive, pooled</span>
+
+<span class="k">struct</span> <span class="b">Book</span> {
+    std::array&lt;Level, NLEV&gt; bid{}, ask{};
+    std::vector&lt;Node&gt; pool;                   <span class="c">// reserve()d once; index = order slot</span>
+    <span class="k">int</span> best_bid_tick = -<span class="n">1</span>, best_ask_tick = NLEV;
+
+    <span class="k">static</span> <span class="k">int</span> to_tick(<span class="k">double</span> px) { <span class="k">return</span> <span class="k">int</span>(px / TICK + <span class="n">0.5</span>); }
+
+    uint32_t add(<span class="k">char</span> side, <span class="k">double</span> px, uint32_t qty) {
+        <span class="k">int</span> t = to_tick(px);
+        Level&amp; L = (side == <span class="s">'B'</span>) ? bid[t] : ask[t];
+        uint32_t slot = uint32_t(pool.size());
+        pool.push_back({qty, NIL, t, side});            <span class="c">// no allocation: reserved</span>
+        <span class="k">if</span> (L.tail == NIL) L.head = slot; <span class="k">else</span> pool[L.tail].next = slot;
+        L.tail = slot;                                  <span class="c">// price-time: append at the back</span>
+        L.qty += qty;
+        <span class="k">if</span> (side == <span class="s">'B'</span>) { <span class="k">if</span> (t &gt; best_bid_tick) best_bid_tick = t; }
+        <span class="k">else</span>             { <span class="k">if</span> (t &lt; best_ask_tick) best_ask_tick = t; }
+        <span class="k">return</span> slot;
+    }
+    <span class="c">// O(1) reads — the hot path never scans</span>
+    <span class="k">double</span> best_bid() <span class="k">const</span> { <span class="k">return</span> best_bid_tick &lt; <span class="n">0</span>     ? <span class="n">0.0</span> : best_bid_tick * TICK; }
+    <span class="k">double</span> best_ask() <span class="k">const</span> { <span class="k">return</span> best_ask_tick &gt;= NLEV ? <span class="n">0.0</span> : best_ask_tick * TICK; }
+
+    <span class="c">// qty resting in front of `slot` at its own level: your fill probability</span>
+    uint32_t queue_ahead(uint32_t slot) <span class="k">const</span> {
+        <span class="k">const</span> Node&amp; me = pool[slot];
+        <span class="k">const</span> Level&amp; L = (me.side == <span class="s">'B'</span>) ? bid[me.tick] : ask[me.tick];
+        uint32_t ahead = <span class="n">0</span>;
+        <span class="k">for</span> (uint32_t i = L.head; i != NIL &amp;&amp; i != slot; i = pool[i].next)
+            ahead += pool[i].qty;                       <span class="c">// walks only your level</span>
+        <span class="k">return</span> ahead;
+    }
+};</pre>
+    <div class="note" style="margin-top:14px"><b>Read the <code>add</code> path again.</b> One indexed store
+    into <code>bid[t]</code>, one <code>push_back</code> into a reserved pool, two integer compares. No
+    allocation, no tree rotation, no <code>memmove</code> — and the touch update is a single comparison because
+    a new order at or inside the touch can only ever <em>improve</em> it.</div>
+  </div>
+</section>
+
+<!-- ══════════════ PITFALLS ══════════════ -->
+<section id="pitfalls">
+  <div class="kicker">Part 4</div>
+  <h2><span class="secnum">4</span>Five ways a fast book turns out to be wrong or slow</h2>
+  <p class="lead">Every one of these passes a unit test. Open them.</p>
+
+  <details class="pit"><summary>Computing the BBO by scanning, on the read path</summary>
+    <div class="body">
+      <p><code>best_bid()</code> loops down from the top of the array looking for the first non-empty level.
+      With the touch at tick 9 990 out of 65 536 that is ten thousand iterations, most of them over cold
+      memory, and you call it four times per message.</p>
+      <p>The fix is not a faster loop, it is <em>not looping</em>. Maintain <code>best_bid_tick</code> as a
+      cached scalar and pay for it on the write path, where you have message-rate budget instead of
+      per-read budget. The asymmetry — rare writes, constant reads — is the whole reason this trade is free.</p>
+      <p class="fix">Fix: cache the touch index. <code>add</code> only ever improves it (one compare);
+      <code>cancel</code> is the only operation allowed to scan, and only when it empties the inside level.</p>
+    </div></details>
+
+  <details class="pit"><summary>Forgetting to advance the touch when a cancel empties the inside level</summary>
+    <div class="body">
+      <p><code>cancel</code> subtracts the qty and returns. The level is now zero but
+      <code>best_ask_tick</code> still points at it, so <code>best_ask()</code> keeps returning a price where
+      nothing rests. Your bot crosses a spread that is not there, and the tests never catch it because they
+      cancel away from the touch.</p>
+      <p>The mirror image is worse: a side that empties completely leaves the index pointing into the array
+      instead of at the sentinel, and <code>best_ask()</code> reads a stale tick forever.</p>
+      <p class="fix">Fix: after any cancel at the touch, walk one tick at a time until you find size — it is a
+      contiguous scan and the common case runs zero iterations. If you run off the end, reset to the sentinel
+      and make <code>best_ask()</code> return <code>0.0</code>. Test the empty-side case explicitly.</p>
+    </div></details>
+
+  <details class="pit"><summary><code>std::unordered_map&lt;std::string, Order&gt;</code> on the hot path</summary>
+    <div class="body">
+      <p>It looks like O(1). Per lookup you hash a <code>std::string</code> (a pointer chase to the heap
+      unless it is short enough for SSO), then follow a bucket pointer to a node allocated somewhere else
+      entirely — two or three likely misses, so 100–200 ns for an "O(1)" operation. Insert can rehash, which
+      is an unbounded pause on a random message.</p>
+      <p>Both halves of the problem are layout, not asymptotics: chaining scatters your data, and
+      <code>std::string</code> keys turn a key comparison into a dereference.</p>
+      <p class="fix">Fix: open addressing over a flat power-of-two table, fixed-size inline <code>char[16]</code>
+      keys, mask instead of modulo, and <code>reserve</code>d once at start-up so it never rehashes. That is
+      exactly what <code>SymMap</code> in the starter asks for, and it is one contiguous probe.</p>
+    </div></details>
+
+  <details class="pit"><summary>Indexing the array with a rounded <code>double</code></summary>
+    <div class="body">
+      <p><code>int t = int(px / TICK);</code> — and <code>101.99 / 0.01</code> evaluates to
+      <code>10198.999999999998</code>, so the truncation puts the order one tick low. Half your book is now
+      shifted by a cent and your spread reads as negative on a name whose price happens to land on the wrong
+      side of a binary fraction.</p>
+      <p>Rounding with <code>+ 0.5</code> covers this case, but the real fix is to stop carrying prices as
+      doubles at all: the exchange sends you an integer number of ticks, the tick grid is fixed, and every
+      arithmetic step you do in floating point is a chance to lose a cent.</p>
+      <p class="fix">Fix: parse prices to integer ticks at the edge of the system and keep them integral all
+      the way through the book. Convert back to a <code>double</code> once, at the boundary where a human or a
+      log needs it. Assert <code>t</code> is inside the band before you use it as an index.</p>
+    </div></details>
+
+  <details class="pit"><summary>Applying a delta after a sequence gap</summary>
+    <div class="body">
+      <p>Seq 104 arrives when you expected 103. You apply it, because the alternative is having no book. From
+      that moment your local book and the exchange's disagree, silently and permanently — you never see an
+      error, you just quote a level that emptied thirty seconds ago and get adversely selected on every fill.</p>
+      <p>This is the one failure on this page that costs money rather than microseconds, and it is the reason
+      the sequence number exists. A book that is fast and wrong is worse than one that is slow and honest,
+      because you will size positions against it.</p>
+      <p class="fix">Fix: on a gap, mark the book stale, stop quoting, and re-request a snapshot. Widget 5 is
+      the ledger for each policy — read the "book wrong by" number for <em>apply it anyway</em> and compare it
+      to the "time stale" cost of doing it properly.</p>
+    </div></details>
+</section>
+
+<!-- ══════════════ CHECK ══════════════ -->
+<section id="check">
+  <div class="kicker">Part 5</div>
+  <h2><span class="secnum">5</span>Check yourself</h2>
+  <p class="lead">Instant feedback, no grading. Pick the answer you would defend in a design review.</p>
+
+  <div class="mcq" data-a="2" data-exp="<b>One cached scalar versus a chain of pointer hops.</b> The flat book does not search for the touch at all — <code>best_bid_tick</code> is an integer kept up to date on the write path, so the read is a compare and a multiply out of L1: about 1&nbsp;ns. <code>std::map</code> has to reach the extremal node, and at 64 levels that is roughly six hops through nodes the allocator scattered across the heap. Each hop is a dependent load that the prefetcher cannot anticipate, so it is a likely miss — six of them at LLC-to-DRAM latency is hundreds of nanoseconds. The big-O of both reads is fine; only one of them is fast.">
+    <p class="q"><span>Q1</span>Your book has 64 occupied levels per side. Reading the best bid: why is the flat
+    price-indexed array roughly two orders of magnitude faster than <code>std::map</code>?</p>
+    <div class="opts">
+      <button class="opt" type="button">Because O(1) is asymptotically better than O(log n), and 64 is large enough for that to matter</button>
+      <button class="opt" type="button">Because <code>std::map</code> has to rebalance the tree on every read</button>
+      <button class="opt" type="button">Because the flat book reads one cached integer from L1, while the map chases ~6 dependent pointers the prefetcher cannot see coming</button>
+      <button class="opt" type="button">Because <code>std::map</code> stores prices as doubles and the comparison is slower</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+
+  <div class="mcq" data-a="0" data-exp="<b>You go to the back of the new level, and the old time priority is gone for good.</b> Price-time priority means the queue at each price is a strict FIFO keyed on arrival order — the arena engine keys it on a monotonic <code>seq</code>, so there are no ties to break. A reprice is a cancel plus a new order: at 100.01 you are behind every share already resting there, and the 200 shares of priority you had built at 100.00 do not travel with you. That is why churning quotes is expensive even when the cancel and the repost are both free: what you are spending is queue position, not fees. Only move when the edge is bigger than the position you are giving up.">
+    <p class="q"><span>Q2</span>You have 200 shares resting at 100.00 with 500 shares ahead of you. You reprice to
+    100.01, where 900 shares already rest. What is your queue position now?</p>
+    <div class="opts">
+      <button class="opt" type="button">900 shares ahead — you join the back of the new level and forfeit all the time priority you had</button>
+      <button class="opt" type="button">500 shares ahead — priority follows the order, not the price</button>
+      <button class="opt" type="button">0 shares ahead — an improving price always goes to the front of the queue</button>
+      <button class="opt" type="button">450 shares ahead — priority is pro-rated across the two levels</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+
+  <div class="mcq" data-a="3" data-exp="<b>Stop, mark stale, re-request.</b> A delta describes a change relative to a state you no longer have, so applying 104 to a book that never saw 103 produces a book that is wrong in a way nothing downstream can detect. Buffering does not help either — 103 was dropped by the network and is never arriving, so you would wait forever. Averaging is not a thing you can do to an order book. The only honest move is to declare the book unusable, pull your quotes, and rebuild from the next snapshot; the cost is a few milliseconds of not trading, against a position sized on a fictional book.">
+    <p class="q"><span>Q3</span>You expected sequence 103 and received 104. The gap is real — 103 was dropped by
+    the network. What does the feed handler do?</p>
+    <div class="opts">
+      <button class="opt" type="button">Apply 104 — the book is mostly right and stopping costs money</button>
+      <button class="opt" type="button">Buffer 104 and wait for 103 to arrive out of order</button>
+      <button class="opt" type="button">Apply 104 but widen your quotes to compensate for the uncertainty</button>
+      <button class="opt" type="button">Mark the book stale, stop quoting, and rebuild from the next snapshot</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+</section>
+
+<!-- ══════════════ NEXT ══════════════ -->
+<section id="next">
+  <div class="kicker">Part 6</div>
+  <h2><span class="secnum">6</span>Do the work</h2>
+  <div class="grid2" style="margin-top:14px">
+    <div class="panel"><h4>In class</h4><ul class="plain">
+      <li>Fill in <code>include/order_book.hpp</code>: flat price-indexed levels, cached touch, O(1)
+      <code>best_bid()</code> / <code>best_ask()</code>. Get <code>make book</code> green.</li>
+      <li>Build <code>SymMap</code> as open addressing over a power-of-two table with inline
+      <code>char[16]</code> keys — mask, not modulo.</li>
+      <li>Benchmark against <code>std::map&lt;int,uint32_t&gt;</code> and
+      <code>std::unordered_map&lt;std::string,uint64_t&gt;</code>. Report <code>ns_per_op</code> and the factor.</li>
+      <li>Test the edge Widget 1 keeps hitting: a cancel that empties a side. Both accessors must return
+      <code>0.0</code>, not a stale tick.</li>
+      <li>Stretch: keep the per-level FIFO so you can report your own <code>queue_ahead</code>.</li>
+    </ul></div>
+    <div class="panel"><h4>Before next class</h4><ul class="plain">
+      <li><b>HW7</b> — order book plus hash table, with the benchmark write-up: p50 / p99 / p99.9 against the
+      <code>std::</code> containers.</li>
+      <li>Wire the local book into <code>on_book</code>: decode, update the touched levels, decide — no
+      allocation on that path.</li>
+      <li>Read <code>on_ack(sym, id, queue_ahead, level_qty)</code>. That is the exchange telling you your
+      standing in the FIFO; a <code>queue_ahead</code> of 0 means you are about to fill.</li>
+      <li>Skim <code>shared/orderbook.py</code> — <code>queue_position</code> is thirty lines and it is the
+      definition your mirror has to match.</li>
+    </ul></div>
+  </div>
+  <div class="nextgrid" style="margin-top:18px">
+    <a class="nextcard" href="https://github.com/sdonadio/hft-cpp-starter-columbia"><div class="nl">Code</div>
+      <div class="nt">Get the code · 15-week track starter</div><div class="nd">Header stubs including
+      <code>order_book.hpp</code>, the tests you must pass, and the C++ arena client.
+      <code>cmake -B build</code>, then <code>make book</code>.</div></a>
+    <a class="nextcard" href="https://github.com/sdonadio/hft-cpp-starter-uchicago"><div class="nl">Code</div>
+      <div class="nt">Get the code · 9-session track starter</div><div class="nd">The same stubs and the same
+      grader, packaged for the condensed nine-session schedule.</div></a>
+    <a class="nextcard" href="index.html"><div class="nl">Map</div>
+      <div class="nt">Course home</div><div class="nd">Both tracks, and where the order-book block sits in each.</div></a>
+    <a class="nextcard" href="week8.html"><div class="nl">Next</div>
+      <div class="nt">Week 8 · Algorithmic Complexity &amp; Time-Series →</div><div class="nd">Now that reading
+      the book is free, compute something on top of it in O(1) per tick.</div></a>
+  </div>
+  <div class="row" style="margin-top:16px">
+    <a class="btn" href="week6.html">← Week 6 · Compile-Time &amp; Policy-Based Design</a>
+    <a class="btn" href="week8.html">Week 8 · Algorithmic Complexity &amp; Time-Series →</a>
+  </div>
+</section>
+
+<footer>Low-Latency Trading Arena · an interactive companion for a course on low-latency trading systems in C++ · <a href="https://github.com/sdonadio/low-latency-trading-arena">Source</a></footer>
+
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════
+   Week 7 — Data Structures for HFT: The Order Book
+   Five widgets, no dependencies, no network, everything drawn from data.
+   ════════════════════════════════════════════════════════════════ */
+var $ = function (id) { return document.getElementById(id); };
+
+/* SVG namespace taken from the document so no absolute URL appears in this file */
+var SVGNS = $("bkLadder").namespaceURI;
+function mk(tag, attrs) {
+  var e = document.createElementNS(SVGNS, tag);
+  for (var k in attrs) { if (attrs.hasOwnProperty(k)) e.setAttribute(k, attrs[k]); }
+  return e;
+}
+function clear(el) {
+  if (!el) return;
+  if (el.removeChild) { while (el.firstChild) el.removeChild(el.firstChild); }
+  else { el.innerHTML = ""; }
+}
+function tx(p, x, y, s, o) {
+  o = o || {};
+  var e = mk("text", {
+    x: x, y: y, fill: o.fill || "#9aa0a6", "font-size": o.size || 10,
+    "font-family": o.sans ? "system-ui, sans-serif" : "ui-monospace, Menlo, monospace",
+    "font-weight": o.weight || 400, "text-anchor": o.anchor || "start"
+  });
+  e.textContent = s;
+  p.appendChild(e);
+  return e;
+}
+var C = {
+  ink: "#e8e6e3", muted: "#9aa0a6", dim: "#5f6673", line: "#272c36",
+  acc: "#7c3aed", acc2: "#c4b5fd", ok: "#3fb950", warn: "#d29922",
+  bad: "#f85149", sky: "#58a6ff", violet: "#a78bfa", teal: "#2dd4bf"
+};
+function setSw(ids, on) {
+  ids.forEach(function (id) {
+    var b = $(id);
+    if (b) b.setAttribute("aria-pressed", id === on ? "true" : "false");
+  });
+}
+function fmtNs(ns) {
+  if (ns < 1000) return ns.toFixed(ns < 10 ? 2 : 1) + " ns";
+  if (ns < 1e6) return (ns / 1000).toFixed(2) + " µs";
+  return (ns / 1e6).toFixed(2) + " ms";
+}
+function fmtBytes(b) {
+  if (b < 1024) return b.toFixed(0) + " B";
+  if (b < 1048576) return (b / 1024).toFixed(1) + " KB";
+  if (b < 1073741824) return (b / 1048576).toFixed(1) + " MB";
+  return (b / 1073741824).toFixed(2) + " GB";
+}
+/* the cache ladder every number on this page is quoted against */
+var LAT = { L1: 1.0, L2: 4.0, LLC: 14.0, DRAM: 90.0 };
+var CAP = { L1: 48 * 1024, L2: 1280 * 1024, LLC: 24 * 1024 * 1024 };
+function residency(bytes) {
+  if (bytes <= CAP.L1) return { nm: "L1", ns: LAT.L1 };
+  if (bytes <= CAP.L2) return { nm: "L2", ns: LAT.L2 };
+  if (bytes <= CAP.LLC) return { nm: "LLC", ns: LAT.LLC };
+  return { nm: "DRAM", ns: LAT.DRAM };
+}
+
+/* ══════════════════════════════════════════════════════════════
+   WIDGET 1 — a live CLOB with price-time priority
+   11 ticks, a FIFO queue per level, trades at the resting price.
+   ══════════════════════════════════════════════════════════════ */
+var BK_N = 11, BK_BASE = 99.95, BK_TICK = 0.01;
+var bkBid = [], bkAsk = [], bkId = 1, bkMine = null, bkSide = "B", bkLogRows = [];
+
+function bkPx(i) { return BK_BASE + i * BK_TICK; }
+function bkQty(q) { var s = 0, j; for (j = 0; j < q.length; j++) s += q[j].qty; return s; }
+function bkBest(arr, hi) {
+  var i;
+  if (hi) { for (i = BK_N - 1; i >= 0; i--) if (bkQty(arr[i]) > 0) return i; }
+  else { for (i = 0; i < BK_N; i++) if (bkQty(arr[i]) > 0) return i; }
+  return -1;
+}
+function bkLog(s, cls) {
+  bkLogRows.unshift({ s: s, c: cls || "" });
+  if (bkLogRows.length > 9) bkLogRows.pop();
+  var box = $("bkLog");
+  clear(box);
+  bkLogRows.forEach(function (r) {
+    var d = document.createElement("div");
+    if (r.c) d.className = r.c;
+    d.textContent = r.s;
+    box.appendChild(d);
+  });
+}
+function bkReset(quiet) {
+  bkBid = []; bkAsk = []; bkId = 1; bkMine = null;
+  var i;
+  for (i = 0; i < BK_N; i++) { bkBid.push([]); bkAsk.push([]); }
+  /* a plausible opening book: size thins as you go away from the touch */
+  [[3, 400], [3, 300], [4, 600], [4, 200], [5, 500], [5, 300], [5, 200]].forEach(function (p) {
+    bkBid[p[0]].push({ id: bkId++, qty: p[1], mine: false });
+  });
+  [[6, 500], [6, 200], [7, 400], [7, 300], [8, 600]].forEach(function (p) {
+    bkAsk[p[0]].push({ id: bkId++, qty: p[1], mine: false });
+  });
+  bkLogRows = [];
+  if (!quiet) bkLog("book reset · 100.00 bid / 100.01 ask · none of it yours");
+}
+/* consume `qty` from one side, FIFO inside each level, best price first.
+   Trades print at the RESTING order's price — that is the whole rule. */
+function bkTake(side, qty) {
+  var arr = side === "B" ? bkBid : bkAsk, filledMine = 0, notional = 0, taken = 0, guard = 0;
+  while (qty > 0 && guard++ < 64) {
+    var i = bkBest(arr, side === "B");
+    if (i < 0) break;
+    var q = arr[i];
+    while (qty > 0 && q.length) {
+      var o = q[0], n = Math.min(o.qty, qty);
+      o.qty -= n; qty -= n; taken += n; notional += n * bkPx(i);
+      if (o.mine) filledMine += n;
+      if (o.qty === 0) {
+        q.shift();
+        if (o.mine) { bkMine = null; }
+      }
+    }
+  }
+  return { taken: taken, mine: filledMine, vwap: taken ? notional / taken : 0, left: qty };
+}
+function bkPost(px, qty, side, label) {
+  var i = Math.round((px - BK_BASE) / BK_TICK);
+  if (i < 0 || i >= BK_N) return;
+  var bb = bkBest(bkBid, true), ba = bkBest(bkAsk, false);
+  var crosses = side === "B" ? (ba >= 0 && i >= ba) : (bb >= 0 && i <= bb);
+  if (crosses) {
+    var r = bkTake(side === "B" ? "S" : "B", qty);
+    bkLog(label + " limit " + px.toFixed(2) + " × " + qty + " CROSSED: took " + r.taken +
+      " sh at vwap " + r.vwap.toFixed(4) + " — aggressive, so you paid the spread", "bad");
+    return;
+  }
+  var arr = side === "B" ? bkBid : bkAsk;
+  var ahead = bkQty(arr[i]);
+  var o = { id: bkId++, qty: qty, mine: label === "you" };
+  arr[i].push(o);                     /* price-time priority: the BACK of the queue */
+  if (o.mine) bkMine = { side: side, tick: i, id: o.id };
+  if (o.mine) {
+    bkLog("you posted " + qty + " sh " + (side === "B" ? "bid" : "ask") + " at " + px.toFixed(2) +
+      " → joined the back of the FIFO, " + ahead + " sh ahead of you", "hl");
+  } else {
+    bkLog("another trader posted " + qty + " sh at " + px.toFixed(2) +
+      (bkMine && bkMine.tick === i && bkMine.side === side
+        ? " — behind you, so it does not move your position" : ""));
+  }
+}
+function bkFind() {
+  if (!bkMine) return null;
+  var arr = bkMine.side === "B" ? bkBid : bkAsk, q = arr[bkMine.tick], j, ahead = 0;
+  for (j = 0; j < q.length; j++) {
+    if (q[j].id === bkMine.id) return { ahead: ahead, qty: q[j].qty, level: bkQty(q), idx: j };
+    ahead += q[j].qty;
+  }
+  bkMine = null;
+  return null;
+}
+function bkDraw() {
+  var svg = $("bkLadder");
+  clear(svg);
+  var top = 34, rowH = 31, cx = 360, half = 300, i;
+  var maxLv = 600;
+  for (i = 0; i < BK_N; i++) maxLv = Math.max(maxLv, bkQty(bkBid[i]), bkQty(bkAsk[i]));
+  var W = function (q) { return half * q / maxLv; };
+  var bb = bkBest(bkBid, true), ba = bkBest(bkAsk, false);
+
+  tx(svg, cx - 150, 20, "BIDS  ·  FIFO front is nearest the price", { fill: C.ok, size: 10.5, anchor: "end", weight: 700 });
+  tx(svg, cx + 150, 20, "ASKS  ·  FIFO front is nearest the price", { fill: C.bad, size: 10.5, weight: 700 });
+
+  for (i = BK_N - 1; i >= 0; i--) {
+    var y = top + (BK_N - 1 - i) * rowH;
+    var isTouch = (i === bb || i === ba);
+    svg.appendChild(mk("rect", {
+      x: 20, y: y, width: 680, height: rowH - 3, rx: 3,
+      fill: isTouch ? "rgba(124,58,237,.10)" : "transparent"
+    }));
+    tx(svg, cx, y + 19, bkPx(i).toFixed(2), {
+      fill: isTouch ? C.acc2 : C.muted, size: 11.5, anchor: "middle", weight: isTouch ? 700 : 400
+    });
+    /* bids grow leftwards from the price column; asks grow rightwards */
+    ["B", "S"].forEach(function (sd) {
+      var q = (sd === "B" ? bkBid : bkAsk)[i], cum = 0, j;
+      for (j = 0; j < q.length; j++) {
+        var o = q[j], w = W(o.qty);
+        if (w < 0.6) { cum += o.qty; continue; }
+        var x = sd === "B" ? cx - 26 - W(cum) - w : cx + 26 + W(cum);
+        var mineAhead = bkMine && bkMine.side === sd && bkMine.tick === i &&
+          q.some(function (z, zi) { return z.id === bkMine.id && zi > j; });
+        svg.appendChild(mk("rect", {
+          x: x, y: y + 4, width: Math.max(1, w - 1.2), height: rowH - 11, rx: 2,
+          fill: o.mine ? C.acc : (mineAhead ? C.acc2 : (sd === "B" ? C.ok : C.bad)),
+          opacity: o.mine ? 1 : (mineAhead ? 0.62 : 0.5)
+        }));
+        if (w > 34) {
+          tx(svg, x + w / 2, y + 19, String(o.qty), {
+            fill: o.mine ? "#fff" : "#0b0e14", size: 9.5, anchor: "middle", weight: 700
+          });
+        }
+        cum += o.qty;
+      }
+      if (cum > 0) {
+        tx(svg, sd === "B" ? cx - 24 - W(cum) - 5 : cx + 24 + W(cum) + 5, y + 19, String(cum),
+          { fill: C.dim, size: 9.5, anchor: sd === "B" ? "end" : "start" });
+      }
+    });
+  }
+  svg.appendChild(mk("line", { x1: cx - 22, y1: top - 6, x2: cx - 22, y2: top + BK_N * rowH, stroke: C.line, "stroke-width": 1 }));
+  svg.appendChild(mk("line", { x1: cx + 22, y1: top - 6, x2: cx + 22, y2: top + BK_N * rowH, stroke: C.line, "stroke-width": 1 }));
+  var m = bkFind();
+  tx(svg, 20, top + BK_N * rowH + 16,
+    m ? ("your order: " + m.qty + " sh at " + bkPx(bkMine.tick).toFixed(2) + "  ·  position " +
+      (m.idx + 1) + " of " + (bkMine.side === "B" ? bkBid : bkAsk)[bkMine.tick].length +
+      " in the queue  ·  " + m.ahead + " sh must trade before you do")
+      : "your order: none resting — post one and watch where it lands",
+    { fill: m ? C.acc2 : C.dim, size: 10.5, weight: 700 });
+}
+function bkRender() {
+  bkDraw();
+  var bb = bkBest(bkBid, true), ba = bkBest(bkAsk, false);
+  $("bkBid").textContent = bb < 0 ? "—" : bkPx(bb).toFixed(2);
+  $("bkAsk").textContent = ba < 0 ? "—" : bkPx(ba).toFixed(2);
+  $("bkSpr").textContent = (bb < 0 || ba < 0) ? "—" : ((bkPx(ba) - bkPx(bb)) * 100).toFixed(0) + " ¢";
+  var m = bkFind();
+  $("bkAhead").textContent = m ? m.ahead + " sh" : "—";
+  $("bkLevel").textContent = m ? m.level + " sh" : "—";
+  $("bkFillAfter").textContent = m ? (m.ahead === 0 ? "next trade" : m.ahead + " sh trade") : "—";
+  $("bkFillAfter").className = "sv " + (m ? (m.ahead === 0 ? "ok" : m.ahead > 600 ? "bad" : "warn") : "");
+  var v = $("bkVerdict");
+  if (!m) {
+    v.innerHTML = "<b>Nothing of yours is resting.</b> Post a limit inside the book and it joins the back of " +
+      "that price's FIFO. Post one that crosses the spread and it never rests at all — it executes against " +
+      "resting size, at the <em>resting</em> order's price.";
+  } else if (m.ahead === 0) {
+    v.innerHTML = "<b>Front of the queue.</b> You are first in line at " + bkPx(bkMine.tick).toFixed(2) +
+      ", so the next trade at this price is yours. This is what speed buys: not a better price, an earlier " +
+      "place in the same queue.";
+  } else {
+    var pct = Math.max(0, Math.min(100, 100 * (1 - m.ahead / Math.max(1, m.level))));
+    v.innerHTML = "<b>" + m.ahead + " shares ahead of you</b> in a level holding " + m.level +
+      ". Your fill needs all of them to trade first, so a print smaller than " + m.ahead +
+      " shares leaves you untouched — roughly " + pct.toFixed(0) + "&nbsp;% of the way to the front. " +
+      "Repricing does not improve this; it resets it.";
+  }
+}
+(function bkInit() {
+  var sel = $("bkPx"), i;
+  for (i = 0; i < BK_N; i++) {
+    var o = document.createElement("option");
+    o.value = String(i); o.textContent = bkPx(i).toFixed(2);
+    if (i === 5) o.selected = true;
+    sel.appendChild(o);
+  }
+  bkReset(true);
+  var selPx = function () { return bkPx(+$("bkPx").value); };
+  var selQ = function () { return +$("bkQty").value; };
+  $("bkPx").addEventListener("change", function () { $("vbkPx").textContent = selPx().toFixed(2); });
+  ["input", "change"].forEach(function (ev) {
+    $("bkQty").addEventListener(ev, function () { $("vbkQty").textContent = $("bkQty").value; });
+  });
+  $("bkSideB").addEventListener("click", function () { bkSide = "B"; setSw(["bkSideB", "bkSideS"], "bkSideB"); });
+  $("bkSideS").addEventListener("click", function () { bkSide = "S"; setSw(["bkSideB", "bkSideS"], "bkSideS"); });
+  $("bkPost").addEventListener("click", function () {
+    if (bkMine) { bkLog("you already have an order resting — cancel or reprice it first", "bad"); bkRender(); return; }
+    bkPost(selPx(), selQ(), bkSide, "you"); bkRender();
+  });
+  $("bkCancel").addEventListener("click", function () {
+    var m = bkFind();
+    if (!m) { bkLog("nothing of yours to cancel"); bkRender(); return; }
+    var arr = bkMine.side === "B" ? bkBid : bkAsk, t = bkMine.tick, id = bkMine.id;
+    arr[t] = arr[t].filter(function (o) { return o.id !== id; });
+    bkLog("you cancelled at " + bkPx(t).toFixed(2) + " — the " + m.ahead +
+      " sh of queue position you had built is gone the moment you do this");
+    bkMine = null; bkRender();
+  });
+  $("bkReprice").addEventListener("click", function () {
+    var m = bkFind();
+    if (!m) { bkLog("post an order first, then reprice it"); bkRender(); return; }
+    var oldT = bkMine.tick, oldAhead = m.ahead, q = m.qty, sd = bkMine.side;
+    var arr = sd === "B" ? bkBid : bkAsk, id = bkMine.id;
+    arr[oldT] = arr[oldT].filter(function (o) { return o.id !== id; });
+    bkMine = null;
+    var newT = +$("bkPx").value;
+    if (newT === oldT) {
+      bkPost(bkPx(newT), q, sd, "you");
+      bkLog("repriced to the SAME price — and you still went to the back: a cancel-replace is a new order", "bad");
+    } else {
+      bkPost(bkPx(newT), q, sd, "you");
+      var m2 = bkFind();
+      bkLog("repriced " + bkPx(oldT).toFixed(2) + " → " + bkPx(newT).toFixed(2) + ": queue ahead " +
+        oldAhead + " sh → " + (m2 ? m2.ahead : 0) + " sh. Time priority does not travel with the order.", "bad");
+    }
+    bkRender();
+  });
+  $("bkFlow").addEventListener("click", function () {
+    var bb = bkBest(bkBid, true), ba = bkBest(bkAsk, false);
+    var sd = Math.random() < 0.5 ? "B" : "S";
+    var t = sd === "B" ? Math.max(0, bb - (Math.random() < 0.6 ? 0 : 1))
+      : Math.min(BK_N - 1, ba + (Math.random() < 0.6 ? 0 : 1));
+    bkPost(bkPx(t), 100 * (1 + Math.floor(Math.random() * 5)), sd, "flow");
+    bkRender();
+  });
+  $("bkMBuy").addEventListener("click", function () {
+    var r = bkTake("S", 300);
+    bkLog("market BUY 300 → filled " + r.taken + " sh at vwap " + r.vwap.toFixed(4) +
+      " (each print at the RESTING ask, not at one price)" + (r.mine ? " · " + r.mine + " sh of it was YOURS" : ""),
+      r.mine ? "ok" : "");
+    bkRender();
+  });
+  $("bkMSell").addEventListener("click", function () {
+    var r = bkTake("B", 300);
+    bkLog("market SELL 300 → filled " + r.taken + " sh at vwap " + r.vwap.toFixed(4) +
+      " (each print at the RESTING bid)" + (r.mine ? " · " + r.mine + " sh of it was YOURS" : ""),
+      r.mine ? "ok" : "");
+    bkRender();
+  });
+  $("bkReset").addEventListener("click", function () { bkReset(); bkRender(); });
+  bkLog("book reset · 100.00 bid / 100.01 ask · none of it yours");
+  bkRender();
+})();
+
+/* ══════════════════════════════════════════════════════════════
+   WIDGET 2 — the data-structure race
+   Cost model: hot footprint decides the residency level; the number of
+   DISTINCT cache lines an op touches decides what it pays at that level.
+   ══════════════════════════════════════════════════════════════ */
+var DS = [
+  { key: "map", nm: "std::map&lt;int,Level&gt;", sub: "red-black tree, one heap node per level", col: C.bad },
+  { key: "vec", nm: "sorted std::vector&lt;Level&gt;", sub: "contiguous, binary search, memmove on insert", col: C.warn },
+  { key: "flat", nm: "flat array + intrusive FIFO", sub: "price-indexed, cached touch, pooled nodes", col: C.acc2 }
+];
+var NLEV_FLAT = 1 << 16, LEVEL_B = 12, NODE_B = 48, MALLOC_B = 32, LINE = 64;
+
+function dsModel(depth, reads, mixPct) {
+  var mix = mixPct / 100, out = {};
+  /* ---- std::map: D scattered nodes, each its own line, log2(D) dependent hops */
+  var mapFoot = depth * (NODE_B + MALLOC_B);
+  var mapRes = residency(mapFoot);
+  var hops = Math.max(1, Math.ceil(Math.log(depth + 1) / Math.LN2));
+  out.map = {
+    foot: mapFoot, res: mapRes,
+    linesAdd: hops + 1, linesBbo: hops,
+    /* every hop is a dependent load the prefetcher cannot predict: full latency */
+    nsAdd: hops * mapRes.ns + 3 + mix * 42,          /* +42 ns when it must malloc a node */
+    nsBbo: hops * mapRes.ns + 1
+  };
+  /* ---- sorted vector: contiguous, binary search, memmove on a new level */
+  var vecFoot = depth * LEVEL_B;
+  var vecRes = residency(vecFoot);
+  var perLine = LINE / LEVEL_B;
+  var probes = Math.max(1, Math.ceil(Math.log(depth + 1) / Math.LN2));
+  var coldProbes = Math.max(1, probes - Math.floor(Math.log(perLine) / Math.LN2));
+  var moveB = depth * LEVEL_B / 2;
+  out.vec = {
+    foot: vecFoot, res: vecRes,
+    linesAdd: coldProbes + Math.ceil(moveB / LINE) * mix, linesBbo: 1,
+    nsAdd: coldProbes * vecRes.ns + 2 + mix * (moveB / 16),   /* memmove ~16 B/ns */
+    nsBbo: vecRes.ns * 0.35 + 0.6                              /* first/last slot, usually hot */
+  };
+  /* ---- flat array: whole band allocated, but only `depth` lines are hot */
+  var flatFoot = depth * LEVEL_B;          /* the touched working set, not the allocation */
+  var flatRes = residency(flatFoot);
+  out.flat = {
+    foot: flatFoot, alloc: NLEV_FLAT * LEVEL_B, res: flatRes,
+    linesAdd: 2, linesBbo: 0,
+    nsAdd: flatRes.ns + LAT.L1 + 1.2,       /* one level line + one pool line + 2 compares */
+    nsBbo: LAT.L1                            /* best_bid_tick is a cached scalar */
+  };
+  DS.forEach(function (d) {
+    var m = out[d.key];
+    m.perMsg = m.nsAdd + reads * m.nsBbo;
+    m.total = m.perMsg * 1e6;
+  });
+  return out;
+}
+function dsRender() {
+  var depth = Math.pow(2, +$("dsDepth").value);
+  var reads = +$("dsBbo").value, mix = +$("dsMix").value;
+  $("vdsDepth").textContent = depth.toLocaleString();
+  $("vdsBbo").textContent = reads;
+  $("vdsMix").textContent = mix + " %";
+  var m = dsModel(depth, reads, mix);
+  var worst = Math.max(m.map.nsAdd, m.vec.nsAdd, m.map.nsBbo * 1, m.vec.nsAdd);
+  var maxNs = Math.max(m.map.perMsg, m.vec.perMsg, m.flat.perMsg);
+
+  /* per-op bars: add and bbo side by side per structure */
+  var box = $("dsBars");
+  clear(box);
+  DS.forEach(function (d) {
+    var s = m[d.key];
+    [["add", s.nsAdd], ["best_bid × " + reads, s.nsBbo * reads]].forEach(function (p, pi) {
+      var row = document.createElement("div");
+      row.className = "dsrow";
+      var lab = document.createElement("div");
+      lab.className = "dsn";
+      lab.innerHTML = (pi === 0 ? d.nm : "&nbsp;") + "<em>" + p[0] + "</em>";
+      var bar = document.createElement("div");
+      bar.className = "bar";
+      var fill = document.createElement("i");
+      fill.style.width = Math.max(1.5, 100 * p[1] / maxNs) + "%";
+      fill.style.background = d.col;
+      fill.style.opacity = pi === 0 ? "0.9" : "0.5";
+      var val = document.createElement("span");
+      val.textContent = fmtNs(p[1]);
+      bar.appendChild(fill); bar.appendChild(val);
+      row.appendChild(lab); row.appendChild(bar);
+      box.appendChild(row);
+    });
+  });
+
+  /* total time for 1 M messages */
+  var svg = $("dsTotal");
+  clear(svg);
+  var x0 = 132, x1 = 690, maxT = Math.max(m.map.total, m.vec.total, m.flat.total);
+  tx(svg, 14, 16, "1 000 000 book messages, end to end", { fill: C.muted, size: 10.5, weight: 700 });
+  DS.forEach(function (d, i) {
+    var s = m[d.key], y = 36 + i * 36;
+    tx(svg, x0 - 8, y + 14, d.key === "map" ? "std::map" : d.key === "vec" ? "sorted vector" : "flat array",
+      { fill: C.ink, size: 10.5, anchor: "end" });
+    svg.appendChild(mk("rect", { x: x0, y: y, width: Math.max(2, (x1 - x0) * s.total / maxT), height: 19, rx: 3, fill: d.col, opacity: 0.85 }));
+    tx(svg, x0 + Math.max(2, (x1 - x0) * s.total / maxT) + 7, y + 14,
+      fmtNs(s.total) + "   ·   " + (s.total / m.flat.total).toFixed(1) + "×",
+      { fill: d.key === "flat" ? C.ok : C.muted, size: 10.5, weight: d.key === "flat" ? 700 : 400 });
+  });
+
+  /* the table */
+  var t = $("dsTable");
+  while (t.rows.length > 1) t.deleteRow(1);
+  DS.forEach(function (d) {
+    var s = m[d.key], r = t.insertRow(-1);
+    [d.key === "map" ? "std::map" : d.key === "vec" ? "sorted vector" : "flat array",
+      fmtBytes(s.foot) + (s.alloc ? " hot / " + fmtBytes(s.alloc) + " alloc" : ""),
+      s.res.nm + " · " + s.res.ns.toFixed(0) + " ns",
+      s.linesAdd.toFixed(1), s.linesBbo.toFixed(1),
+      fmtNs(s.nsAdd), fmtNs(s.nsBbo), fmtNs(s.total)].forEach(function (v, i) {
+      var c = r.insertCell(-1);
+      c.textContent = v;
+      if (i === 0) c.className = "n";
+    });
+  });
+
+  var margin = m.map.total / m.flat.total;
+  $("dsWin").textContent = "flat array";
+  $("dsMargin").textContent = margin.toFixed(1) + "× vs map";
+  $("dsVerdict").innerHTML = "<b>At " + depth.toLocaleString() + " levels the flat book processes the same " +
+    "million messages in " + fmtNs(m.flat.total) + " against " + fmtNs(m.map.total) + " for the tree — " +
+    margin.toFixed(1) + "×.</b> Notice what is doing the work. The tree's footprint is " + fmtBytes(m.map.foot) +
+    " because each of its " + depth.toLocaleString() + " levels is a separate heap node with allocator overhead, " +
+    "so it lives in " + m.map.res.nm + " and pays " + m.map.res.ns.toFixed(0) + " ns per hop — " +
+    Math.ceil(Math.log(depth + 1) / Math.LN2) + " dependent hops the prefetcher cannot anticipate. The flat book " +
+    "touches " + fmtBytes(m.flat.foot) + " of hot lines out of a " + fmtBytes(m.flat.alloc) + " allocation, and its " +
+    "read is a cached integer in L1 at " + LAT.L1.toFixed(0) + " ns no matter how deep the book gets. " +
+    "Drag <em>reads per message</em> up and the gap widens, because the read is the operation the layout makes free.";
+}
+["dsDepth", "dsBbo", "dsMix"].forEach(function (id) {
+  $(id).addEventListener("input", dsRender);
+  $(id).addEventListener("change", dsRender);
+});
+dsRender();
+
+/* ══════════════════════════════════════════════════════════════
+   WIDGET 3 — pointer chasing versus contiguity, one cache line at a time
+   ══════════════════════════════════════════════════════════════ */
+function ccModel() {
+  var k = +$("ccK").value, sz = +$("ccSz").value, pref = $("ccPref").checked;
+  var useful = k * sz;
+  var flatLines = Math.ceil(useful / LINE);
+  var treeLines = k;                          /* one scattered node per level */
+  /* contiguous + prefetcher: the stream is detected after ~2 lines, the rest overlap */
+  var nsFlat = pref ? (Math.min(2, flatLines) * LAT.LLC + Math.max(0, flatLines - 2) * 1.6)
+    : flatLines * LAT.LLC;
+  /* pointer chase: every load depends on the previous one, so nothing overlaps
+     and the prefetcher has no stride to detect */
+  var nsTree = treeLines * LAT.DRAM;
+  return {
+    k: k, sz: sz, pref: pref, useful: useful,
+    flatLines: flatLines, treeLines: treeLines,
+    flatFetch: flatLines * LINE, treeFetch: treeLines * LINE,
+    nsFlat: nsFlat, nsTree: nsTree
+  };
+}
+function ccDraw(m) {
+  var svg = $("ccSvg");
+  clear(svg);
+  var cols = 12, cw = 54, ch = 30, x0 = 20;
+  function grid(y, label, lit, sub) {
+    tx(svg, x0, y - 8, label, { fill: C.ink, size: 11, weight: 700 });
+    tx(svg, 700, y - 8, sub, { fill: C.dim, size: 10, anchor: "end" });
+    var i;
+    for (i = 0; i < cols * 2; i++) {
+      var cxp = x0 + (i % cols) * cw, cyp = y + Math.floor(i / cols) * (ch + 5);
+      var on = lit.indexOf(i) >= 0;
+      svg.appendChild(mk("rect", {
+        x: cxp, y: cyp, width: cw - 4, height: ch, rx: 3,
+        fill: on ? (label.indexOf("flat") === 0 ? C.acc : C.bad) : "#12151c",
+        stroke: on ? (label.indexOf("flat") === 0 ? C.acc2 : C.bad) : C.line,
+        "stroke-width": 1, opacity: on ? 0.92 : 1
+      }));
+      tx(svg, cxp + (cw - 4) / 2, cyp + 19, "64B", {
+        fill: on ? "#fff" : C.dim, size: 9, anchor: "middle", weight: on ? 700 : 400
+      });
+    }
+  }
+  /* flat: the first N lines, contiguous */
+  var litF = [], i;
+  for (i = 0; i < Math.min(24, m.flatLines); i++) litF.push(i);
+  grid(40, "flat array · " + m.flatLines + " contiguous line" + (m.flatLines === 1 ? "" : "s"),
+    litF, m.pref ? "stride detected → prefetched ahead" : "prefetcher off → every line is a full miss");
+  /* the tree: k pseudo-random lines from a fixed LCG so the picture is stable */
+  var litT = [], s = 20250903 >>> 0;
+  while (litT.length < Math.min(24, m.treeLines)) {
+    s = (1664525 * s + 1013904223) >>> 0;
+    var v = s % (cols * 2);
+    if (litT.indexOf(v) < 0) litT.push(v);
+  }
+  grid(150, "std::map · " + m.treeLines + " scattered line" + (m.treeLines === 1 ? "" : "s"),
+    litT, "each address depends on the previous load → no overlap, no prefetch");
+
+  /* the two timings, to scale */
+  var bx = 20, bw = 660, y = 258, mx = Math.max(m.nsFlat, m.nsTree);
+  tx(svg, bx, y - 8, "time to walk " + m.k + " level" + (m.k === 1 ? "" : "s"), { fill: C.muted, size: 10.5, weight: 700 });
+  [["flat", m.nsFlat, C.acc2], ["std::map", m.nsTree, C.bad]].forEach(function (p, i) {
+    var yy = y + i * 26;
+    tx(svg, bx + 62, yy + 14, p[0], { fill: C.ink, size: 10.5, anchor: "end" });
+    svg.appendChild(mk("rect", { x: bx + 70, y: yy, width: Math.max(2, (bw - 70) * p[1] / mx), height: 18, rx: 3, fill: p[2], opacity: 0.85 }));
+    tx(svg, bx + 70 + Math.max(2, (bw - 70) * p[1] / mx) + 7, yy + 13, fmtNs(p[1]), { fill: p[2], size: 10.5, weight: 700 });
+  });
+}
+function ccRender() {
+  var m = ccModel();
+  $("vccK").textContent = m.k;
+  $("vccSz").textContent = m.sz + " B";
+  $("ccUse").textContent = m.useful + " B";
+  $("ccFetchF").textContent = fmtBytes(m.flatFetch);
+  $("ccFetchT").textContent = fmtBytes(m.treeFetch);
+  $("ccNsF").textContent = fmtNs(m.nsFlat);
+  $("ccNsT").textContent = fmtNs(m.nsTree);
+  $("ccRatio").textContent = (m.nsTree / Math.max(0.01, m.nsFlat)).toFixed(1) + "×";
+  ccDraw(m);
+  var utilF = 100 * m.useful / m.flatFetch, utilT = 100 * m.useful / m.treeFetch;
+  $("ccVerdict").innerHTML = "<b>You asked for " + m.useful + " bytes.</b> The flat walk fetched " +
+    fmtBytes(m.flatFetch) + " of it — " + utilF.toFixed(0) + "&nbsp;% of every line you paid for was data you " +
+    "wanted — in " + m.flatLines + " line" + (m.flatLines === 1 ? "" : "s") + " the hardware could see coming. " +
+    "The pointer chase fetched " + fmtBytes(m.treeFetch) + " for the same " + m.useful + " useful bytes (" +
+    utilT.toFixed(0) + "&nbsp;% utilisation) across " + m.treeLines + " lines, and — this is the part that costs " +
+    "you — each address is only known once the previous load returns, so the misses <em>serialise</em> instead of " +
+    "overlapping. " + (m.pref ? "With the prefetcher on, the contiguous walk is essentially bandwidth-bound. "
+      : "With the prefetcher off, even the contiguous walk pays per line — turn it back on and watch the flat bar collapse. ") +
+    "That serialisation, not the byte count, is why the tree is " + (m.nsTree / Math.max(0.01, m.nsFlat)).toFixed(1) +
+    "× slower here.";
+}
+["ccK", "ccSz"].forEach(function (id) {
+  $(id).addEventListener("input", ccRender);
+  $(id).addEventListener("change", ccRender);
+});
+$("ccPref").addEventListener("change", ccRender);
+ccRender();
+
+/* ══════════════════════════════════════════════════════════════
+   WIDGET 4 — sizing the price band, and the day the market leaves it
+   ══════════════════════════════════════════════════════════════ */
+var pbTick = 0.01;
+function pbRender() {
+  var ref = +$("pbRef").value, band = +$("pbBand").value, occ = +$("pbOcc").value, mv = +$("pbMove").value;
+  $("vpbRef").textContent = "$" + ref;
+  $("vpbBand").textContent = band + " %";
+  $("vpbOcc").textContent = occ;
+  $("vpbMove").textContent = (mv > 0 ? "+" : "") + mv + " %";
+
+  var lo = ref * (1 - band / 100), hi = ref * (1 + band / 100);
+  var ticks = Math.max(1, Math.round((hi - lo) / pbTick));
+  var bytes = ticks * LEVEL_B;
+  var treeBytes = occ * (NODE_B + MALLOC_B);
+  var occPct = 100 * Math.min(occ, ticks) / ticks;
+  var px = ref * (1 + mv / 100);
+  var out = px < lo || px > hi;
+  var res = residency(Math.min(occ, ticks) * LEVEL_B);
+
+  $("pbTicks").textContent = ticks.toLocaleString();
+  $("pbBytes").textContent = fmtBytes(bytes);
+  $("pbBytes").className = "sv " + (bytes <= CAP.L2 ? "acc" : bytes <= CAP.LLC ? "warn" : "bad");
+  $("pbOccPct").textContent = occPct < 0.01 ? "<0.01 %" : occPct.toFixed(occPct < 1 ? 2 : 1) + " %";
+  $("pbOccPct").className = "sv " + (occPct > 5 ? "ok" : occPct > 0.5 ? "warn" : "bad");
+  $("pbTree").textContent = fmtBytes(treeBytes);
+
+  /* the band, the occupied levels, and where the price now is */
+  var svg = $("pbSvg");
+  clear(svg);
+  var x0 = 24, x1 = 696, y = 60, h = 46;
+  var vlo = Math.min(lo, px) - (hi - lo) * 0.08, vhi = Math.max(hi, px) + (hi - lo) * 0.08;
+  var X = function (p) { return x0 + (x1 - x0) * (p - vlo) / (vhi - vlo); };
+  tx(svg, x0, 26, "allocated band · " + ticks.toLocaleString() + " ticks of $" +
+    (pbTick < 0.001 ? pbTick.toFixed(4) : pbTick.toFixed(2)) + " = " + fmtBytes(bytes) + " per side",
+    { fill: C.muted, size: 10.5, weight: 700 });
+  svg.appendChild(mk("rect", { x: X(lo), y: y, width: Math.max(2, X(hi) - X(lo)), height: h, rx: 4, fill: C.acc, opacity: 0.16, stroke: C.acc2, "stroke-width": 1.2 }));
+  /* occupied levels cluster around the touch — that is the point */
+  var i, shown = Math.min(occ, 260), spanOcc = (hi - lo) * Math.min(1, occ / ticks) * 0.5 + (hi - lo) * 0.02;
+  for (i = 0; i < shown; i++) {
+    var frac = (i / Math.max(1, shown - 1)) - 0.5;
+    var p = ref + frac * spanOcc * 2;
+    if (p < lo || p > hi) continue;
+    svg.appendChild(mk("rect", { x: X(p), y: y + 6, width: 1.6, height: h - 12, fill: C.ok, opacity: 0.8 }));
+  }
+  tx(svg, X(lo), y + h + 15, "$" + lo.toFixed(2), { fill: C.dim, size: 10, anchor: "middle" });
+  tx(svg, X(hi), y + h + 15, "$" + hi.toFixed(2), { fill: C.dim, size: 10, anchor: "middle" });
+  tx(svg, X(ref), y - 8, "band sized here · $" + ref, { fill: C.acc2, size: 10, anchor: "middle" });
+  svg.appendChild(mk("line", { x1: X(px), y1: y - 22, x2: X(px), y2: y + h + 24, stroke: out ? C.bad : C.warn, "stroke-width": 2, "stroke-dasharray": out ? "5 4" : "0" }));
+  tx(svg, X(px), y + h + 40, (out ? "PRICE OUT OF BAND · $" : "price now · $") + px.toFixed(2),
+    { fill: out ? C.bad : C.warn, size: 10.5, anchor: "middle", weight: 700 });
+  /* memory comparison */
+  var by = 176, mx = Math.max(bytes, treeBytes);
+  tx(svg, x0, by - 8, "memory per side", { fill: C.muted, size: 10.5, weight: 700 });
+  [["flat array", bytes, C.acc2], ["tree of occupied levels", treeBytes, C.bad]].forEach(function (p, k) {
+    var yy = by + k * 24;
+    tx(svg, x0 + 150, yy + 13, p[0], { fill: C.ink, size: 10.5, anchor: "end" });
+    svg.appendChild(mk("rect", { x: x0 + 158, y: yy, width: Math.max(2, (x1 - x0 - 158) * p[1] / mx), height: 17, rx: 3, fill: p[2], opacity: 0.85 }));
+    tx(svg, x0 + 158 + Math.max(2, (x1 - x0 - 158) * p[1] / mx) + 7, yy + 13, fmtBytes(p[1]), { fill: p[2], size: 10.5, weight: 700 });
+  });
+
+  var v = $("pbVerdict");
+  if (out) {
+    var reIdx = Math.round(Math.abs(px - ref) / pbTick);
+    v.innerHTML = "<b>The market walked out of your band.</b> The price is $" + px.toFixed(2) +
+      " and the array only spans $" + lo.toFixed(2) + " – $" + hi.toFixed(2) +
+      ", so the index for the touch is " + reIdx.toLocaleString() + " ticks outside the allocation. In C++ that is not " +
+      "an exception, it is a write past the end of a <code>std::array</code> — memory corruption on a limit-up " +
+      "day, which is precisely the day it matters. You must either bound-check every index (a branch on the hot " +
+      "path) or rebase: pick a new <code>base_</code>, memmove the surviving levels, and rebuild the touch. " +
+      "Size the band for the halt bands the exchange actually enforces, not for a quiet Tuesday.";
+  } else if (bytes > CAP.LLC) {
+    v.innerHTML = "<b>The array no longer fits in cache.</b> " + fmtBytes(bytes) + " per side is past the " +
+      fmtBytes(CAP.LLC) + " last-level cache, so a cold level costs a DRAM miss at " + LAT.DRAM.toFixed(0) +
+      " ns — the very thing you bought the array to avoid. The <em>hot</em> levels around the touch still " +
+      "resolve in " + res.nm + ", which is why this works in practice; but the array is now a bet that you " +
+      "never read the tail. Narrow the band, or keep the flat array for the inside and an ordered map for the rest.";
+  } else if (occPct < 0.5) {
+    v.innerHTML = "<b>" + occPct.toFixed(2) + "&nbsp;% occupancy — the array is almost entirely zeroes.</b> " +
+      occ.toLocaleString() + " quoted levels in " + ticks.toLocaleString() + " allocated ticks. The tree " +
+      "stores the same book in " + fmtBytes(treeBytes) + " against your " + fmtBytes(bytes) +
+      ", and this is the regime where the flat array genuinely loses: a tick that is a tiny fraction of the " +
+      "price (crypto, FX, anything quoted to eight decimals) makes the index space enormous while the quoted " +
+      "levels stay a handful. Hash the tick, or index a compacted ladder of the levels that exist.";
+  } else {
+    v.innerHTML = "<b>A well-sized band.</b> " + ticks.toLocaleString() + " ticks, " + fmtBytes(bytes) +
+      " per side, " + occPct.toFixed(1) + "&nbsp;% of it carrying size, and the hot working set of " +
+      fmtBytes(Math.min(occ, ticks) * LEVEL_B) + " resolves out of " + res.nm + " at " + res.ns.toFixed(0) +
+      " ns. The whole allocation happens once at start-up, so nothing on the message path ever calls the " +
+      "allocator. Now push <em>price move</em> to the edge and see what you owe on a limit-up day.";
+  }
+}
+[["pbT1", 0.01], ["pbT2", 0.05], ["pbT3", 0.25], ["pbT4", 0.0001]].forEach(function (p) {
+  $(p[0]).addEventListener("click", function () {
+    pbTick = p[1];
+    setSw(["pbT1", "pbT2", "pbT3", "pbT4"], p[0]);
+    pbRender();
+  });
+});
+["pbRef", "pbBand", "pbOcc", "pbMove"].forEach(function (id) {
+  $(id).addEventListener("input", pbRender);
+  $(id).addEventListener("change", pbRender);
+});
+pbRender();
+
+/* ══════════════════════════════════════════════════════════════
+   WIDGET 5 — snapshot, delta, and the sequence gap
+   ══════════════════════════════════════════════════════════════ */
+var sgMsgs = [], sgState = null;
+function sgSeed() {
+  /* deterministic stream so the numbers are reproducible between runs */
+  var s = 20250907 >>> 0;
+  return function () { s = (1664525 * s + 1013904223) >>> 0; return s / 4294967296; };
+}
+function sgBuild() {
+  var rnd = sgSeed(), gap = +$("sgGap").value / 100, dup = +$("sgDup").value / 100;
+  var snapEvery = +$("sgSnap").value;
+  sgMsgs = [];
+  var seq = 1, n = 0;
+  while (sgMsgs.length < 200) {
+    if (n > 0 && n % snapEvery === 0) sgMsgs.push({ kind: "snap", seq: seq - 1 });
+    n++;
+    if (rnd() < gap) { seq++; continue; }        /* the network ate this one */
+    sgMsgs.push({ kind: "delta", seq: seq });
+    if (rnd() < dup) sgMsgs.push({ kind: "delta", seq: seq });   /* A/B feed duplicate */
+    seq++;
+  }
+  sgState = {
+    i: 0, expected: 0, stale: true, applied: 0, gaps: 0, dupes: 0,
+    wrong: 0, worst: 0, staleN: 0, seen: 0, marks: []
+  };
+}
+function sgOne() {
+  var st = sgState, pol = $("sgPol").value;
+  if (st.i >= sgMsgs.length) return false;
+  var m = sgMsgs[st.i++], mark = "x";
+  st.seen++;
+  if (m.kind === "snap") {
+    st.expected = m.seq + 1; st.stale = false; st.wrong = 0; mark = "snap";
+  } else if (st.stale && pol === "stale") {
+    mark = "stale";
+  } else if (m.seq < st.expected) {
+    st.dupes++; mark = "dup";
+  } else if (m.seq > st.expected) {
+    st.gaps++;
+    if (pol === "apply") { st.wrong += (m.seq - st.expected); st.expected = m.seq + 1; st.applied++; mark = "gapapply"; }
+    else if (pol === "drop") { st.wrong += (m.seq - st.expected); st.expected = m.seq + 1; mark = "gapdrop"; }
+    else { st.stale = true; mark = "gapstale"; }
+  } else {
+    st.expected++; st.applied++; mark = "ok";
+  }
+  if (st.stale && pol === "stale") st.staleN++;
+  st.worst = Math.max(st.worst, st.wrong);
+  st.marks.push(mark);
+  return true;
+}
+function sgDraw() {
+  var svg = $("sgSvg"), st = sgState;
+  clear(svg);
+  var COL = {
+    ok: C.ok, dup: C.dim, snap: C.sky, stale: "#3a3f4b",
+    gapapply: C.bad, gapdrop: C.warn, gapstale: C.acc
+  };
+  var x0 = 20, x1 = 700, n = 200, cw = (x1 - x0) / n, i;
+  tx(svg, x0, 18, "200 feed messages, left to right", { fill: C.muted, size: 10.5, weight: 700 });
+  tx(svg, x1, 18, st.seen + " processed", { fill: C.dim, size: 10, anchor: "end" });
+  for (i = 0; i < n; i++) {
+    var mk2 = st.marks[i];
+    svg.appendChild(mk("rect", {
+      x: x0 + i * cw, y: 28, width: Math.max(1, cw - 0.7), height: 26, rx: 1,
+      fill: mk2 ? COL[mk2] : "#15181f", opacity: mk2 ? 0.92 : 1
+    }));
+  }
+  var lg = [["applied in order", C.ok], ["duplicate, dropped", C.dim], ["snapshot", C.sky],
+    ["gap", C.acc], ["stale, not quoting", "#3a3f4b"], ["applied over a gap", C.bad]];
+  lg.forEach(function (p, k) {
+    var lx = x0 + (k % 3) * 232, ly = 74 + Math.floor(k / 3) * 18;
+    svg.appendChild(mk("rect", { x: lx, y: ly, width: 10, height: 10, rx: 2, fill: p[1] }));
+    tx(svg, lx + 15, ly + 9, p[0], { fill: C.muted, size: 10 });
+  });
+  /* divergence over time */
+  var gy = 128, gh = 62, maxW = Math.max(1, st.worst);
+  svg.appendChild(mk("rect", { x: x0, y: gy, width: x1 - x0, height: gh, rx: 4, fill: "#12151c", stroke: C.line, "stroke-width": 1 }));
+  tx(svg, x0 + 6, gy - 5, "levels your book is wrong by (0 = agrees with the exchange)", { fill: C.dim, size: 10 });
+  var w = 0, pol = $("sgPol").value;
+  var pts = [];
+  st.marks.forEach(function (m2, k) {
+    if (m2 === "snap") w = 0;
+    else if (m2 === "gapapply" || m2 === "gapdrop") w += 1;
+    pts.push([x0 + k * cw, gy + gh - 3 - (gh - 8) * Math.min(1, w / maxW)]);
+  });
+  if (pts.length > 1) {
+    var d = "", k;
+    for (k = 0; k < pts.length; k++) d += (k ? "L" : "M") + pts[k][0].toFixed(1) + " " + pts[k][1].toFixed(1);
+    svg.appendChild(mk("path", { d: d, fill: "none", stroke: pol === "stale" ? C.ok : C.bad, "stroke-width": 1.8 }));
+  }
+  tx(svg, x1 - 6, gy + 14, "worst " + st.worst, { fill: st.worst ? C.bad : C.ok, size: 10.5, anchor: "end", weight: 700 });
+}
+function sgRender() {
+  var st = sgState, pol = $("sgPol").value;
+  $("sgApplied").textContent = st.applied;
+  $("sgGaps").textContent = st.gaps;
+  $("sgDupes").textContent = st.dupes;
+  $("sgWrong").textContent = st.wrong + " level" + (st.wrong === 1 ? "" : "s");
+  $("sgWrong").className = "sv " + (st.wrong === 0 ? "ok" : "bad");
+  $("sgStale").textContent = st.seen ? (100 * st.staleN / st.seen).toFixed(0) + " %" : "0 %";
+  $("sgStale").className = "sv " + (st.staleN === 0 ? "ok" : "warn");
+  $("sgWorst").textContent = st.worst;
+  $("sgWorst").className = "sv " + (st.worst === 0 ? "ok" : "bad");
+  sgDraw();
+  var v = $("sgVerdict");
+  if (!st.seen) {
+    v.innerHTML = "<b>Nothing processed yet.</b> Run the stream, then switch the policy and run it again — " +
+      "the message sequence is deterministic, so the only thing that changes is what you did about the gaps.";
+  } else if (pol === "apply") {
+    v.innerHTML = "<b>Fast and wrong.</b> You applied " + st.applied + " messages and never stopped quoting, " +
+      "but you also applied " + st.gaps + " deltas on top of state you never received, so your book is " +
+      "currently wrong by " + st.wrong + " level" + (st.wrong === 1 ? "" : "s") + " and was as bad as " +
+      st.worst + ". Nothing in your process knows this. You will quote against levels that emptied, get " +
+      "picked off on every one of those quotes, and the P&amp;L will look like bad luck rather than a bug. " +
+      "Note that the periodic snapshot silently repairs it — which is exactly what makes the failure so hard " +
+      "to find in a log.";
+  } else if (pol === "drop") {
+    v.innerHTML = "<b>Better, still wrong.</b> Dropping the out-of-order delta avoids applying garbage, but " +
+      "the update it carried is gone too: " + st.gaps + " gaps left your book " + st.worst +
+      " level" + (st.worst === 1 ? "" : "s") + " behind at its worst. A delta is a <em>change</em>, so skipping " +
+      "one leaves a level frozen at a stale size until the next snapshot happens to overwrite it. Half-measures " +
+      "on a delta feed produce a book that is quietly stale rather than obviously broken.";
+  } else {
+    v.innerHTML = "<b>Honest.</b> " + st.gaps + " gaps, and each one took you out of the market until the next " +
+      "snapshot — " + (100 * st.staleN / st.seen).toFixed(0) + "&nbsp;% of the stream spent not quoting. In " +
+      "exchange, your book is wrong by " + st.wrong + " levels and never was: the divergence line stays flat on " +
+      "the floor. That is the trade this policy makes — you give up a measurable slice of quoting time to " +
+      "guarantee that every quote you <em>do</em> send is priced off a book that matches the exchange's. " +
+      "Shorten the snapshot interval to buy the stale time back.";
+  }
+}
+function sgReset() { sgBuild(); sgRender(); }
+[["sgGap", "vsgGap", " %"], ["sgDup", "vsgDup", " %"], ["sgSnap", "vsgSnap", ""]].forEach(function (p) {
+  ["input", "change"].forEach(function (ev) {
+    $(p[0]).addEventListener(ev, function () {
+      $(p[1]).textContent = $(p[0]).value + p[2];
+      sgReset();
+    });
+  });
+});
+$("sgPol").addEventListener("change", sgReset);
+$("sgRun").addEventListener("click", function () { var g = 0; while (sgOne() && g++ < 400) {} sgRender(); });
+$("sgStep").addEventListener("click", function () { sgOne(); sgRender(); });
+$("sgReset").addEventListener("click", sgReset);
+sgReset();
+
+/* ── MCQ engine (shared across week pages) ───────────────────── */
+Array.prototype.forEach.call(document.querySelectorAll(".mcq"), function (q) {
+  var answer = parseInt(q.getAttribute("data-a"), 10);
+  var opts = Array.prototype.slice.call(q.querySelectorAll(".opt"));
+  var fb = q.querySelector(".fb");
+  opts.forEach(function (o, i) {
+    o.addEventListener("click", function () {
+      if (q.dataset.done === "1") return;
+      q.dataset.done = "1";
+      var right = i === answer;
+      opts.forEach(function (b, j) {
+        b.disabled = true;
+        if (j === answer) b.classList.add("right");
+        else if (j === i) b.classList.add("wrong");
+        else b.classList.add("dim");
+      });
+      fb.innerHTML = (right ? "<b>Correct.</b> " : "<b>Not quite.</b> ") + q.getAttribute("data-exp");
+      fb.className = "fb show " + (right ? "good" : "poor");
+    });
+  });
+});
+</script>
+</body>
+</html>

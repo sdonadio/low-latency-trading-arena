@@ -1,0 +1,1260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" href="data:," />
+<title>Week 13 · Low-Latency Design — SIMD &amp; Kernel Bypass — Low-Latency Trading Arena</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    /* ── Low-Latency Trading Arena · shared palette (identical on every page) ── */
+    --accent:       #7c3aed;
+    --accent-2:     #c4b5fd;
+    --accent-3:     #ede9fe;
+    --accent-rgb:   124,58,237;
+    --accent-2-rgb: 196,181,253;
+    --bg:           #0f1115;
+    --panel:        #181b22;
+    --panel2:       #1e222b;
+    --panel-2:      #13161b;
+    --ink:          #e8e6e3;
+    --ink-dim:      #c6c3bf;
+    --ink-mute:     #6f757f;
+    --muted:        #9aa0a6;
+    --dim:          #5f6673;
+    --line:         #272c36;
+    --line-2:       #333a47;
+    --border:       #272c36;
+    --ok:           #3fb950;
+    --warn:         #d29922;
+    --bad:          #f85149;
+    --info:         #6cb6ff;
+    --sky:          #58a6ff;
+    --violet:       #a78bfa;
+    --teal:         #2dd4bf;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.62;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent-2);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  /* ── nav / footer ─────────────────────────────────────────── */
+  nav.top{position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+    padding:11px 22px;background:rgba(15,17,21,.94);border-bottom:1px solid var(--line)}
+  nav.top>a:first-child{font-weight:800;letter-spacing:-.2px;color:var(--ink);font-size:14.5px;
+    border-left:3px solid var(--accent);padding-left:10px}
+  nav.top .crumbs{font-size:12px;color:var(--muted)}
+  nav.top .crumbs b{color:var(--ink);font-weight:700}
+  footer{border-top:1px solid var(--line);background:var(--panel);
+    padding:26px 22px 34px;text-align:center;font-size:11.5px;color:var(--dim);letter-spacing:.3px}
+
+  /* ── sections & typography ────────────────────────────────── */
+  section{max-width:1180px;margin:0 auto;padding:36px 22px 42px;border-top:1px solid var(--line)}
+  section#hero{border-top:none}
+  .kicker{font-size:10.5px;font-weight:800;letter-spacing:1.9px;text-transform:uppercase;color:var(--accent-2)}
+  h1{font-size:clamp(26px,4.2vw,40px);font-weight:800;letter-spacing:-.9px;line-height:1.13;margin:10px 0 6px}
+  h2{font-size:21px;font-weight:700;letter-spacing:-.3px;margin:4px 0 4px}
+  h3{font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);margin-bottom:11px}
+  h4{font-size:13.5px;font-weight:700;margin-bottom:5px}
+  p{margin:9px 0;max-width:82ch}
+  .lead{color:var(--muted);font-size:15px;max-width:84ch}
+  .sub{color:var(--muted);font-size:12.5px}
+  strong{color:#fff;font-weight:650}
+  em.hi{color:var(--accent-2);font-style:normal;font-weight:600}
+  code,.mono{font-family:var(--mono);font-size:12.5px}
+  code{background:rgba(var(--accent-2-rgb),.13);color:#ddd6fe;padding:1px 5px;border-radius:4px}
+  ul.you{list-style:none;margin:16px 0 0;display:grid;gap:8px}
+  ul.you li{position:relative;padding-left:26px;font-size:13.5px;color:var(--ink);max-width:78ch}
+  ul.you li::before{content:"";position:absolute;left:4px;top:8px;width:8px;height:8px;border-radius:2px;
+    background:var(--accent);box-shadow:0 0 0 3px rgba(var(--accent-rgb),.22)}
+  ul.plain{list-style:none;display:grid;gap:7px;font-size:13px;color:var(--muted)}
+  ul.plain li{padding-left:16px;position:relative}
+  ul.plain li::before{content:"\2022";position:absolute;left:2px;color:var(--accent-2)}
+
+  /* ── panels & layout ──────────────────────────────────────── */
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .panel.tight{padding:13px 14px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;align-items:start}
+  .split{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:18px;align-items:start}
+  .split-r{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:18px;align-items:start}
+  .stack{display:grid;gap:14px}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+
+  /* ── controls ─────────────────────────────────────────────── */
+  .btn{font-family:inherit;font-size:12px;font-weight:650;cursor:pointer;color:var(--ink);
+    background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:7px 14px;transition:.15s}
+  .btn:hover:not(:disabled){border-color:var(--accent-2);color:#fff}
+  .btn:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .btn:disabled{opacity:.35;cursor:not-allowed}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.primary:hover:not(:disabled){filter:brightness(1.25)}
+  .btn.on{background:rgba(var(--accent-rgb),.28);border-color:var(--accent-2);color:#fff}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+  .tab{font-family:inherit;font-size:12px;font-weight:650;cursor:pointer;color:var(--muted);
+    background:transparent;border:1px solid var(--line);border-radius:20px;padding:6px 14px;transition:.15s}
+  .tab:hover{color:var(--ink)}
+  .tab[aria-selected="true"]{background:rgba(var(--accent-rgb),.3);border-color:var(--accent-2);color:#fff}
+  .tab:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .ctl{display:grid;gap:4px;margin-bottom:12px}
+  .ctl label{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);
+    display:flex;justify-content:space-between;gap:10px}
+  .ctl label b{font-family:var(--mono);color:var(--accent-2);font-size:12px;text-transform:none;letter-spacing:0}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:3px;
+    background:#2b313d;outline:none;cursor:pointer}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;
+    background:var(--accent-2);border:2px solid var(--bg);cursor:pointer}
+  input[type=range]::-moz-range-thumb{width:15px;height:15px;border-radius:50%;background:var(--accent-2);
+    border:2px solid var(--bg);cursor:pointer}
+  input[type=range]:focus-visible{box-shadow:0 0 0 3px rgba(var(--accent-2-rgb),.4)}
+  select,textarea,input[type=text]{font-family:var(--mono);font-size:12.5px;color:var(--ink);
+    background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:7px 9px;width:100%}
+  select:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px solid var(--accent-2);outline-offset:1px}
+  textarea{line-height:1.55;resize:vertical}
+
+  /* ── stats / pills / code ─────────────────────────────────── */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:1px;
+    background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .stat{background:var(--panel);padding:10px 12px}
+  .stat .sl{font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--dim)}
+  .stat .sv{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--ink);margin-top:3px}
+  .stat .sv.ok{color:var(--ok)} .stat .sv.bad{color:var(--bad)} .stat .sv.warn{color:var(--warn)}
+  .stat .sv.acc{color:var(--accent-2)}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;letter-spacing:.5px;
+    padding:3px 9px;border-radius:20px;border:1px solid var(--line);color:var(--muted)}
+  .pill.ok{color:var(--ok);border-color:rgba(63,185,80,.5);background:rgba(63,185,80,.1)}
+  .pill.bad{color:var(--bad);border-color:rgba(248,81,73,.5);background:rgba(248,81,73,.1)}
+  .pill.warn{color:var(--warn);border-color:rgba(210,153,34,.5);background:rgba(210,153,34,.1)}
+  .pill.acc{color:var(--accent-2);border-color:rgba(var(--accent-2-rgb),.5);background:rgba(var(--accent-rgb),.18)}
+  pre.code{font-family:var(--mono);font-size:11.8px;line-height:1.62;background:#0b0e14;color:#dbe3ea;
+    border:1px solid var(--line);border-radius:10px;padding:13px 14px;overflow-x:auto;white-space:pre}
+  pre.code .k{color:#6cb6ff} pre.code .s{color:#8ddb8c} pre.code .c{color:#6b7484;font-style:italic}
+  pre.code .n{color:#e0b070} pre.code .b{color:#ddd6fe;font-weight:700}
+  .note{border-left:3px solid var(--accent);background:rgba(var(--accent-rgb),.12);border-radius:0 8px 8px 0;
+    padding:10px 13px;font-size:12.5px;color:var(--muted)}
+  .note b{color:var(--ink)}
+  .log{font-family:var(--mono);font-size:11.5px;max-height:230px;overflow-y:auto;display:grid;gap:5px}
+  .log div{background:var(--panel2);border-left:3px solid var(--line);border-radius:0 6px 6px 0;padding:6px 9px;color:var(--muted)}
+  .log div.hl{border-left-color:var(--accent-2);color:var(--ink);background:rgba(var(--accent-rgb),.15)}
+  .log div.ok{border-left-color:var(--ok)} .log div.bad{border-left-color:var(--bad)}
+  svg{display:block;max-width:100%;height:auto}
+  .svgwrap{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px;overflow-x:auto}
+  table.t{width:100%;border-collapse:collapse;font-size:12px}
+  table.t th{font-size:9.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--dim);
+    text-align:left;padding:0 8px 7px;border-bottom:1px solid var(--line)}
+  table.t td{padding:7px 8px;border-bottom:1px solid rgba(39,44,54,.6);color:var(--muted);font-family:var(--mono);font-size:11.8px}
+  table.t td.n{color:var(--ink);font-weight:600}
+
+  /* ── pitfalls ─────────────────────────────────────────────── */
+  details.pit{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:10px;overflow:hidden}
+  details.pit>summary{cursor:pointer;padding:12px 15px;font-size:13.5px;font-weight:650;color:var(--ink);
+    list-style:none;display:flex;gap:11px;align-items:flex-start}
+  details.pit>summary::-webkit-details-marker{display:none}
+  details.pit>summary::before{content:"\25B8";color:var(--accent-2);font-size:12px;line-height:1.5;transition:.2s}
+  details.pit[open]>summary::before{transform:rotate(90deg)}
+  details.pit>summary:focus-visible{outline:2px solid var(--accent-2);outline-offset:-2px}
+  details.pit .body{padding:0 15px 15px 39px;font-size:13px;color:var(--muted);display:grid;gap:9px}
+  details.pit .body .fix{color:var(--ok);font-weight:600}
+
+  /* ── MCQ ──────────────────────────────────────────────────── */
+  .mcq{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 17px;margin-bottom:13px}
+  .mcq .q{font-size:13.8px;font-weight:650;color:var(--ink);margin:0 0 11px;max-width:84ch}
+  .mcq .q span{color:var(--accent-2);font-family:var(--mono);margin-right:7px}
+  .opts{display:grid;gap:7px}
+  .opt{text-align:left;font-family:inherit;font-size:13px;cursor:pointer;color:var(--muted);
+    background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:9px 12px;transition:.15s}
+  .opt:hover:not(:disabled){border-color:var(--accent-2);color:var(--ink)}
+  .opt:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .opt.right{border-color:var(--ok);background:rgba(63,185,80,.13);color:#bce8c4}
+  .opt.wrong{border-color:var(--bad);background:rgba(248,81,73,.12);color:#f4b6b1}
+  .opt.dim{opacity:.5}
+  .fb{margin-top:11px;font-size:12.5px;line-height:1.6;color:var(--muted);display:none;
+    border-left:3px solid var(--line);padding-left:11px}
+  .fb.show{display:block}
+  .fb.show.good{border-left-color:var(--ok)} .fb.show.poor{border-left-color:var(--bad)}
+  .fb b{color:var(--ink)}
+
+  /* ── next ─────────────────────────────────────────────────── */
+  .nextgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+  .nextcard{display:block;background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:15px 17px;transition:.18s;color:inherit}
+  .nextcard:hover{border-color:var(--accent-2);transform:translateY(-2px);text-decoration:none}
+  .nextcard .nl{font-size:10px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--accent-2)}
+  .nextcard .nt{font-size:14.5px;font-weight:700;color:var(--ink);margin-top:5px}
+  .nextcard .nd{font-size:12px;color:var(--muted);margin-top:5px}
+
+  @media (max-width:720px){
+    .grid2,.grid3,.split,.split-r{grid-template-columns:1fr}
+    section{padding:26px 15px 32px}
+    nav.top{padding:10px 15px;gap:8px}
+    nav.top .crumbs{font-size:11px}
+    p,.lead{max-width:none}
+  }
+
+  /* ── week-page shared ─────────────────────────────────────── */
+  #hero{padding:52px 22px 40px;
+    background:radial-gradient(ellipse 820px 340px at 22% -14%,rgba(var(--accent-rgb),.3),transparent 66%)}
+  #hero .wk{font-family:var(--mono);font-size:12px;letter-spacing:2px;color:var(--accent-2);font-weight:700}
+  #hero h1{max-width:24ch}
+  #hero .promise{font-size:16.5px;color:var(--ink);max-width:74ch;margin-top:10px;line-height:1.55}
+  .secnum{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;
+    background:rgba(var(--accent-rgb),.35);border:1px solid var(--accent-2);color:#fff;font-family:var(--mono);
+    font-size:11px;font-weight:700;margin-right:9px;vertical-align:2px}
+  .sw{display:inline-flex;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex-wrap:wrap}
+  .sw button{font-family:inherit;font-size:11.5px;font-weight:650;cursor:pointer;color:var(--muted);
+    background:var(--panel2);border:none;padding:7px 13px;transition:.15s}
+  .sw button[aria-pressed="true"]{background:rgba(var(--accent-rgb),.32);color:#fff}
+  .sw button:focus-visible{outline:2px solid var(--accent-2);outline-offset:-2px}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-top:10px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
+
+  /* ── week-4 specific ──────────────────────────────────────── */
+  .tablewrap{overflow-x:auto}
+  .codepair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+  .lanes{display:grid;gap:12px}
+  .toggles{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:16px;align-items:start}
+  .dash{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}
+  a.btn{display:inline-flex;align-items:center;text-decoration:none}
+  a.btn:hover{text-decoration:none}
+  .verdict{border:1px solid var(--accent-2);border-radius:12px;padding:14px 16px;
+    background:rgba(var(--accent-rgb),.14)}
+  .verdict .vt{font-size:15px;font-weight:750;color:#fff}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:5px 12px;font-size:12px;color:var(--muted)}
+  .kv b{font-family:var(--mono);font-size:11.5px;color:var(--ink-dim);font-weight:600;white-space:nowrap}
+
+
+  /* ── week-13 specific ───────────────────────────── */
+  .chk{display:grid;gap:8px}
+  .chkrow{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:11px;align-items:start;
+    background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:9px 12px}
+  .chkrow.on{border-color:var(--accent-2);background:rgba(var(--accent-rgb),.16)}
+  .chkrow label{font-size:13px;font-weight:650;color:var(--ink);cursor:pointer}
+  .chkrow .cd{font-size:11.5px;color:var(--muted);margin-top:3px}
+  .chkrow .cg{font-family:var(--mono);font-size:11px;color:var(--accent-2);text-align:right;white-space:nowrap}
+  input[type=checkbox]{width:15px;height:15px;accent-color:var(--accent);cursor:pointer;margin-top:3px}
+  input[type=checkbox]:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .lanewrap{display:grid;gap:9px}
+
+  /* ── mobile guard (identical on every page): single column under 720px,
+        no horizontal overflow. Must stay last in the sheet. ───────────── */
+  @media (max-width:720px){
+    .grid2,.grid3,.grid2.narrow-right,.split,.split-r,.codepair,
+    .nextgrid,.dash,.toggles,.lanes,.weeknav,.weeks,.roles,.stack{
+      grid-template-columns:minmax(0,1fr)}
+    [class*="grid"]>*,.stack>*,.wrap>*,.panel,.panel.tight,.nextcard,.wk,.row>*{min-width:0}
+    pre,pre.code,.svgwrap,svg,canvas,table,select,input,textarea,.mono{max-width:100%}
+    pre,pre.code,.svgwrap,.tablewrap{overflow-x:auto}
+    code,.mono{overflow-wrap:anywhere}
+    .ctl,.ctl>*,.controls>*,.row,.legend>*{min-width:0}
+    .ctl{flex-wrap:wrap} .ctl select,.ctl input[type=range]{flex:1 1 100%;width:100%}
+    p,.lead,.sub,.promise{max-width:none}
+  }
+</style>
+
+</head>
+<body>
+
+<nav class="top"><a href="index.html">Low-Latency Trading Arena</a><span class="crumbs"><a href="week12.html">← Week 12</a> · <b>Week 13 · Low-Latency Design — SIMD &amp; Kernel Bypass</b> · <a href="week14.html">Week 14 →</a></span></nav>
+
+<!-- ══════════════ HERO ══════════════ -->
+<section id="hero">
+  <div class="wk">WEEK 13 · 15-WEEK TRACK  ·  SESSION 8 · 9-SESSION TRACK</div>
+  <h1>Low-Latency Design — SIMD &amp; Kernel Bypass</h1>
+  <p class="promise">Week 12 made the <em class="hi">wire</em> lean. This week the box itself is the
+  bottleneck: 64-byte cache lines, eight lanes per instruction, a branch predictor you can help or
+  fight, and a kernel network stack you can walk around entirely. Every item here is a
+  <strong>measured microsecond</strong>, not a style preference.</p>
+  <ul class="you">
+    <li>Choose <strong>AoS or SoA</strong> for a given scan and compute, exactly, how many 64-byte lines each one touches.</li>
+    <li>Vectorize a hot reduction over <code>alignas(32)</code> data — and name the three things that make the vectorizer give up.</li>
+    <li>Price the <em class="hi">kernel network path</em> against kernel bypass in µs, then defend one tuning change per checklist line.</li>
+    <li>Read the arena's <strong>Latency Board</strong> and say whether your next p99.9 comes from code or from colocation.</li>
+  </ul>
+  <div class="row" style="margin-top:22px">
+    <span class="pill acc">Lab: <code>starters/hw13/kernel.cpp</code> — flags only, ~6.5× faster, identical checksum</span>
+    <span class="pill">HW13: flag matrix + <code>perf stat</code> + one line on <code>-ffast-math</code></span>
+    <span class="pill warn">Prove it: p99.9 before/after on the same replayed tape</span>
+  </div>
+</section>
+
+<!-- ══════════════ WHAT ══════════════ -->
+<section id="what">
+  <div class="kicker">Part 1</div>
+  <h2><span class="secnum">1</span>What is it? Winning back the last microseconds, in three places</h2>
+  <p class="lead">By week 13 your algorithm is right and your allocations are gone. What is left is
+  hardware: the <em class="hi">memory</em> you touch, the <em class="hi">instructions</em> you issue, and the
+  <em class="hi">kernel</em> you ask for favours. Those are the three levers, and each one is worth a
+  different number of microseconds — so the order you pull them in matters.</p>
+
+  <div class="grid3" style="margin-top:16px">
+    <div class="panel"><h4>Memory: the wall</h4>
+      <p class="sub">An L1 hit is ~4 cycles (~1 ns). A miss to DRAM is 200+ cycles (~80–100 ns).
+      Memory moves in <strong>64-byte lines</strong>, never in bytes: touch one field and you pay for
+      sixty-four. On the hot path you are almost never compute-bound — you are waiting.</p></div>
+    <div class="panel"><h4>Instructions: the lanes</h4>
+      <p class="sub">One AVX2 register is 256 bits — <strong>eight 32-bit floats</strong> per instruction;
+      AVX-512 doubles that again. <code>-O3 -march=native</code> will do it for you on a clean loop and
+      refuse on a dirty one. Knowing which is which is the skill.</p></div>
+    <div class="panel"><h4>The kernel: the tax</h4>
+      <p class="sub">A syscall is a mode switch — hundreds of ns, sometimes µs under load, plus a
+      polluted cache. The kernel network stack copies, checks and routes every frame.
+      <strong>Kernel bypass</strong> maps the NIC into user space so it never happens.</p></div>
+  </div>
+
+  <div class="note" style="margin-top:16px"><b>The order to pull them in.</b> Layout first (it is free
+  and it never regresses), then vectorization (cheap, sometimes just a flag), then the kernel and the
+  OS (a platform change), and only then <em class="hi">colocation</em> — because colo buys wire time and
+  nothing else. A 200 µs software hiccup dwarfs any wire saving, which is why week 14 exists.</div>
+
+  <h3 style="margin-top:30px">Interactive · array-of-structs vs struct-of-arrays</h3>
+  <p class="sub" style="margin-bottom:12px">You are scanning one field of every order — say the price,
+  to recompute an imbalance. Pick a layout and watch how many <strong>64-byte cache lines</strong> the scan
+  drags in, and how much of each line you actually use. The grid shows one box per line; violet is
+  useful bytes, grey is bytes you paid for and threw away.</p>
+
+  <div class="split">
+    <div class="stack">
+      <div class="row" role="group" aria-label="Choose the memory layout">
+        <div class="sw" id="loLayout">
+          <button type="button" data-l="aos" aria-pressed="true">AoS · array of structs</button>
+          <button type="button" data-l="soa" aria-pressed="false">SoA · struct of arrays</button>
+        </div>
+      </div>
+      <div class="svgwrap">
+        <svg id="loSvg" viewBox="0 0 640 300" role="img" aria-label="A grid of 64-byte cache lines, shaded to show how many bytes of each line the field scan actually uses"></svg>
+      </div>
+      <div class="legend">
+        <span><i style="background:var(--accent)"></i>bytes the scan uses</span>
+        <span><i style="background:#2b313d"></i>bytes fetched and wasted</span>
+        <span><i style="background:var(--panel2);border:1px solid var(--line)"></i>line never touched</span>
+      </div>
+    </div>
+    <div class="stack">
+      <div class="panel tight">
+        <div class="ctl"><label for="loN">Orders scanned <b id="loNv">64</b></label>
+          <input type="range" id="loN" min="16" max="512" step="16" value="64" aria-label="Number of orders scanned" /></div>
+        <div class="ctl"><label for="loStride">Bytes per order (AoS stride)</label>
+          <select id="loStride" aria-label="Bytes per order in the array-of-structs layout">
+            <option value="16">16 B — px + qty, packed</option>
+            <option value="32" selected>32 B — px, qty, id, side</option>
+            <option value="64">64 B — one order per cache line</option>
+            <option value="128">128 B — plus cold audit fields</option>
+          </select></div>
+        <div class="ctl"><label for="loField">Field width scanned</label>
+          <select id="loField" aria-label="Width in bytes of the field being scanned">
+            <option value="4">4 B — float price</option>
+            <option value="8" selected>8 B — double price</option>
+          </select></div>
+        <div class="ctl"><label for="loWhere">Where the data lives</label>
+          <select id="loWhere" aria-label="Which level of the memory hierarchy the data is resident in">
+            <option value="l1">Hot in L1 (~1.0 ns/line)</option>
+            <option value="l2">In L2 (~4 ns/line)</option>
+            <option value="dram" selected>Cold in DRAM, sequential — prefetcher helps (~12 ns/line)</option>
+            <option value="rand">Cold in DRAM, pointer-chased (~85 ns/line)</option>
+          </select></div>
+      </div>
+      <div class="stats" id="loStats"></div>
+      <div class="panel tight"><h3>The same struct, both ways</h3><pre class="code" id="loCode"></pre></div>
+      <div class="note" id="loNote"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ HOW ══════════════ -->
+<section id="how">
+  <div class="kicker">Part 2</div>
+  <h2><span class="secnum">2</span>How it works — lanes, branches and the line you fetch early</h2>
+  <p class="lead">Three mechanisms, and they interact. SIMD gives you width; a data-dependent branch
+  takes it straight back; a prefetch hides the latency that neither of them can do anything about.
+  Play with all three before you write an intrinsic by hand.</p>
+
+  <h3 style="margin-top:24px">Interactive · the vector lanes</h3>
+  <p class="sub" style="margin-bottom:12px">Step or run the reduction over a price array. Each frame
+  consumes one instruction's worth of data — one lane if you are scalar, eight if you are on AVX2.
+  Then change the loop shape and watch the vectorizer refuse.</p>
+
+  <div class="split">
+    <div class="stack">
+      <div class="svgwrap">
+        <svg id="vlSvg" viewBox="0 0 640 240" role="img" aria-label="An animation of a price array being consumed one vector register at a time, with a lane count you choose"></svg>
+      </div>
+      <div class="row" role="group" aria-label="Animation controls">
+        <button class="btn primary" id="vlRun" type="button">Run</button>
+        <button class="btn" id="vlStep" type="button">Step</button>
+        <button class="btn" id="vlReset" type="button">Reset</button>
+      </div>
+      <div class="stats" id="vlStats"></div>
+    </div>
+    <div class="stack">
+      <div class="panel tight">
+        <div class="ctl"><label for="vlLanes">Lanes per instruction</label>
+          <select id="vlLanes" aria-label="Vector width in 32-bit lanes">
+            <option value="1">1 — scalar, no SIMD</option>
+            <option value="4">4 — SSE, 128-bit</option>
+            <option value="8" selected>8 — AVX2, 256-bit</option>
+            <option value="16">16 — AVX-512, 512-bit</option>
+          </select></div>
+        <div class="ctl"><label for="vlN">Array length (floats) <b id="vlNv">256</b></label>
+          <input type="range" id="vlN" min="64" max="1024" step="64" value="256" aria-label="Length of the price array in floats" /></div>
+        <div class="ctl"><label for="vlShape">Loop shape</label>
+          <select id="vlShape" aria-label="The shape of the loop being vectorized">
+            <option value="clean" selected>Clean fmadd reduction — contiguous, aligned</option>
+            <option value="branch">Data-dependent branch inside the loop</option>
+            <option value="gather">Indexed gather — prices[idx[i]]</option>
+            <option value="alias">Possible aliasing — two raw pointers, no restrict</option>
+            <option value="unaligned">Contiguous but unaligned (no alignas)</option>
+          </select></div>
+      </div>
+      <div class="verdict"><div class="vt" id="vlVerdict">—</div>
+        <p class="sub" id="vlWhy" style="margin-top:7px"></p></div>
+      <div class="panel tight"><h3>What the compiler emits</h3><pre class="code" id="vlCode"></pre></div>
+    </div>
+  </div>
+
+  <div class="note" style="margin-top:18px"><b>Check before you hand-write.</b> Build with
+  <code>-O3 -march=native -fopt-info-vec</code> and read the <code>loop vectorized</code> lines. If the
+  compiler already did it, an intrinsic buys you nothing and costs you portability — the HW13 lab makes
+  exactly that point with <em class="hi">flags only</em>, no source edits, and still lands near 6.5×.</div>
+
+  <h3 style="margin-top:30px">Interactive · what a mispredicted branch costs</h3>
+  <p class="sub" style="margin-bottom:12px">A correctly predicted branch is nearly free. A miss flushes
+  the pipeline — roughly <strong>15–20 cycles</strong>, about 5 ns at 3.4 GHz. Branchless code pays a small
+  fixed cost on <em class="hi">every</em> iteration and never flushes. Move the predictability slider and
+  find the crossover.</p>
+
+  <div class="split-r">
+    <div class="stack">
+      <div class="panel tight">
+        <div class="ctl"><label for="bpPred">Branch predictability <b id="bpPredv">95%</b></label>
+          <input type="range" id="bpPred" min="50" max="100" step="1" value="95" aria-label="Percentage of branches the predictor gets right" /></div>
+        <div class="ctl"><label for="bpIter">Iterations per tick <b id="bpIterv">512</b></label>
+          <input type="range" id="bpIter" min="64" max="4096" step="64" value="512" aria-label="Loop iterations per tick" /></div>
+        <div class="row" role="group" aria-label="Choose the code shape">
+          <div class="sw" id="bpMode">
+            <button type="button" data-m="branch" aria-pressed="true">Branchy <code>if</code></button>
+            <button type="button" data-m="less" aria-pressed="false">Branchless blend</button>
+            <button type="button" data-m="both" aria-pressed="false">Both, side by side</button>
+          </div>
+        </div>
+      </div>
+      <div class="svgwrap">
+        <svg id="bpSvg" viewBox="0 0 620 210" role="img" aria-label="A chart of nanoseconds per tick for branchy and branchless code as branch predictability changes"></svg>
+      </div>
+      <div class="stats" id="bpStats"></div>
+    </div>
+    <div class="stack">
+      <div class="codepair">
+        <div class="panel tight"><h3>Branchy</h3><pre class="code">// one unpredictable branch per level
+<span class="k">for</span> (std::size_t i = <span class="n">0</span>; i &lt; n; ++i) {
+  <span class="k">if</span> (px[i] &gt; ref) buy += qty[i];
+  <span class="k">else</span>            sell += qty[i];
+}</pre></div>
+        <div class="panel tight"><h3>Branchless</h3><pre class="code">// same answer, no branch to mispredict
+<span class="k">for</span> (std::size_t i = <span class="n">0</span>; i &lt; n; ++i) {
+  <span class="k">const</span> <span class="k">auto</span> m = -<span class="k">static_cast</span>&lt;std::int64_t&gt;(px[i] &gt; ref);
+  buy  += qty[i] &amp;  m;   <span class="c">// mask is all-ones or 0</span>
+  sell += qty[i] &amp; ~m;
+}</pre></div>
+      </div>
+      <div class="note" id="bpNote"></div>
+      <div class="panel tight"><h3>Prefetch — hide what you cannot avoid</h3>
+        <p class="sub">The hardware prefetcher follows regular strides on its own. It cannot see a
+        data-dependent address, which is exactly the case in an order-book walk. A software hint costs
+        nothing if it is wrong, only bandwidth:</p>
+        <pre class="code">__builtin_prefetch(&amp;level[i + <span class="n">4</span>], <span class="n">0</span>, <span class="n">3</span>);  <span class="c">// read, keep it: L1</span>
+__builtin_prefetch(&amp;tape[i + <span class="n">16</span>], <span class="n">0</span>, <span class="n">0</span>); <span class="c">// read, streaming: don't retain</span></pre>
+        <p class="sub" style="margin-top:9px"><b>Distance is the whole knob.</b> Too near and the line has
+        not arrived; too far and it is evicted before you use it. Tune it with
+        <code>perf stat -e L1-dcache-load-misses,LLC-load-misses</code> — never by feel.</p></div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:30px">The week-13 kernel, for real</h3>
+  <p class="sub" style="margin-bottom:12px">This compiles as written under
+  <code>clang++ -std=c++20 -O2</code> on any target: the AVX2 path is guarded, the scalar path is the
+  reference, and both must produce the same number — which is the checksum rule from the lab.</p>
+  <pre class="code">#include &lt;cstddef&gt;
+#if defined(__AVX2__)
+#include &lt;immintrin.h&gt;
+#endif
+
+<span class="c">// Weighted order-book imbalance. obi and w are alignas(32); n % 8 == 0.</span>
+<span class="k">float</span> <span class="b">weighted_obi</span>(<span class="k">const</span> <span class="k">float</span>* obi, <span class="k">const</span> <span class="k">float</span>* w, std::size_t n) {
+#if defined(__AVX2__)
+  __m256 acc = _mm256_setzero_ps();
+  <span class="k">for</span> (std::size_t i = <span class="n">0</span>; i &lt; n; i += <span class="n">8</span>) {
+    __builtin_prefetch(&amp;obi[i + <span class="n">16</span>], <span class="n">0</span>, <span class="n">0</span>);   <span class="c">// the next 64 B line</span>
+    __m256 a = _mm256_load_ps(&amp;obi[i]);         <span class="c">// aligned: needs alignas(32)</span>
+    __m256 b = _mm256_load_ps(&amp;w[i]);
+    acc = _mm256_fmadd_ps(a, b, acc);            <span class="c">// a*b + acc, 8 lanes, 1 instr</span>
+  }
+  <span class="k">alignas</span>(<span class="n">32</span>) <span class="k">float</span> t[<span class="n">8</span>];
+  _mm256_store_ps(t, acc);
+  <span class="k">return</span> t[<span class="n">0</span>]+t[<span class="n">1</span>]+t[<span class="n">2</span>]+t[<span class="n">3</span>]+t[<span class="n">4</span>]+t[<span class="n">5</span>]+t[<span class="n">6</span>]+t[<span class="n">7</span>];   <span class="c">// horizontal reduce</span>
+#else
+  <span class="k">float</span> s = <span class="n">0.0f</span>;                                 <span class="c">// portable reference path</span>
+  <span class="k">for</span> (std::size_t i = <span class="n">0</span>; i &lt; n; ++i) s += obi[i] * w[i];
+  <span class="k">return</span> s;
+#endif
+}
+<span class="c">// release: -O3 -march=native -flto -DNDEBUG -g</span></pre>
+  <p class="sub" style="margin-top:10px">Two things to notice. The <code>#if</code> is not defensive
+  clutter — it is what lets one repo build on the grader, on your laptop and on an ARM box, and it gives
+  you a scalar oracle to diff the vector result against. And the horizontal reduce at the end is
+  <em class="hi">not</em> free: it is why vectorizing a very short loop can be slower than not bothering.</p>
+</section>
+
+<!-- ══════════════ WHY ══════════════ -->
+<section id="why">
+  <div class="kicker">Part 3</div>
+  <h2><span class="secnum">3</span>Why it matters — the kernel is the biggest single line item</h2>
+  <p class="lead">All the SIMD in the world moves a few hundred nanoseconds. The path a packet takes
+  from the wire to your <code>on_book</code> moves <em class="hi">microseconds</em>. That is why kernel bypass
+  and core isolation come after the cheap wins but before the expensive ones: they are the largest
+  block on the chart, and the arena's Latency Board reads them off your p99.9.</p>
+
+  <h3 style="margin-top:24px">Interactive · the packet path, stage by stage</h3>
+  <p class="sub" style="margin-bottom:12px">Same frame, same NIC, three different paths into your
+  process. Bars are microseconds; the numbers are representative of a modern server NIC under light
+  load and are labelled estimates, not guarantees — the shape is the lesson.</p>
+
+  <div class="split">
+    <div class="stack">
+      <div class="row" role="group" aria-label="Choose the receive path">
+        <div class="sw" id="ppPath">
+          <button type="button" data-p="kernel" aria-pressed="true">Kernel stack · blocking socket</button>
+          <button type="button" data-p="uring" aria-pressed="false">Kernel stack · io_uring + busy-poll</button>
+          <button type="button" data-p="bypass" aria-pressed="false">Kernel bypass · poll-mode driver</button>
+        </div>
+      </div>
+      <div class="svgwrap">
+        <svg id="ppSvg" viewBox="0 0 640 320" role="img" aria-label="A waterfall of the stages a network packet passes through on its way from the wire to user code, in microseconds"></svg>
+      </div>
+      <div class="stats" id="ppStats"></div>
+    </div>
+    <div class="stack">
+      <div class="panel"><h4 id="ppName">Kernel stack · blocking socket</h4>
+        <p class="sub" id="ppWhat"></p>
+        <h3 style="margin-top:14px">Stage detail — click a bar</h3>
+        <div class="kv" id="ppKv"></div>
+      </div>
+      <div class="panel tight"><h3>How you get there</h3><pre class="code" id="ppCode"></pre></div>
+      <div class="note" id="ppNote"></div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:30px">Interactive · the tuning checklist</h3>
+  <p class="sub" style="margin-bottom:12px">Eight platform changes, each with an estimated effect on p50
+  and on p99.9, and each with a cost. Tick them and read the running total — then read the warnings,
+  because several of these are worthless or actively harmful on their own.</p>
+
+  <div class="toggles">
+    <div class="chk" id="tuList"></div>
+    <div class="stack">
+      <div class="stats" id="tuStats"></div>
+      <div class="verdict"><div class="vt" id="tuVerdict">Nothing ticked</div>
+        <p class="sub" id="tuWhy" style="margin-top:7px">Baseline: a stock kernel, a shared core, 4 KB
+        pages. Every number below is measured against this.</p></div>
+      <div class="panel tight"><h3>Warnings</h3><ul class="plain" id="tuWarn"></ul></div>
+      <div class="panel tight"><h3>The resulting boot line and startup</h3><pre class="code" id="tuCode"></pre></div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:30px">What the arena's Latency Board actually measures</h3>
+  <div class="grid2" style="margin-top:12px">
+    <div class="panel"><h4>The instrument</h4>
+      <p class="sub">The exchange stamps your reaction with a monotonic clock in <strong>microseconds</strong>:
+      from the <code>book_snapshot</code> you were sent to the order you sent back from
+      <code>on_book</code>. Every tick is a sample. The board reports
+      <strong>p50 · p99 · p99.9</strong> plus the sample count per participant, and it
+      <em class="hi">sorts by the tail</em>, not by the median — races are won on p99.9.</p>
+      <p class="sub" style="margin-top:9px">A p99.9 needs on the order of a thousand samples before it
+      means anything. Short sessions give you a noisy tail; that is a property of the statistic, not of
+      your code, and saying so out loud is part of a correct report.</p>
+      <div class="note" style="margin-top:11px"><b>Offline is where you optimize.</b>
+      <code>scripts/latency_replay.py</code> drives your binary over a deterministic tape and
+      <code>scripts/latency_report.py</code> prints the same percentiles with a tail histogram. Same tape,
+      one change at a time — otherwise you cannot attribute the delta to anything.</div></div>
+    <div class="panel"><h4>Code versus colocation</h4>
+      <p class="sub">The venue adds an outbound delay per order. The upgrade shop moves you from the
+      default tier to the colocated tier — a straight cut in wire time you buy with cash rather than
+      earn with code. Both move the <em class="hi">same percentiles</em>, which is what makes the comparison
+      honest and the decision interesting.</p>
+      <ul class="plain" style="margin-top:9px">
+        <li>Colo shifts p50 and the tail <b>together</b>, by a fixed amount. It is worth most to
+        latency-arbitrage and queue races (week 15).</li>
+        <li>Code fixes shift the <b>tail specifically</b> — that is what SIMD, no-alloc and pinning do.</li>
+        <li>If your p99.9 is milliseconds and the wire tier is tens of µs, colo is a waste of money
+        until week 14 is done. Fix the software tail first.</li>
+      </ul>
+      <div class="note" style="margin-top:11px"><b>Week 13 grading, in the same currency.</b> A correct
+      vectorized hot loop that matches the scalar result; a measured p99.9 improvement on the same tape;
+      a prefetch and a pinned thread with the reasoning; and the colocation economics argued
+      <em class="hi">with numbers</em>.</div></div>
+  </div>
+</section>
+
+<!-- ══════════════ PITFALLS ══════════════ -->
+<section id="pitfalls">
+  <div class="kicker">Part 4</div>
+  <h2><span class="secnum">4</span>Five ways this goes wrong</h2>
+  <p class="lead">Every one of these has been submitted, graded, and argued about. Open them.</p>
+
+  <details class="pit"><summary>Turning on <code>-ffast-math</code> and calling it a win</summary>
+    <div class="body">
+      <p>It <em class="hi">is</em> faster. It also permits the compiler to reassociate floating-point
+      arithmetic, so a reduction that summed left-to-right now sums in vector lanes and rounds
+      differently. In the HW13 kernel that shows up immediately: the time drops and the
+      <strong>checksum changes</strong>. A build that computes something else is not an optimization.</p>
+      <p>The same flag enables assumptions about NaN and infinity that a pricing kernel has no business
+      making — a single bad tick that used to produce a NaN you could see now produces a plausible
+      number you cannot.</p>
+      <p class="fix">Fix: treat the checksum as the contract. If a flag changes it, the flag is out —
+      or it goes in with a written argument about the tolerance and where it is safe. Reassociation is
+      fine in a statistic you sample; it is not fine in a price you send.</p>
+    </div></details>
+
+  <details class="pit"><summary>Hand-writing intrinsics the compiler was already emitting</summary>
+    <div class="body">
+      <p>Intrinsics are unportable, harder to read, and easy to get subtly wrong — and on a clean
+      contiguous loop <code>-O3 -march=native</code> produces the same instructions for free. Writing
+      them by hand first means you spent a day to match the baseline.</p>
+      <p>The signal is one flag away: <code>-fopt-info-vec</code> tells you every loop the vectorizer
+      took. If your hot loop is in that list, the answer to "should I write an intrinsic" is no.</p>
+      <p class="fix">Fix: measure, then read <code>-fopt-info-vec</code>, then hand-vectorize only the
+      loops the compiler refused — and when you do, keep the scalar version compiled in as the oracle
+      you diff against.</p>
+    </div></details>
+
+  <details class="pit"><summary>An aligned load on unaligned data</summary>
+    <div class="body">
+      <p><code>_mm256_load_ps</code> requires a 32-byte-aligned address. Give it anything else and you
+      get a fault — or, worse, you get away with it on your laptop and fault on the grader. Data from
+      <code>new</code>, from the middle of a struct, or from an offset into a buffer is not aligned
+      because you hoped it was.</p>
+      <p>The mirror mistake is using <code>_mm256_loadu_ps</code> everywhere and assuming it is free. It
+      is nearly free when the data happens to be aligned and it is not when a load straddles two cache
+      lines — you pay for both.</p>
+      <p class="fix">Fix: <code>alignas(32)</code> on the buffer (or <code>alignas(64)</code> to own a
+      whole line), assert the alignment once at startup, and keep the loop count a multiple of the lane
+      count so there is no scalar tail to get wrong.</p>
+    </div></details>
+
+  <details class="pit"><summary>Busy-polling a core you do not own</summary>
+    <div class="body">
+      <p>Spinning is the right answer <em class="hi">only</em> when the core is yours. Spin on a core the
+      scheduler is also using and you have built the worst of both worlds: 100% CPU, the other tenant
+      still preempts you, and your p99.9 gets worse than the blocking version you replaced.</p>
+      <p>The same applies to a laptop with four cores and a browser open. Pinning is not a flag you
+      sprinkle on; it is a claim about the machine that has to be true.</p>
+      <p class="fix">Fix: pin with <code>pthread_setaffinity_np</code>, hand the core over with
+      <code>isolcpus</code> plus <code>nohz_full</code> and <code>rcu_nocbs</code>, move IRQs off it, and
+      keep the poller and the strategy on <em class="hi">different</em> isolated cores so they never
+      contend. Then measure — if p99.9 did not improve, you did not actually get the core.</p>
+    </div></details>
+
+  <details class="pit"><summary>Building with <code>-march=native</code> somewhere else</summary>
+    <div class="body">
+      <p><code>-march=native</code> means "this exact CPU". Build on a machine with AVX-512 and run on
+      one without, and you do not get a slow binary — you get <code>SIGILL</code> on the first vector
+      instruction, usually inside a hot loop, usually the first time it matters.</p>
+      <p>It also silently changes what a portable-looking <code>#if defined(__AVX2__)</code> block
+      compiles to, so the code you tested is not the code you shipped.</p>
+      <p class="fix">Fix: build on the target microarchitecture, or name the baseline explicitly
+      (<code>-mavx2 -mfma</code>) and dispatch at runtime if you truly need one binary for several
+      machines. Either way, record the flags next to the latency numbers — a percentile without its
+      build line is not a measurement.</p>
+    </div></details>
+</section>
+
+<!-- ══════════════ CHECK ══════════════ -->
+<section id="check">
+  <div class="kicker">Part 5</div>
+  <h2><span class="secnum">5</span>Check yourself</h2>
+  <p class="lead">Three questions, instant feedback, nothing recorded.</p>
+
+  <div class="mcq" data-a="2" data-exp="<b>32 lines against 4.</b> AoS: the 64 orders are 32 B apart, so the scan walks 64 × 32 B = 2048 B of address space — 32 cache lines — and uses 8 of every 64 bytes, about 12% of what it fetched. SoA: the 64 prices are contiguous, 64 × 8 B = 512 B = 4 lines, every byte useful. Same data, same answer, an 8× difference in lines touched. This is why the arena's hot loops keep prices in their own array and the audit fields somewhere else entirely.">
+    <p class="q"><span>Q1</span>You scan the 8-byte price of 64 orders. In AoS the order struct is 32 bytes; in SoA the prices are contiguous. How many 64-byte cache lines does each scan touch?</p>
+    <div class="opts">
+      <button class="opt" type="button">8 lines and 8 lines — the data is the same size either way</button>
+      <button class="opt" type="button">32 lines and 4 lines</button>
+      <button class="opt" type="button">64 lines and 64 lines — one line per order in both layouts</button>
+      <button class="opt" type="button">4 lines and 32 lines — AoS is the compact one</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+
+  <div class="mcq" data-a="1" data-exp="<b>Almost nothing, because the vectorizer bails on the data-dependent branch.</b> SIMD applies one instruction to every lane, so a per-element <code>if</code> has to become a mask-and-blend before any width is available. Some compilers will do that if-conversion for a simple body; many will not, and <code>-fopt-info-vec</code> will tell you which happened. The fix is to remove the branch yourself — compute both sides and select with a mask — and only then does <code>-march=native</code> have something to widen. The mispredicts are a second, separate cost on top.">
+    <p class="q"><span>Q2</span>Your hot loop has an <code>if (px[i] &gt; ref)</code> inside it and is fully memory-resident. You add <code>-march=native</code>. What do you expect?</p>
+    <div class="opts">
+      <button class="opt" type="button">Little or no gain — the data-dependent branch blocks vectorization</button>
+      <button class="opt" type="button">An 8× speedup, since AVX2 is eight lanes wide</button>
+      <button class="opt" type="button">A slowdown, because vector instructions have longer latency</button>
+      <button class="opt" type="button">An 8× speedup only if you also pass <code>-funroll-loops</code></button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+
+  <div class="mcq" data-a="3" data-exp="<b>Neither — go fix the software tail first.</b> Colocation buys wire time: it shifts p50 and the tail down together by a fixed amount, tens of microseconds in the arena's tiers. A 1.8 ms p99.9 means something in your process occasionally does a thousand times its normal work — an allocation, a page fault, a preemption, an O(window) recompute. Spending the budget on colo while that is live buys a tens-of-µs improvement on a milliseconds-scale problem, and the Latency Board sorts on the tail, so it will barely move your rank. That is precisely the week-14 agenda.">
+    <p class="q"><span>Q3</span>Your p99.9 is 1.8 ms. The colocated tier would cut roughly 180 µs of wire delay per order and costs real budget. Buy colo, or hand-vectorize the imbalance loop?</p>
+    <div class="opts">
+      <button class="opt" type="button">Buy colo — 180 µs is the single biggest number available</button>
+      <button class="opt" type="button">Hand-vectorize — compute is always the right place to start</button>
+      <button class="opt" type="button">Neither yet: a 1.8 ms tail is a software pathology; find and kill it first</button>
+      <button class="opt" type="button">Both at once, so the improvements compound</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+</section>
+
+<!-- ══════════════ NEXT ══════════════ -->
+<section id="next">
+  <div class="kicker">Part 6</div>
+  <h2><span class="secnum">6</span>Do the work</h2>
+  <div class="grid2" style="margin-top:14px">
+    <div class="panel"><h4>In the lab (~45–60 min)</h4><ul class="plain">
+      <li>Build <code>starters/hw13/kernel.cpp</code> at <code>-O0</code>, then at
+      <code>-O3 -march=native -funroll-loops</code>. Expect roughly <b>6.5×</b> and an
+      <b>identical checksum</b>. You never touch the source.</li>
+      <li>Explain the win with <code>perf stat -d</code>: fewer retired instructions, higher IPC, and
+      what happened to branch-misses. No <code>perf</code>? <code>-fopt-info-vec</code> plus the
+      <code>time_ms</code> delta stands in.</li>
+      <li>Write the AVX reduction by hand once, so you know what <code>-march=native</code> bought you,
+      then throw it away.</li>
+      <li>Demo <code>alignas(64)</code> and <code>__builtin_prefetch</code>, and tune the prefetch
+      distance until the counters agree with you.</li>
+    </ul></div>
+    <div class="panel"><h4>Homework 13 &amp; the weekly exercise</h4><ul class="plain">
+      <li><b>HW13 (flags only):</b> a time matrix over <code>-O0</code>, <code>-O2</code>,
+      <code>-O3</code>, <code>-O3 -march=native</code>, <code>+ -funroll-loops</code>,
+      <code>+ -flto</code> — with the checksum unchanged in every row.</li>
+      <li><b>HW13:</b> for your best build, quote the drop in instructions and in branch-misses versus
+      <code>-O0</code>, one sentence of cause each.</li>
+      <li><b>HW13:</b> try <code>-ffast-math</code>. Does the checksum still match? One line on why it
+      is not free, and whether you would ship it in a pricing kernel.</li>
+      <li><b>In your bot:</b> vectorize and align the <code>on_book</code> hot loop, pin its thread, cut
+      hot-path syscalls — then report p50/p99/p99.9 before and after on the <em class="hi">same</em> tape.</li>
+      <li><b>Colocation economics:</b> your p99.9 at the default tier versus the colocated tier, and
+      whether the edge is worth the cost. Argue it with numbers.</li>
+    </ul></div>
+  </div>
+  <div class="nextgrid" style="margin-top:18px">
+    <div class="nextcard"><div class="nl">Code</div>
+      <div class="nt">Get the code</div>
+      <div class="nd">Both tracks share one starter tree. <code>starters/hw13/kernel.cpp</code> is the
+      frozen kernel; <code>scripts/latency_replay.py</code> and <code>scripts/latency_report.py</code>
+      are the graded instrument.</div>
+      <div class="row" style="margin-top:11px">
+        <a class="btn" href="https://github.com/sdonadio/hft-cpp-starter-columbia">15-week track starter</a>
+        <a class="btn" href="https://github.com/sdonadio/hft-cpp-starter-uchicago">9-session track starter</a>
+      </div></div>
+    <a class="nextcard" href="week12.html"><div class="nl">Previous</div>
+      <div class="nt">← Week 12 · Async I/O &amp; Serialization</div>
+      <div class="nd">The wire got lean. This week the machine underneath it did.</div></a>
+    <a class="nextcard" href="week14.html"><div class="nl">Next</div>
+      <div class="nt">Week 14 · Profiling, the Tail &amp; Production →</div>
+      <div class="nd">You have the levers. Now find out which one your tail is actually waiting on — and prove the fix with a histogram.</div></a>
+  </div>
+</section>
+
+<footer>Low-Latency Trading Arena · an interactive companion for a course on low-latency trading systems in C++ · <a href="https://github.com/sdonadio/low-latency-trading-arena">Source</a></footer>
+
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════
+   Week 13 — Low-Latency Design: SIMD & Kernel Bypass
+   ════════════════════════════════════════════════════════════════ */
+var $ = function (id) { return document.getElementById(id); };
+/* SVG namespace taken from the document so no absolute URL appears in this file */
+var SVGNS = $("loSvg").namespaceURI;
+function mk(tag, attrs) {
+  var e = document.createElementNS(SVGNS, tag);
+  for (var k in attrs) { if (attrs.hasOwnProperty(k)) e.setAttribute(k, attrs[k]); }
+  return e;
+}
+function txt(x, y, s, size, fill, anchor, weight) {
+  var t = mk("text", { x: x, y: y, "font-size": size || 10, "font-family": "monospace", fill: fill || "#9aa0a6" });
+  if (anchor) t.setAttribute("text-anchor", anchor);
+  if (weight) t.setAttribute("font-weight", weight);
+  t.textContent = s;
+  return t;
+}
+function clear(n) { while (n.firstChild) n.removeChild(n.firstChild); }
+function stats(host, rows) {
+  clear(host);
+  rows.forEach(function (r) {
+    var d = document.createElement("div"); d.className = "stat";
+    var a = document.createElement("div"); a.className = "sl"; a.textContent = r[0];
+    var b = document.createElement("div"); b.className = "sv" + (r[2] ? " " + r[2] : ""); b.textContent = r[1];
+    d.appendChild(a); d.appendChild(b); host.appendChild(d);
+  });
+}
+function swWire(host, fn) {
+  var btns = Array.prototype.slice.call(host.querySelectorAll("button"));
+  btns.forEach(function (b) {
+    b.addEventListener("click", function () {
+      btns.forEach(function (o) { o.setAttribute("aria-pressed", o === b ? "true" : "false"); });
+      fn(b);
+    });
+  });
+}
+
+/* ════ 1. AoS vs SoA — cache lines touched ════════════════════ */
+var LO = { layout: "aos", n: 64, stride: 32, field: 8, where: "dram" };
+var LO_COST = { l1: 1.0, l2: 4.0, dram: 12.0, rand: 85.0 };
+var LO_COSTLBL = { l1: "L1", l2: "L2", dram: "DRAM seq", rand: "DRAM random" };
+
+function loLines() {
+  /* returns {lines: [usefulBytesPerLine], useful, fetched} */
+  var per = {}, i, L, order = [];
+  if (LO.layout === "aos") {
+    for (i = 0; i < LO.n; i++) {
+      L = Math.floor((i * LO.stride) / 64);
+      if (per[L] === undefined) { per[L] = 0; order.push(L); }
+      per[L] += LO.field;
+    }
+  } else {
+    for (i = 0; i < LO.n; i++) {
+      L = Math.floor((i * LO.field) / 64);
+      if (per[L] === undefined) { per[L] = 0; order.push(L); }
+      per[L] += LO.field;
+    }
+  }
+  var arr = order.map(function (k) { return Math.min(64, per[k]); });
+  return { lines: arr, useful: LO.n * LO.field, fetched: arr.length * 64 };
+}
+
+function loDraw() {
+  var r = loLines(), svg = $("loSvg");
+  clear(svg);
+  var COLS = 16, BW = 36, BH = 30, GX = 3, GY = 6, X0 = 18, Y0 = 34;
+  var shown = Math.min(r.lines.length, COLS * 6);
+  svg.appendChild(txt(X0, 20, (LO.layout === "aos" ? "AoS" : "SoA") + " · " + r.lines.length +
+    " cache lines touched · " + r.fetched + " B fetched for " + r.useful + " B of price data", 11.5, "#c4b5fd", null, 700));
+  for (var i = 0; i < shown; i++) {
+    var cx = X0 + (i % COLS) * (BW + GX), cy = Y0 + Math.floor(i / COLS) * (BH + GY);
+    svg.appendChild(mk("rect", { x: cx, y: cy, width: BW, height: BH, rx: 3,
+      fill: "#2b313d", stroke: "#272c36" }));
+    var frac = r.lines[i] / 64, h = Math.max(2, BH * frac);
+    svg.appendChild(mk("rect", { x: cx, y: cy + BH - h, width: BW, height: h, rx: 2, fill: "#7c3aed" }));
+    if (BW >= 30) svg.appendChild(txt(cx + BW / 2, cy + BH - 4, r.lines[i] + "B", 8.5, "#e8e6e3", "middle"));
+  }
+  var yTail = Y0 + Math.ceil(shown / COLS) * (BH + GY) + 14;
+  if (r.lines.length > shown) {
+    svg.appendChild(txt(X0, yTail, "… showing the first " + shown + " of " + r.lines.length + " lines", 10, "#6f757f"));
+    yTail += 16;
+  }
+  /* untouched-line illustration for the AoS case */
+  if (LO.layout === "aos" && LO.stride >= 64) {
+    svg.appendChild(txt(X0, yTail, "stride " + LO.stride + " B ≥ 64 B: one line per order, and " +
+      (LO.stride / 64 > 1 ? "you skip " + (LO.stride / 64 - 1) + " line(s) between each" : "no sharing at all"), 10, "#d29922"));
+  }
+  var eff = r.useful / r.fetched, ns = r.lines.length * LO_COST[LO.where];
+  stats($("loStats"), [
+    ["lines touched", String(r.lines.length)],
+    ["bytes fetched", r.fetched + " B"],
+    ["bytes used", r.useful + " B"],
+    ["line efficiency", (eff * 100).toFixed(0) + "%", eff > 0.6 ? "ok" : (eff < 0.3 ? "bad" : "warn")],
+    ["est. scan time", ns.toFixed(0) + " ns", "acc"]
+  ]);
+  $("loCode").textContent = LO.layout === "aos"
+    ? "struct Order {              // " + LO.stride + " B, one object\n" +
+      "  " + (LO.field === 8 ? "double" : "float ") + " px;              // the " + LO.field + " B you scan\n" +
+      "  std::uint32_t qty;\n" +
+      "  std::uint64_t id;\n" +
+      "  std::uint8_t  side;      // cold, but it rides along\n" +
+      "};\nstd::vector<Order> book;   // AoS\n\n" +
+      "for (auto& o : book) acc += o.px;  // 1 useful field per " + LO.stride + " B"
+    : "struct Book {                       // SoA\n" +
+      "  alignas(64) std::vector<" + (LO.field === 8 ? "double" : "float") + "> px;   // hot: scanned\n" +
+      "  std::vector<std::uint32_t> qty;\n" +
+      "  std::vector<std::uint64_t> id;    // cold: never touched here\n" +
+      "  std::vector<std::uint8_t>  side;\n" +
+      "};\n\nfor (double p : b.px) acc += p;    // every byte of every line";
+  $("loNote").innerHTML = LO.layout === "aos"
+    ? "<b>AoS pays for the whole struct.</b> The scan uses " + LO.field + " of every " + LO.stride +
+      " bytes, so " + (eff * 100).toFixed(0) + "% of the bandwidth does work. It is the right layout when you touch " +
+      "<em class=\"hi\">most</em> fields of <em class=\"hi\">one</em> order — an order lifecycle update, say."
+    : "<b>SoA pays only for what it reads.</b> " + r.lines.length + " lines, 100% useful, and the access is " +
+      "perfectly contiguous so the hardware prefetcher runs ahead of you. It is the right layout when you " +
+      "touch <em class=\"hi\">one</em> field of <em class=\"hi\">every</em> order — which is what a signal does.";
+}
+swWire($("loLayout"), function (b) { LO.layout = b.getAttribute("data-l"); loDraw(); });
+$("loN").addEventListener("input", function () { LO.n = +this.value; $("loNv").textContent = this.value; loDraw(); });
+$("loStride").addEventListener("change", function () { LO.stride = +this.value; loDraw(); });
+$("loField").addEventListener("change", function () { LO.field = +this.value; loDraw(); });
+$("loWhere").addEventListener("change", function () { LO.where = this.value; loDraw(); });
+loDraw();
+
+/* ════ 2. Vector-lane animator ════════════════════════════════ */
+var VL = { lanes: 8, n: 256, shape: "clean", cell: 0, timer: null };
+var VL_SHAPE = {
+  clean:     { eff: 1.00, ns: 0.294, ok: true,  v: "Vectorized · full width",
+    why: "Contiguous, aligned, no branch, no aliasing. -O3 -march=native takes this loop without being asked, and one fmadd retires per cycle.",
+    code: "// clean: the vectorizer takes it\nfor (std::size_t i = 0; i < n; ++i)\n  acc += px[i] * w[i];      // -fopt-info-vec: \"loop vectorized\"" },
+  branch:    { eff: 0.125, ns: 0.60, ok: false, v: "Scalar · the branch blocked it",
+    why: "SIMD applies one instruction to every lane, so a per-element if has to become a mask-and-blend first. Many compilers refuse, and you also pay mispredicts on top.",
+    code: "// data-dependent branch: usually not vectorized\nfor (std::size_t i = 0; i < n; ++i)\n  if (px[i] > ref) buy += q[i];   // <-- per-element\n  else             sell += q[i];" },
+  gather:    { eff: 0.50, ns: 1.20, ok: false, v: "Vectorized · but a gather costs ~12 cycles",
+    why: "A gather does exist in AVX2, but it issues one cache access per lane internally. Eight scattered loads are eight chances to miss; the width is nominal, not real.",
+    code: "// indexed access: legal to vectorize, slow to run\nfor (std::size_t i = 0; i < n; ++i)\n  acc += px[idx[i]] * w[i];  // _mm256_i32gather_ps" },
+  alias:     { eff: 0.125, ns: 0.35, ok: false, v: "Scalar · the compiler assumed overlap",
+    why: "Two raw pointers of the same type may alias, so the compiler must behave as if a store to one changes the other. It serializes the loop to stay correct.",
+    code: "// no restrict: out may alias px\nvoid f(float* out, const float* px, std::size_t n) {\n  for (std::size_t i = 0; i < n; ++i)\n    out[i] = px[i] * 2.0f;   // add __restrict to fix\n}" },
+  unaligned: { eff: 1.00, ns: 0.44, ok: true,  v: "Vectorized · unaligned loads, split lines",
+    why: "loadu works, and it is nearly free when the address happens to be aligned. When a 32-byte load straddles two cache lines you pay for both — a steady ~50% tax on the loads.",
+    code: "// no alignas: the compiler must emit loadu\nstd::vector<float> px(n);      // 16 B aligned at best\nfor (std::size_t i = 0; i < n; ++i)\n  acc += px[i] * w[i];         // _mm256_loadu_ps" }
+};
+function vlModel() {
+  var sh = VL_SHAPE[VL.shape];
+  var eff = Math.max(1, Math.round(VL.lanes * sh.eff));
+  if (VL.lanes === 1) eff = 1;
+  var instr = Math.ceil(VL.n / eff);
+  var reduceNs = eff > 1 ? 1.8 : 0;
+  var ns = instr * sh.ns + reduceNs;
+  var scalarNs = VL.n * 0.294;
+  return { eff: eff, instr: instr, ns: ns, scalar: scalarNs, sp: scalarNs / ns, sh: sh };
+}
+function vlDraw() {
+  var m = vlModel(), svg = $("vlSvg"), CELLS = 64, COLS = 32;
+  clear(svg);
+  var epc = VL.n / CELLS, win = Math.max(1, Math.round(m.eff / epc));
+  var BW = 17, BH = 22, X0 = 20, Y0 = 40;
+  svg.appendChild(txt(X0, 22, VL.n + " floats · " + m.eff + " lane" + (m.eff === 1 ? "" : "s") +
+    " per instruction · " + m.instr + " instructions", 11.5, "#c4b5fd", null, 700));
+  for (var i = 0; i < CELLS; i++) {
+    var cx = X0 + (i % COLS) * (BW + 2), cy = Y0 + Math.floor(i / COLS) * (BH + 8);
+    var done = i < VL.cell, live = i >= VL.cell && i < VL.cell + win;
+    svg.appendChild(mk("rect", { x: cx, y: cy, width: BW, height: BH, rx: 2,
+      fill: live ? "#7c3aed" : (done ? "rgba(124,58,237,.34)" : "#1e222b"),
+      stroke: live ? "#c4b5fd" : "#272c36", "stroke-width": live ? 1.6 : 1 }));
+  }
+  var yB = Y0 + 2 * (BH + 8) + 22;
+  svg.appendChild(txt(X0, yB, "one register", 9.5, "#c4b5fd"));
+  svg.appendChild(mk("rect", { x: X0, y: yB + 6, width: win * (BW + 2) - 2, height: 8, rx: 2, fill: "#7c3aed" }));
+  svg.appendChild(txt(X0, yB + 34, m.sh.ok ? "consumed left to right, " + win + " cell" + (win === 1 ? "" : "s") + " per frame"
+    : "the compiler fell back — watch the window shrink", 10, m.sh.ok ? "#9aa0a6" : "#d29922"));
+  stats($("vlStats"), [
+    ["effective lanes", String(m.eff), m.eff > 1 ? "acc" : "warn"],
+    ["instructions", String(m.instr)],
+    ["est. ns / array", m.ns.toFixed(1)],
+    ["scalar baseline", m.scalar.toFixed(1) + " ns"],
+    ["speedup", m.sp.toFixed(2) + "×", m.sp > 2 ? "ok" : (m.sp < 1.05 ? "bad" : "warn")]
+  ]);
+  $("vlVerdict").textContent = m.sh.v;
+  $("vlWhy").textContent = m.sh.why;
+  $("vlCode").textContent = m.sh.code;
+}
+function vlStop() { if (VL.timer) { clearInterval(VL.timer); VL.timer = null; $("vlRun").textContent = "Run"; } }
+function vlAdvance() {
+  var m = vlModel(), epc = VL.n / 64, win = Math.max(1, Math.round(m.eff / epc));
+  VL.cell += win;
+  if (VL.cell >= 64) { VL.cell = 0; vlStop(); }
+  vlDraw();
+}
+$("vlRun").addEventListener("click", function () {
+  if (VL.timer) { vlStop(); return; }
+  this.textContent = "Pause";
+  VL.timer = setInterval(vlAdvance, 130);
+});
+$("vlStep").addEventListener("click", function () { vlStop(); vlAdvance(); });
+$("vlReset").addEventListener("click", function () { vlStop(); VL.cell = 0; vlDraw(); });
+$("vlLanes").addEventListener("change", function () { VL.lanes = +this.value; VL.cell = 0; vlDraw(); });
+$("vlShape").addEventListener("change", function () { VL.shape = this.value; VL.cell = 0; vlDraw(); });
+$("vlN").addEventListener("input", function () { VL.n = +this.value; $("vlNv").textContent = this.value; VL.cell = 0; vlDraw(); });
+vlDraw();
+
+/* ════ 3. Mispredict cost ═════════════════════════════════════ */
+var BP = { pred: 95, iter: 512, mode: "branch" };
+var MISPREDICT_NS = 5.0;   /* ~17 cycles at 3.4 GHz */
+function bpBranchy(p) { return 0.294 + (1 - p / 100) * MISPREDICT_NS; }
+function bpLess() { return 0.588; }              /* two extra ALU ops, never flushes */
+function bpDraw() {
+  var svg = $("bpSvg");
+  clear(svg);
+  var X0 = 46, Y0 = 18, W = 540, H = 140, maxNs = 0.294 + 0.5 * MISPREDICT_NS;
+  var sx = function (p) { return X0 + ((p - 50) / 50) * W; };
+  var sy = function (v) { return Y0 + H - (v / maxNs) * H; };
+  svg.appendChild(mk("line", { x1: X0, y1: Y0 + H, x2: X0 + W, y2: Y0 + H, stroke: "#333a47" }));
+  svg.appendChild(mk("line", { x1: X0, y1: Y0, x2: X0, y2: Y0 + H, stroke: "#333a47" }));
+  [50, 60, 70, 80, 90, 100].forEach(function (p) {
+    svg.appendChild(txt(sx(p), Y0 + H + 15, p + "%", 9.5, "#6f757f", "middle"));
+  });
+  [0, 1, 2].forEach(function (v) {
+    svg.appendChild(txt(X0 - 7, sy(v) + 3, v.toFixed(0) + "ns", 9, "#6f757f", "end"));
+    svg.appendChild(mk("line", { x1: X0, y1: sy(v), x2: X0 + W, y2: sy(v), stroke: "#272c36", "stroke-dasharray": "2 4" }));
+  });
+  var show = BP.mode;
+  if (show === "branch" || show === "both") {
+    var d = "", p;
+    for (p = 50; p <= 100; p += 1) d += (p === 50 ? "M" : "L") + sx(p).toFixed(1) + " " + sy(bpBranchy(p)).toFixed(1) + " ";
+    svg.appendChild(mk("path", { d: d, fill: "none", stroke: "#f85149", "stroke-width": 2 }));
+    svg.appendChild(txt(X0 + W - 4, sy(bpBranchy(99)) - 8, "branchy if", 10, "#f85149", "end", 700));
+  }
+  if (show === "less" || show === "both") {
+    svg.appendChild(mk("line", { x1: X0, y1: sy(bpLess()), x2: X0 + W, y2: sy(bpLess()),
+      stroke: "#7c3aed", "stroke-width": 2 }));
+    svg.appendChild(txt(X0 + 6, sy(bpLess()) - 7, "branchless blend — flat", 10, "#c4b5fd", null, 700));
+  }
+  /* crossover marker */
+  var xover = 100 * (1 - (bpLess() - 0.294) / MISPREDICT_NS);
+  svg.appendChild(mk("line", { x1: sx(xover), y1: Y0, x2: sx(xover), y2: Y0 + H, stroke: "#d29922", "stroke-dasharray": "3 3" }));
+  svg.appendChild(txt(sx(xover) - 5, Y0 + 12, "crossover " + xover.toFixed(0) + "%", 9.5, "#d29922", "end"));
+  /* current position */
+  svg.appendChild(mk("line", { x1: sx(BP.pred), y1: Y0, x2: sx(BP.pred), y2: Y0 + H, stroke: "#c4b5fd" }));
+  svg.appendChild(mk("circle", { cx: sx(BP.pred), cy: sy(bpBranchy(BP.pred)), r: 4, fill: "#f85149" }));
+  svg.appendChild(txt(X0 + W / 2, Y0 + H + 32, "branch predictability →", 10, "#9aa0a6", "middle"));
+
+  var nb = bpBranchy(BP.pred) * BP.iter, nl = bpLess() * BP.iter;
+  stats($("bpStats"), [
+    ["branchy", (nb / 1000).toFixed(2) + " µs", nb <= nl ? "ok" : "bad"],
+    ["branchless", (nl / 1000).toFixed(2) + " µs", nl < nb ? "ok" : "warn"],
+    ["mispredicts / tick", Math.round(BP.iter * (1 - BP.pred / 100)).toString()],
+    ["crossover", xover.toFixed(0) + "%", "acc"],
+    ["winner", nl < nb ? "branchless" : "branchy", "acc"]
+  ]);
+  $("bpNote").innerHTML = BP.pred >= xover
+    ? "<b>Keep the branch.</b> At " + BP.pred + "% the predictor is right often enough that the branch is " +
+      "nearly free, and the branchless version's fixed extra work is pure loss. Above roughly " +
+      xover.toFixed(0) + "% predictability, readable branchy code is also the faster code."
+    : "<b>Go branchless.</b> At " + BP.pred + "% you are eating about " +
+      Math.round(BP.iter * (1 - BP.pred / 100)) + " pipeline flushes per tick, ~" + MISPREDICT_NS.toFixed(0) +
+      " ns each. A mask-and-blend pays a small constant instead — and it is the same transformation that " +
+      "lets the vectorizer widen the loop, so you often collect twice.";
+}
+$("bpPred").addEventListener("input", function () { BP.pred = +this.value; $("bpPredv").textContent = this.value + "%"; bpDraw(); });
+$("bpIter").addEventListener("input", function () { BP.iter = +this.value; $("bpIterv").textContent = this.value; bpDraw(); });
+swWire($("bpMode"), function (b) { BP.mode = b.getAttribute("data-m"); bpDraw(); });
+bpDraw();
+
+/* ════ 4. Packet-path waterfall ═══════════════════════════════ */
+var PP_PATHS = {
+  kernel: {
+    name: "Kernel stack · blocking socket",
+    what: "The default. Every frame is DMA'd to a kernel ring, raises an interrupt, walks the generic " +
+      "network stack, is copied into a socket buffer, and then the scheduler has to wake your thread up. " +
+      "Correct, portable, and the most expensive path available.",
+    syscalls: "1–2 per packet", cores: "0 dedicated",
+    code: "// nothing special — and that is the point\nint fd = ::socket(AF_INET, SOCK_DGRAM, 0);\n::recvfrom(fd, buf, sizeof buf, 0, ...);  // blocks: the\n// scheduler decides when you run again",
+    stages: [
+      ["wire → NIC PHY/MAC", 0.15, "Physics and the MAC. You cannot optimize this; you can only shorten the cable, which is what colocation is."],
+      ["DMA to ring + IRQ", 1.20, "The NIC writes the frame into a kernel ring and raises an interrupt. The interrupt is the jitter: it fires on whichever core the affinity mask allows."],
+      ["driver + softirq (NAPI)", 1.60, "The driver's poll routine runs in softirq context, competing with every other softirq on that core."],
+      ["IP / UDP / TCP stack", 2.40, "Checksums, routing, connection lookup, reassembly — general-purpose code you are not using most of."],
+      ["copy into user buffer", 1.10, "One memcpy from kernel space to your buffer, plus the syscall's mode switch in both directions."],
+      ["wake the thread", 2.00, "The largest and least predictable stage: your thread was blocked, so a scheduler decision now stands between the data and your code."],
+      ["your parse in on_book", 0.80, "Yours. Weeks 6 and 12 are about making this number small; everything above it is the platform's."]
+    ]
+  },
+  uring: {
+    name: "Kernel stack · io_uring + busy-poll",
+    what: "Keep the kernel's stack but stop paying for interrupts and wake-ups: busy-poll the NIC from " +
+      "your own thread and submit/complete through shared rings instead of a syscall per operation. A " +
+      "large win for a small change, and it needs no special NIC.",
+    syscalls: "≈0 per packet (batched)", cores: "1 spinning",
+    code: "// io_uring: shared submit/complete rings, no syscall per op\n#include <liburing.h>\nio_uring ring;\nio_uring_queue_init(256, &ring, IORING_SETUP_SQPOLL);\n// plus: SO_BUSY_POLL / sysctl net.core.busy_poll",
+    stages: [
+      ["wire → NIC PHY/MAC", 0.15, "Unchanged. Physics does not care about your software."],
+      ["DMA to ring, no IRQ", 0.55, "Busy-polling means the descriptor is read by a thread that is already awake. No interrupt, so no interrupt jitter."],
+      ["driver poll (NAPI busy_poll)", 0.70, "The same driver code, but called from your context on demand rather than from a softirq."],
+      ["IP / UDP stack", 2.40, "Still the kernel's stack. This is the block that only true bypass removes, and it is now the biggest one."],
+      ["ring completion, no wake", 0.45, "The completion lands in a shared memory ring you are already spinning on — no scheduler in the path."],
+      ["your parse in on_book", 0.80, "Yours, unchanged."]
+    ]
+  },
+  bypass: {
+    name: "Kernel bypass · poll-mode driver",
+    what: "The NIC is mapped into your process. Descriptors are written straight into a userspace ring " +
+      "and a poll-mode driver reads them — no interrupt, no kernel stack, no copy, no syscall. DPDK is " +
+      "the do-it-yourself version; a vendor shim like Onload gets you most of it under the ordinary " +
+      "sockets API.",
+    syscalls: "0 on the hot path", cores: "1 dedicated, 100% busy",
+    code: "// DPDK poll-mode receive: the whole hot path\nstruct rte_mbuf* bufs[32];\nfor (;;) {\n  uint16_t n = rte_eth_rx_burst(port, 0, bufs, 32);\n  for (uint16_t i = 0; i < n; ++i) on_frame(bufs[i]);\n}  // isolcpus'd core, huge pages, mlock'd memory",
+    stages: [
+      ["wire → NIC PHY/MAC", 0.15, "Unchanged — and now it is a visible fraction of the total, which is when colocation starts to matter."],
+      ["DMA into a userspace ring", 0.35, "The NIC writes into memory your process owns. Nothing copies it again, ever."],
+      ["poll-mode driver read", 0.25, "A load from a descriptor you are already spinning on. This is as close to zero as software gets."],
+      ["your parse in on_book", 0.80, "Yours — and now the dominant term. From here on, every microsecond is yours to win or lose."]
+    ]
+  }
+};
+var PP = { path: "kernel", sel: 0 };
+function ppTotal(p) { return PP_PATHS[p].stages.reduce(function (a, s) { return a + s[1]; }, 0); }
+function ppDraw() {
+  var P = PP_PATHS[PP.path], svg = $("ppSvg"), st = P.stages;
+  clear(svg);
+  var X0 = 168, W = 430, Y0 = 30, RH = 26, GAP = 8;
+  var maxTot = ppTotal("kernel"), acc = 0;
+  svg.setAttribute("viewBox", "0 0 640 " + (Y0 + st.length * (RH + GAP) + 42));
+  svg.appendChild(txt(18, 18, P.name, 11.5, "#c4b5fd", null, 700));
+  st.forEach(function (s, i) {
+    var y = Y0 + i * (RH + GAP);
+    var bx = X0 + (acc / maxTot) * W, bw = Math.max(3, (s[1] / maxTot) * W);
+    var g = mk("g", { role: "button", tabindex: "0", "aria-label": s[0] + ", " + s[1].toFixed(2) + " microseconds" });
+    g.appendChild(txt(158, y + 17, s[0], 10, i === PP.sel ? "#e8e6e3" : "#9aa0a6", "end"));
+    g.appendChild(mk("rect", { x: bx, y: y, width: bw, height: RH, rx: 3,
+      fill: i === PP.sel ? "#7c3aed" : "rgba(124,58,237,.45)",
+      stroke: i === PP.sel ? "#c4b5fd" : "#272c36" }));
+    g.appendChild(txt(bx + bw + 6, y + 17, s[1].toFixed(2) + " µs", 9.5, "#c4b5fd"));
+    g.addEventListener("click", function () { PP.sel = i; ppDraw(); });
+    g.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); PP.sel = i; ppDraw(); } });
+    svg.appendChild(g);
+    acc += s[1];
+  });
+  var yT = Y0 + st.length * (RH + GAP) + 6;
+  svg.appendChild(mk("line", { x1: X0, y1: yT, x2: X0 + W, y2: yT, stroke: "#333a47" }));
+  svg.appendChild(txt(158, yT + 15, "total", 10.5, "#e8e6e3", "end", 700));
+  svg.appendChild(mk("rect", { x: X0, y: yT + 6, width: Math.max(3, (acc / maxTot) * W), height: 12, rx: 3, fill: "#c4b5fd" }));
+  svg.appendChild(txt(X0 + (acc / maxTot) * W + 6, yT + 16, acc.toFixed(2) + " µs", 10, "#c4b5fd", null, 700));
+  var saved = maxTot - acc;
+  stats($("ppStats"), [
+    ["wire → on_book", acc.toFixed(2) + " µs", "acc"],
+    ["vs kernel path", saved > 0.01 ? "−" + saved.toFixed(2) + " µs" : "baseline", saved > 0.01 ? "ok" : ""],
+    ["syscalls", P.syscalls],
+    ["cores burned", P.cores, P.cores.indexOf("0") === 0 ? "" : "warn"]
+  ]);
+  $("ppName").textContent = P.name;
+  $("ppWhat").textContent = P.what;
+  var kv = $("ppKv"); clear(kv);
+  [["stage", st[PP.sel][0]], ["cost", st[PP.sel][1].toFixed(2) + " µs"],
+   ["share", ((st[PP.sel][1] / acc) * 100).toFixed(0) + "% of this path"]].forEach(function (r) {
+    var b = document.createElement("b"); b.textContent = r[0];
+    var s = document.createElement("span"); s.textContent = r[1];
+    kv.appendChild(b); kv.appendChild(s);
+  });
+  $("ppCode").textContent = P.code;
+  $("ppNote").innerHTML = "<b>" + st[PP.sel][0] + ".</b> " + st[PP.sel][2];
+}
+swWire($("ppPath"), function (b) { PP.path = b.getAttribute("data-p"); PP.sel = 0; ppDraw(); });
+ppDraw();
+
+/* ════ 5. Tuning checklist ════════════════════════════════════ */
+var TU_BASE = { p50: 9.2, p999: 2100 };   /* µs, stock kernel on a shared core */
+var TU_ITEMS = [
+  { id: "pin",   l: "Pin the hot thread to one core",
+    d: "pthread_setaffinity_np, or taskset at launch. Stops the scheduler migrating you and cooling every cache you just warmed.",
+    p50: 0.3, p999: 40, cost: "one core, exclusively",
+    line: "taskset -c 3 ./build/hft_bot" },
+  { id: "isol",  l: "Hand the core over: isolcpus + nohz_full + rcu_nocbs",
+    d: "Removes the core from the scheduler's pool, stops the timer tick on it, and moves RCU callbacks elsewhere. Only means anything if you are pinned to that core.",
+    p50: 0.1, p999: 350, cost: "a reboot; that core is gone from the OS",
+    needs: "pin", line: "isolcpus=2,3 nohz_full=2,3 rcu_nocbs=2,3" },
+  { id: "irq",   l: "Move device IRQs off the hot core",
+    d: "Write an affinity mask to /proc/irq/*/smp_affinity so no interrupt can preempt the strategy thread mid-race.",
+    p50: 0.05, p999: 120, cost: "the interrupts land on somebody else's core",
+    line: "echo 1 > /proc/irq/$IRQ/smp_affinity" },
+  { id: "poll",  l: "Busy-poll instead of blocking",
+    d: "Spin on the NIC or the ring rather than sleeping. Lowest and most deterministic latency there is — on a core you own. On a shared core it is worse than blocking.",
+    p50: 2.0, p999: 60, cost: "100% CPU on that core, forever",
+    needs: "pin", line: "sysctl -w net.core.busy_poll=50" },
+  { id: "huge",  l: "Huge pages for the hot arena",
+    d: "2 MB pages instead of 4 KB: 512× fewer TLB entries for the same working set, so a random walk over the book stops thrashing the TLB.",
+    p50: 0.4, p999: 25, cost: "reserved memory you cannot use for anything else",
+    line: "sysctl -w vm.nr_hugepages=512" },
+  { id: "fault", l: "Pre-fault and mlock the hot memory",
+    d: "Touch every page and lock it resident at startup. A first-touch page fault on the hot path is a trap into the kernel measured in microseconds — and it lands in your p99.9 every time.",
+    p50: 0.0, p999: 900, cost: "slower startup, resident RSS",
+    line: "mlockall(MCL_CURRENT | MCL_FUTURE);  // + touch every page" },
+  { id: "numa",  l: "Allocate NUMA-local to the NIC's socket",
+    d: "On a two-socket box, memory attached to the other socket costs roughly twice as much to read. Put the thread, its memory and the NIC on the same node.",
+    p50: 0.6, p999: 45, cost: "you have half the machine's RAM nearby",
+    line: "numactl --cpunodebind=0 --membind=0 ./build/hft_bot" },
+  { id: "cstate", l: "Disable C-states and pin the frequency",
+    d: "A core that went to sleep takes tens of microseconds to come back, and a core that boosts and throttles gives you two different machines. Determinism beats peak clock.",
+    p50: 0.2, p999: 180, cost: "power and heat, all session long",
+    line: "intel_idle.max_cstate=0 processor.max_cstate=1 idle=poll" }
+];
+var TU = {};
+function tuBuild() {
+  var host = $("tuList");
+  TU_ITEMS.forEach(function (it) {
+    var row = document.createElement("div"); row.className = "chkrow"; row.id = "row_" + it.id;
+    var cb = document.createElement("input"); cb.type = "checkbox"; cb.id = "cb_" + it.id;
+    cb.setAttribute("aria-label", it.l);
+    var mid = document.createElement("div");
+    var lab = document.createElement("label"); lab.setAttribute("for", cb.id); lab.textContent = it.l;
+    var dd = document.createElement("div"); dd.className = "cd"; dd.textContent = it.d + " Cost: " + it.cost + ".";
+    mid.appendChild(lab); mid.appendChild(dd);
+    var g = document.createElement("div"); g.className = "cg";
+    g.textContent = "p50 −" + it.p50.toFixed(2) + " µs\np99.9 −" + it.p999 + " µs";
+    g.style.whiteSpace = "pre";
+    row.appendChild(cb); row.appendChild(mid); row.appendChild(g);
+    host.appendChild(row);
+    TU[it.id] = false;
+    cb.addEventListener("change", function () { TU[it.id] = cb.checked; tuDraw(); });
+  });
+}
+function tuDraw() {
+  var p50 = TU_BASE.p50, p999 = TU_BASE.p999, cores = 0, warns = [], n = 0;
+  TU_ITEMS.forEach(function (it) {
+    var row = $("row_" + it.id);
+    if (row) row.className = "chkrow" + (TU[it.id] ? " on" : "");
+    if (!TU[it.id]) return;
+    n++;
+    var gain50 = it.p50, gain999 = it.p999;
+    if (it.needs && !TU[it.needs]) { gain50 = 0; gain999 = 0; }
+    if (it.id === "huge" && !TU.fault) { gain999 = gain999 * 0.4; }
+    p50 -= gain50; p999 -= gain999;
+  });
+  if (TU.pin) cores += 1;
+  if (TU.poll && !TU.pin) { p999 += 260; warns.push("<b>Busy-poll without pinning.</b> You are spinning on a core the scheduler still shares, so you burn 100% CPU and still get preempted. This is strictly worse than blocking — the model adds the penalty back."); }
+  if (TU.isol && !TU.pin) warns.push("<b>isolcpus without pinning.</b> You removed a core from the scheduler and then did not ask for it. Nothing runs there and nothing changed. Pin first.");
+  if (TU.huge && !TU.fault) warns.push("<b>Huge pages that still fault.</b> A 2 MB page you have not touched is a 2 MB fault waiting to happen — bigger than the 4 KB one it replaced. Pre-fault and mlock, or the TLB win arrives with a new tail event attached.");
+  if (TU.poll && TU.pin && !TU.isol) warns.push("<b>Pinned but not isolated.</b> Pinning stops migration; it does not stop the timer tick, kernel threads or other tasks landing on that core. isolcpus + nohz_full is what actually hands it over.");
+  if (n === 0) warns.push("Nothing ticked. The baseline is a stock kernel, a shared core and 4 KB pages — which is exactly what your laptop is, and why laptop numbers are not evidence.");
+  if (TU.pin && TU.isol && TU.irq && TU.poll && TU.fault && TU.numa && TU.cstate) warns.push("<b>The platform is yours.</b> From here the tail is your code, which is week 14's whole subject. Note that you have also given up two cores and a reboot for this — write that down next to the percentiles.");
+  p50 = Math.max(1.4, p50); p999 = Math.max(12, p999);
+  if (TU.poll) cores += 1;
+  stats($("tuStats"), [
+    ["est. p50", p50.toFixed(2) + " µs", "acc"],
+    ["est. p99.9", p999 >= 1000 ? (p999 / 1000).toFixed(2) + " ms" : p999.toFixed(0) + " µs",
+      p999 < 100 ? "ok" : (p999 > 800 ? "bad" : "warn")],
+    ["tail / median", (p999 / p50).toFixed(0) + "×", p999 / p50 < 30 ? "ok" : "warn"],
+    ["cores dedicated", String(cores), cores > 1 ? "warn" : ""],
+    ["changes applied", n + " / " + TU_ITEMS.length]
+  ]);
+  $("tuVerdict").textContent = n === 0 ? "Nothing ticked"
+    : (p999 < 60 ? "Deterministic: the OS is out of the way"
+      : (p999 < 400 ? "Better, but something still preempts you" : "Still at the mercy of the scheduler"));
+  $("tuWhy").textContent = n === 0
+    ? "Baseline: a stock kernel, a shared core, 4 KB pages. Every number is measured against this."
+    : "These are representative figures for a server-class box, not a promise. The point is the ranking: "
+      + "page faults and scheduler preemption dominate the tail, and busy-poll dominates the median.";
+  var wl = $("tuWarn"); clear(wl);
+  warns.forEach(function (w) { var li = document.createElement("li"); li.innerHTML = w; wl.appendChild(li); });
+  var lines = ["# boot / systemd / startup, derived from what you ticked"];
+  TU_ITEMS.forEach(function (it) { if (TU[it.id]) lines.push(it.line); });
+  if (lines.length === 1) lines.push("# (nothing yet — tick a row)");
+  $("tuCode").textContent = lines.join("\n");
+}
+tuBuild();
+tuDraw();
+
+/* ── MCQ engine (shared across week pages) ───────────────────── */
+Array.prototype.forEach.call(document.querySelectorAll(".mcq"), function (q) {
+  var answer = parseInt(q.getAttribute("data-a"), 10);
+  var opts = Array.prototype.slice.call(q.querySelectorAll(".opt"));
+  var fb = q.querySelector(".fb");
+  opts.forEach(function (o, i) {
+    o.addEventListener("click", function () {
+      if (q.dataset.done === "1") return;
+      q.dataset.done = "1";
+      var right = i === answer;
+      opts.forEach(function (b, j) {
+        b.disabled = true;
+        if (j === answer) b.classList.add("right");
+        else if (j === i) b.classList.add("wrong");
+        else b.classList.add("dim");
+      });
+      fb.innerHTML = (right ? "<b>Correct.</b> " : "<b>Not quite.</b> ") + q.getAttribute("data-exp");
+      fb.className = "fb show " + (right ? "good" : "poor");
+    });
+  });
+});
+</script>
+</body>
+</html>
