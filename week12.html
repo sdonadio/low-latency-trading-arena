@@ -1,0 +1,1586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" href="data:," />
+<title>Week 12 · Async I/O &amp; Serialization — Low-Latency Trading Arena</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    /* ── Low-Latency Trading Arena · shared palette (identical on every page) ── */
+    --accent:       #7c3aed;
+    --accent-2:     #c4b5fd;
+    --accent-3:     #ede9fe;
+    --accent-rgb:   124,58,237;
+    --accent-2-rgb: 196,181,253;
+    --bg:           #0f1115;
+    --panel:        #181b22;
+    --panel2:       #1e222b;
+    --panel-2:      #13161b;
+    --ink:          #e8e6e3;
+    --ink-dim:      #c6c3bf;
+    --ink-mute:     #6f757f;
+    --muted:        #9aa0a6;
+    --dim:          #5f6673;
+    --line:         #272c36;
+    --line-2:       #333a47;
+    --border:       #272c36;
+    --ok:           #3fb950;
+    --warn:         #d29922;
+    --bad:          #f85149;
+    --info:         #6cb6ff;
+    --sky:          #58a6ff;
+    --violet:       #a78bfa;
+    --teal:         #2dd4bf;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.62;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent-2);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  /* ── nav / footer ─────────────────────────────────────────── */
+  nav.top{position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+    padding:11px 22px;background:rgba(15,17,21,.94);border-bottom:1px solid var(--line)}
+  nav.top>a:first-child{font-weight:800;letter-spacing:-.2px;color:var(--ink);font-size:14.5px;
+    border-left:3px solid var(--accent);padding-left:10px}
+  nav.top .crumbs{font-size:12px;color:var(--muted)}
+  nav.top .crumbs b{color:var(--ink);font-weight:700}
+  footer{border-top:1px solid var(--line);background:var(--panel);
+    padding:26px 22px 34px;text-align:center;font-size:11.5px;color:var(--dim);letter-spacing:.3px}
+
+  /* ── sections & typography ────────────────────────────────── */
+  section{max-width:1180px;margin:0 auto;padding:36px 22px 42px;border-top:1px solid var(--line)}
+  section#hero{border-top:none}
+  .kicker{font-size:10.5px;font-weight:800;letter-spacing:1.9px;text-transform:uppercase;color:var(--accent-2)}
+  h1{font-size:clamp(26px,4.2vw,40px);font-weight:800;letter-spacing:-.9px;line-height:1.13;margin:10px 0 6px}
+  h2{font-size:21px;font-weight:700;letter-spacing:-.3px;margin:4px 0 4px}
+  h3{font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);margin-bottom:11px}
+  h4{font-size:13.5px;font-weight:700;margin-bottom:5px}
+  p{margin:9px 0;max-width:82ch}
+  .lead{color:var(--muted);font-size:15px;max-width:84ch}
+  .sub{color:var(--muted);font-size:12.5px}
+  strong{color:#fff;font-weight:650}
+  em.hi{color:var(--accent-2);font-style:normal;font-weight:600}
+  code,.mono{font-family:var(--mono);font-size:12.5px}
+  code{background:rgba(var(--accent-2-rgb),.13);color:#ddd4fb;padding:1px 5px;border-radius:4px}
+  ul.you{list-style:none;margin:16px 0 0;display:grid;gap:8px}
+  ul.you li{position:relative;padding-left:26px;font-size:13.5px;color:var(--ink);max-width:78ch}
+  ul.you li::before{content:"";position:absolute;left:4px;top:8px;width:8px;height:8px;border-radius:2px;
+    background:var(--accent);box-shadow:0 0 0 3px rgba(var(--accent-rgb),.22)}
+  ul.plain{list-style:none;display:grid;gap:7px;font-size:13px;color:var(--muted)}
+  ul.plain li{padding-left:16px;position:relative}
+  ul.plain li::before{content:"\2022";position:absolute;left:2px;color:var(--accent-2)}
+
+  /* ── panels & layout ──────────────────────────────────────── */
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .panel.tight{padding:13px 14px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;align-items:start}
+  .split{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:18px;align-items:start}
+  .split-r{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:18px;align-items:start}
+  .stack{display:grid;gap:14px}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+
+  /* ── controls ─────────────────────────────────────────────── */
+  .btn{font-family:inherit;font-size:12px;font-weight:650;cursor:pointer;color:var(--ink);
+    background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:7px 14px;transition:.15s}
+  .btn:hover:not(:disabled){border-color:var(--accent-2);color:#fff}
+  .btn:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .btn:disabled{opacity:.35;cursor:not-allowed}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.primary:hover:not(:disabled){filter:brightness(1.25)}
+  .btn.on{background:rgba(var(--accent-rgb),.28);border-color:var(--accent-2);color:#fff}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+  .tab{font-family:inherit;font-size:12px;font-weight:650;cursor:pointer;color:var(--muted);
+    background:transparent;border:1px solid var(--line);border-radius:20px;padding:6px 14px;transition:.15s}
+  .tab:hover{color:var(--ink)}
+  .tab[aria-selected="true"]{background:rgba(var(--accent-rgb),.3);border-color:var(--accent-2);color:#fff}
+  .tab:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .ctl{display:grid;gap:4px;margin-bottom:12px}
+  .ctl label{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);
+    display:flex;justify-content:space-between;gap:10px}
+  .ctl label b{font-family:var(--mono);color:var(--accent-2);font-size:12px;text-transform:none;letter-spacing:0}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:3px;
+    background:#2b313d;outline:none;cursor:pointer}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;
+    background:var(--accent-2);border:2px solid var(--bg);cursor:pointer}
+  input[type=range]::-moz-range-thumb{width:15px;height:15px;border-radius:50%;background:var(--accent-2);
+    border:2px solid var(--bg);cursor:pointer}
+  input[type=range]:focus-visible{box-shadow:0 0 0 3px rgba(var(--accent-2-rgb),.4)}
+  select,textarea,input[type=text]{font-family:var(--mono);font-size:12.5px;color:var(--ink);
+    background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:7px 9px;width:100%}
+  select:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px solid var(--accent-2);outline-offset:1px}
+  textarea{line-height:1.55;resize:vertical}
+
+  /* ── stats / pills / code ─────────────────────────────────── */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:1px;
+    background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .stat{background:var(--panel);padding:10px 12px}
+  .stat .sl{font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--dim)}
+  .stat .sv{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--ink);margin-top:3px}
+  .stat .sv.ok{color:var(--ok)} .stat .sv.bad{color:var(--bad)} .stat .sv.warn{color:var(--warn)}
+  .stat .sv.acc{color:var(--accent-2)}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;letter-spacing:.5px;
+    padding:3px 9px;border-radius:20px;border:1px solid var(--line);color:var(--muted)}
+  .pill.ok{color:var(--ok);border-color:rgba(63,185,80,.5);background:rgba(63,185,80,.1)}
+  .pill.bad{color:var(--bad);border-color:rgba(248,81,73,.5);background:rgba(248,81,73,.1)}
+  .pill.warn{color:var(--warn);border-color:rgba(210,153,34,.5);background:rgba(210,153,34,.1)}
+  .pill.acc{color:var(--accent-2);border-color:rgba(var(--accent-2-rgb),.5);background:rgba(var(--accent-rgb),.18)}
+  pre.code{font-family:var(--mono);font-size:11.8px;line-height:1.62;background:#0b0e14;color:#dbe3ea;
+    border:1px solid var(--line);border-radius:10px;padding:13px 14px;overflow-x:auto;white-space:pre}
+  pre.code .k{color:#6cb6ff} pre.code .s{color:#8ddb8c} pre.code .c{color:#6b7484;font-style:italic}
+  pre.code .n{color:#e0b070} pre.code .b{color:#ddd4fb;font-weight:700}
+  .note{border-left:3px solid var(--accent);background:rgba(var(--accent-rgb),.12);border-radius:0 8px 8px 0;
+    padding:10px 13px;font-size:12.5px;color:var(--muted)}
+  .note b{color:var(--ink)}
+  .log{font-family:var(--mono);font-size:11.5px;max-height:230px;overflow-y:auto;display:grid;gap:5px}
+  .log div{background:var(--panel2);border-left:3px solid var(--line);border-radius:0 6px 6px 0;padding:6px 9px;color:var(--muted)}
+  .log div.hl{border-left-color:var(--accent-2);color:var(--ink);background:rgba(var(--accent-rgb),.15)}
+  .log div.ok{border-left-color:var(--ok)} .log div.bad{border-left-color:var(--bad)}
+  svg{display:block;max-width:100%;height:auto}
+  .svgwrap{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px;overflow-x:auto}
+  table.t{width:100%;border-collapse:collapse;font-size:12px}
+  table.t th{font-size:9.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--dim);
+    text-align:left;padding:0 8px 7px;border-bottom:1px solid var(--line)}
+  table.t td{padding:7px 8px;border-bottom:1px solid rgba(39,44,54,.6);color:var(--muted);font-family:var(--mono);font-size:11.8px}
+  table.t td.n{color:var(--ink);font-weight:600}
+
+  /* ── pitfalls ─────────────────────────────────────────────── */
+  details.pit{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:10px;overflow:hidden}
+  details.pit>summary{cursor:pointer;padding:12px 15px;font-size:13.5px;font-weight:650;color:var(--ink);
+    list-style:none;display:flex;gap:11px;align-items:flex-start}
+  details.pit>summary::-webkit-details-marker{display:none}
+  details.pit>summary::before{content:"\25B8";color:var(--accent-2);font-size:12px;line-height:1.5;transition:.2s}
+  details.pit[open]>summary::before{transform:rotate(90deg)}
+  details.pit>summary:focus-visible{outline:2px solid var(--accent-2);outline-offset:-2px}
+  details.pit .body{padding:0 15px 15px 39px;font-size:13px;color:var(--muted);display:grid;gap:9px}
+  details.pit .body .fix{color:var(--ok);font-weight:600}
+
+  /* ── MCQ ──────────────────────────────────────────────────── */
+  .mcq{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 17px;margin-bottom:13px}
+  .mcq .q{font-size:13.8px;font-weight:650;color:var(--ink);margin:0 0 11px;max-width:84ch}
+  .mcq .q span{color:var(--accent-2);font-family:var(--mono);margin-right:7px}
+  .opts{display:grid;gap:7px}
+  .opt{text-align:left;font-family:inherit;font-size:13px;cursor:pointer;color:var(--muted);
+    background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:9px 12px;transition:.15s}
+  .opt:hover:not(:disabled){border-color:var(--accent-2);color:var(--ink)}
+  .opt:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .opt.right{border-color:var(--ok);background:rgba(63,185,80,.13);color:#bce8c4}
+  .opt.wrong{border-color:var(--bad);background:rgba(248,81,73,.12);color:#f4b6b1}
+  .opt.dim{opacity:.5}
+  .fb{margin-top:11px;font-size:12.5px;line-height:1.6;color:var(--muted);display:none;
+    border-left:3px solid var(--line);padding-left:11px}
+  .fb.show{display:block}
+  .fb.show.good{border-left-color:var(--ok)} .fb.show.poor{border-left-color:var(--bad)}
+  .fb b{color:var(--ink)}
+
+  /* ── next ─────────────────────────────────────────────────── */
+  .nextgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+  .nextcard{display:block;background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:15px 17px;transition:.18s;color:inherit}
+  .nextcard:hover{border-color:var(--accent-2);transform:translateY(-2px);text-decoration:none}
+  .nextcard .nl{font-size:10px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--accent-2)}
+  .nextcard .nt{font-size:14.5px;font-weight:700;color:var(--ink);margin-top:5px}
+  .nextcard .nd{font-size:12px;color:var(--muted);margin-top:5px}
+
+  @media (max-width:720px){
+    .grid2,.grid3,.split,.split-r{grid-template-columns:1fr}
+    section{padding:26px 15px 32px}
+    nav.top{padding:10px 15px;gap:8px}
+    nav.top .crumbs{font-size:11px}
+    p,.lead{max-width:none}
+  }
+
+  /* ── week-page shared ─────────────────────────────────────── */
+  #hero{padding:52px 22px 40px;
+    background:radial-gradient(ellipse 820px 340px at 22% -14%,rgba(var(--accent-rgb),.3),transparent 66%)}
+  #hero .wk{font-family:var(--mono);font-size:12px;letter-spacing:2px;color:var(--accent-2);font-weight:700}
+  #hero h1{max-width:24ch}
+  #hero .promise{font-size:16.5px;color:var(--ink);max-width:74ch;margin-top:10px;line-height:1.55}
+  .secnum{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;
+    background:rgba(var(--accent-rgb),.35);border:1px solid var(--accent-2);color:#fff;font-family:var(--mono);
+    font-size:11px;font-weight:700;margin-right:9px;vertical-align:2px}
+  .sw{display:inline-flex;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex-wrap:wrap}
+  .sw button{font-family:inherit;font-size:11.5px;font-weight:650;cursor:pointer;color:var(--muted);
+    background:var(--panel2);border:none;padding:7px 13px;transition:.15s}
+  .sw button[aria-pressed="true"]{background:rgba(var(--accent-rgb),.32);color:#fff}
+  .sw button:focus-visible{outline:2px solid var(--accent-2);outline-offset:-2px}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-top:10px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
+
+
+
+  /* ── week-12 specific ─────────────────────────────────────── */
+  .tablewrap{overflow-x:auto}
+  .bars{display:grid;gap:7px;margin-top:10px}
+  .bar{display:grid;grid-template-columns:158px minmax(0,1fr) 104px;gap:9px;align-items:center}
+  .bar .bl{font-size:11px;font-weight:650;color:var(--muted)}
+  .bar .bt{position:relative;height:18px;border-radius:5px;background:#0b0e14;
+    border:1px solid var(--line);overflow:hidden}
+  .bar .bt i{display:block;height:100%;width:0;transition:width .5s cubic-bezier(.2,.7,.3,1)}
+  .bar .bv{font-family:var(--mono);font-size:11px;color:var(--accent-2);text-align:right}
+  .bar.win .bl{color:var(--ink)}
+  .steps{display:grid;gap:5px;font-family:var(--mono);font-size:11.5px}
+  .steps div{background:var(--panel2);border-left:3px solid var(--line);border-radius:0 6px 6px 0;
+    padding:6px 10px;color:var(--dim);white-space:pre-wrap;overflow-wrap:anywhere}
+  .steps div.on{border-left-color:var(--accent-2);color:var(--ink);background:rgba(var(--accent-rgb),.16)}
+  .steps div.past{color:var(--muted)}
+  .steps div.bad{border-left-color:var(--bad);color:#f4b6b1}
+  .steps div.ok{border-left-color:var(--ok)}
+  .big{font-family:var(--mono);font-size:26px;font-weight:700;color:var(--accent-2);letter-spacing:-.5px}
+  .bigsub{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--dim);margin-top:2px}
+  .verdict{margin-top:14px;font-family:var(--mono);font-size:13px;font-weight:700;letter-spacing:.6px}
+  .verdict.met{color:var(--ok)} .verdict.miss{color:var(--bad)}
+  .lanes{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+  .codepair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+  .buf{display:flex;flex-wrap:wrap;gap:3px}
+  .bb{font-family:var(--mono);font-size:10.5px;padding:5px 4px;border-radius:4px;min-width:26px;
+    text-align:center;background:#0b0e14;border:1px solid var(--line);color:var(--dim)}
+  .bb.len{background:rgba(108,182,255,.22);border-color:#6cb6ff;color:#cfe6ff}
+  .bb.pay{background:rgba(var(--accent-rgb),.3);border-color:var(--accent-2);color:#fff}
+  .bb.part{background:rgba(210,153,34,.2);border-color:#d29922;color:#f0dda6}
+  .bb.free{opacity:.34}
+  .fds{display:grid;grid-template-columns:repeat(auto-fill,minmax(30px,1fr));gap:4px}
+  .fd{height:26px;border-radius:5px;background:#0b0e14;border:1px solid var(--line);
+    display:grid;place-items:center;font-family:var(--mono);font-size:9.5px;color:var(--dim);transition:.14s}
+  .fd.ready{background:rgba(63,185,80,.26);border-color:#3fb950;color:#fff}
+  .fd.scan{border-color:var(--warn)}
+  .digits{display:flex;flex-wrap:wrap;gap:4px}
+  .dg{font-family:var(--mono);font-size:14px;font-weight:700;padding:6px 9px;border-radius:6px;
+    background:#0b0e14;border:1px solid var(--line);color:var(--dim)}
+  .dg.on{background:rgba(var(--accent-rgb),.32);border-color:var(--accent-2);color:#fff}
+  .dg.out{background:rgba(63,185,80,.2);border-color:rgba(63,185,80,.6);color:#bce8c4}
+  .toggles{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:9px}
+  .tg{display:flex;gap:10px;align-items:flex-start;background:var(--panel2);border:1px solid var(--line);
+    border-radius:9px;padding:9px 11px;cursor:pointer;transition:.15s}
+  .tg:hover{border-color:var(--line-2)}
+  .tg.on{border-color:var(--accent-2);background:rgba(var(--accent-rgb),.14)}
+  .tg input{margin-top:2px;width:15px;height:15px;accent-color:var(--accent);flex-shrink:0;cursor:pointer}
+  .tg .tt{font-size:12px;font-weight:650;color:var(--ink)}
+  .tg .td{font-size:11px;color:var(--muted);margin-top:2px}
+  /* ── mobile guard (identical on every page): single column under 720px,
+        no horizontal overflow. Must stay last in the sheet. ───────────── */
+  @media (max-width:720px){
+    .grid2,.grid3,.grid2.narrow-right,.split,.split-r,.codepair,
+    .nextgrid,.dash,.toggles,.lanes,.weeknav,.weeks,.roles,.stack{
+      grid-template-columns:minmax(0,1fr)}
+    [class*="grid"]>*,.stack>*,.wrap>*,.panel,.panel.tight,.nextcard,.wk,.row>*{min-width:0}
+    pre,pre.code,.svgwrap,svg,canvas,table,select,input,textarea,.mono{max-width:100%}
+    pre,pre.code,.svgwrap,.tablewrap{overflow-x:auto}
+    code,.mono{overflow-wrap:anywhere}
+    .ctl,.ctl>*,.controls>*,.row,.legend>*{min-width:0}
+    .ctl{flex-wrap:wrap} .ctl select,.ctl input[type=range]{flex:1 1 100%;width:100%}
+    p,.lead,.sub,.promise{max-width:none}
+  }
+</style>
+</head>
+<body>
+
+<nav class="top"><a href="index.html">Low-Latency Trading Arena</a><span class="crumbs"><a href="week11.html">← Week 11</a> · <b>Week 12 · Async I/O &amp; Serialization</b> · <a href="week13.html">Week 13 →</a></span></nav>
+
+
+<!-- ══════════════ HERO ══════════════ -->
+<section id="hero">
+  <div class="wk">WEEK 12 · 15-WEEK TRACK  ·  SESSION 7 · 9-SESSION TRACK</div>
+  <h1>Async I/O &amp; Serialization</h1>
+  <p class="promise">Last week you learned what the bytes mean. This week you stop paying full price for
+  them. Two costs sit between the wire and your strategy — <strong>the syscall that fetches the bytes and
+  the codec that turns them into numbers</strong> — and both of them are usually larger than the
+  strategy itself. You will make one thread service many sockets without ever blocking, and you will
+  make a decode that touches only the fields you trade on.</p>
+  <ul class="you">
+    <li>Explain readiness versus completion, and why <code>EAGAIN</code> is the normal case rather than an error.</li>
+    <li>Choose between <code>select</code>, <code>poll</code> and <code>epoll</code> with the <em class="hi">O(n) versus O(ready)</em> argument, and say what edge-triggering obliges you to do.</li>
+    <li>Frame a byte stream correctly under partial reads, with a length prefix or a delimiter.</li>
+    <li>Beat <code>std::to_string</code> with a twenty-line <code>u64toa</code>, and beat a DOM parser with a <code>string_view</code>.</li>
+  </ul>
+  <div class="row" style="margin-top:22px">
+    <span class="pill acc">Lab: <code>include/u64toa.hpp</code> — edges, fuzz, and a ns/op metric</span>
+    <span class="pill">Then: targeted extract on the arena's <code>book_snapshot</code></span>
+    <span class="pill warn">Batching buys throughput with the latency you are graded on</span>
+  </div>
+</section>
+
+<!-- ══════════════ WHAT ══════════════ -->
+<section id="what">
+  <div class="kicker">Part 1</div>
+  <h2><span class="secnum">1</span>What is it? One thread, many sockets, never blocked</h2>
+  <p class="lead">A blocking <code>recv()</code> parks your thread in the kernel until bytes arrive. That
+  is fine for one socket and catastrophic for many: a quiet connection freezes the thread that a busy
+  connection needs. The fix is to invert the question — instead of &ldquo;give me bytes from this
+  socket&rdquo;, ask <strong>&ldquo;which of my sockets has bytes right now?&rdquo;</strong> and do the
+  reads yourself. That is readiness, and it is what <code>select</code>, <code>poll</code> and
+  <code>epoll</code> answer.</p>
+
+  <div class="split" style="margin-top:18px">
+    <div class="panel">
+      <h3>One event loop · <span id="elN2">1,000</span> connections</h3>
+      <div class="fds" id="elFds" role="img" aria-label="Grid of file descriptors, highlighting the ones that are ready"></div>
+      <div class="ctl" style="margin-top:14px"><label for="elN">Registered connections <b id="elNV">1,000</b></label>
+        <input type="range" id="elN" min="1" max="200" value="100" aria-label="Number of registered connections, in tens"/></div>
+      <div class="ctl"><label for="elAct">Fraction ready per wake-up <b id="elActV">2 %</b></label>
+        <input type="range" id="elAct" min="1" max="100" value="2" aria-label="Percentage of connections ready on each wake-up"/></div>
+      <div class="ctl"><label for="elWork">Your handler, per ready socket <b id="elWorkV">1.5 µs</b></label>
+        <input type="range" id="elWork" min="1" max="80" value="15" aria-label="Handler cost per ready socket in tenths of a microsecond"/></div>
+      <div class="svgwrap"><svg id="elSvg" viewBox="0 0 540 210" role="img" aria-label="Chart of multiplexing overhead against connection count for select, poll, epoll and thread-per-connection"></svg></div>
+      <div class="legend">
+        <span><i style="background:#f85149"></i>select / poll — O(n) scan</span>
+        <span><i style="background:#7c3aed"></i>epoll / kqueue — O(ready)</span>
+        <span><i style="background:#d29922"></i>thread per connection</span>
+      </div>
+    </div>
+    <div class="stack">
+      <div class="panel tight"><h3>Mechanism</h3>
+        <div class="sw" role="group" aria-label="Choose an I/O multiplexing mechanism" style="margin-bottom:12px">
+          <button id="elBlock" type="button" aria-pressed="false">thread per conn</button>
+          <button id="elSelect" type="button" aria-pressed="false">select</button>
+          <button id="elPoll" type="button" aria-pressed="false">poll</button>
+          <button id="elEpoll" type="button" aria-pressed="true">epoll / kqueue</button>
+        </div>
+        <div class="stats">
+          <div class="stat"><div class="sl">Wake-up overhead</div><div class="sv acc" id="elOh">—</div></div>
+          <div class="stat"><div class="sl">Handler work</div><div class="sv" id="elWk">—</div></div>
+          <div class="stat"><div class="sl">Last socket served at</div><div class="sv" id="elLast">—</div></div>
+          <div class="stat"><div class="sl">Threads</div><div class="sv" id="elThr">—</div></div>
+        </div>
+      </div>
+      <pre class="code" id="elCode">—</pre>
+      <div class="note" id="elNote"></div>
+    </div>
+  </div>
+  <p class="sub" style="margin-top:10px">The chart plots <em class="hi">multiplexing overhead only</em> —
+  the cost of finding out which sockets are ready, before a single <code>recv</code> — at a fixed ready
+  fraction, sweeping the connection count. <code>select</code> and <code>poll</code> hand the kernel the whole interest set on
+  every call and get the whole set back, so their cost grows with <em>registered</em> descriptors —
+  which is exactly the wrong variable. <code>epoll</code> registers once with <code>epoll_ctl</code> and
+  returns only the ready ones, so its cost grows with <em>ready</em> descriptors. At two per cent
+  activity that is a fiftyfold difference in the wrong direction.</p>
+
+  <h3 style="margin-top:32px">Edge versus level triggering</h3>
+  <p>Level-triggered means &ldquo;this socket is <em>still</em> readable&rdquo;; edge-triggered means
+  &ldquo;this socket <em>became</em> readable&rdquo;. Edge gives you fewer wake-ups and one hard
+  obligation: <strong>you must drain the socket until <code>EAGAIN</code></strong>, because nothing will
+  remind you. Step the two side by side.</p>
+
+  <div class="split-r" style="margin-top:14px">
+    <div class="panel">
+      <h3>Three messages land in one burst</h3>
+      <div class="sw" role="group" aria-label="Choose the trigger mode" style="margin-bottom:12px">
+        <button id="etLevel" type="button" aria-pressed="true">level-triggered</button>
+        <button id="etEdge" type="button" aria-pressed="false">edge-triggered</button>
+      </div>
+      <div class="toggles" style="grid-template-columns:minmax(0,1fr);margin-bottom:12px">
+        <label class="tg" id="etDrainTg">
+          <input type="checkbox" id="etDrain" aria-label="Handler drains the socket until EAGAIN"/>
+          <div><div class="tt">Handler loops until <code>EAGAIN</code></div>
+            <div class="td">read in a <code>for(;;)</code> instead of one <code>recv</code> per event</div></div>
+        </label>
+      </div>
+      <div class="steps" id="etLog" aria-live="polite"></div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn primary" id="etStep" type="button" aria-label="Advance the event loop one iteration">Loop iteration →</button>
+        <button class="btn" id="etReset" type="button" aria-label="Restart the scenario">Restart</button>
+      </div>
+    </div>
+    <div class="stack">
+      <div class="panel tight"><h3>Socket state</h3>
+        <div class="stats">
+          <div class="stat"><div class="sl">Bytes in kernel buffer</div><div class="sv" id="etKern">—</div></div>
+          <div class="stat"><div class="sl">Messages delivered</div><div class="sv ok" id="etDone">—</div></div>
+          <div class="stat"><div class="sl">Wake-ups used</div><div class="sv acc" id="etWake">—</div></div>
+          <div class="stat"><div class="sl">Loop status</div><div class="sv" id="etState">—</div></div>
+        </div>
+        <div class="verdict" id="etVerdict">—</div>
+      </div>
+      <pre class="code" id="etCode">—</pre>
+      <div class="note" id="etNote"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ HOW ══════════════ -->
+<section id="how">
+  <div class="kicker">Part 2</div>
+  <h2><span class="secnum">2</span>How does it work? Syscalls, batches, and frames</h2>
+  <p class="lead">Once you are non-blocking, the remaining cost is the syscall itself: about
+  <strong>600&#8239;ns of round trip into the kernel and back</strong>, per call, doing nothing useful.
+  There are exactly three ways to pay less of it — call it less often per message, amortise it over many
+  messages, or stop calling it at all.</p>
+
+  <h3 style="margin-top:24px">a · Busy-poll the socket, or wait to be woken?</h3>
+  <div class="split" style="margin-top:14px">
+    <div class="panel">
+      <h3>Cost per message received</h3>
+      <div class="ctl"><label for="syRate">Message rate on this socket <b id="syRateV">50 k/s</b></label>
+        <input type="range" id="syRate" min="1" max="500" value="50" aria-label="Message rate in thousands per second"/></div>
+      <div class="ctl"><label for="syBatch">recvmmsg batch size <b id="syBatchV">1</b></label>
+        <input type="range" id="syBatch" min="1" max="64" value="1" aria-label="Number of messages fetched per syscall"/></div>
+      <div class="sw" role="group" aria-label="Choose how the thread waits for data" style="margin:4px 0 14px">
+        <button id="syWait" type="button" aria-pressed="true">epoll_wait, then recv</button>
+        <button id="syPoll" type="button" aria-pressed="false">busy-poll recv</button>
+        <button id="syBusyKern" type="button" aria-pressed="false">SO_BUSY_POLL</button>
+      </div>
+      <div class="bars" id="syBars"></div>
+      <p class="sub" style="margin-top:12px" id="syCap"></p>
+    </div>
+    <div class="stack">
+      <div class="panel tight"><h3>Per message</h3>
+        <div class="stats">
+          <div class="stat"><div class="sl">Syscalls</div><div class="sv" id="sySys">—</div></div>
+          <div class="stat"><div class="sl">Kernel overhead</div><div class="sv acc" id="syOh">—</div></div>
+          <div class="stat"><div class="sl">Added queueing</div><div class="sv warn" id="syQ">—</div></div>
+          <div class="stat"><div class="sl">CPU while idle</div><div class="sv" id="syCpu">—</div></div>
+        </div>
+        <div class="big" id="syTotal" style="margin-top:12px">—</div>
+        <div class="bigsub">receive-side cost per message</div>
+      </div>
+      <pre class="code" id="syCode">—</pre>
+      <div class="note" id="syNote"></div>
+    </div>
+  </div>
+  <p class="sub" style="margin-top:10px"><code>recvmmsg</code> is the zero-copy-adjacent idea you can
+  actually reach from portable code: one syscall fills an array of <code>mmsghdr</code> structures, so
+  64 datagrams cost one kernel transition instead of 64. Note what the widget shows about it, though —
+  <em class="hi">a batch of 64 only helps if 64 messages are already waiting</em>. If they are not, the
+  call either returns short (no gain) or waits for them (pure added latency). Batching converts
+  throughput headroom into latency, and on a tick path you have the opposite preference.</p>
+
+  <h3 style="margin-top:32px">b · Framing a byte stream under partial reads</h3>
+  <p>TCP does not preserve your send boundaries. A single <code>recv</code> can deliver half a message,
+  two messages, or two and a half. The buffer below receives the same three messages in awkward chunks;
+  watch the framing loop cope, and switch the framing strategy.</p>
+
+  <div class="split" style="margin-top:14px">
+    <div class="panel">
+      <h3>Receive buffer · framing in place</h3>
+      <div class="sw" role="group" aria-label="Choose a framing strategy" style="margin-bottom:12px">
+        <button id="frLen" type="button" aria-pressed="true">4-byte length prefix</button>
+        <button id="frDelim" type="button" aria-pressed="false">delimiter (newline)</button>
+      </div>
+      <div class="buf" id="frBuf" role="img" aria-label="Receive buffer contents, showing length prefixes, payload bytes and a partial tail"></div>
+      <div class="row" style="margin-top:14px">
+        <button class="btn primary" id="frStep" type="button" aria-label="Deliver the next recv chunk">Next recv() →</button>
+        <button class="btn" id="frReset" type="button" aria-label="Restart the stream">Restart</button>
+        <span class="pill" id="frPill">len_ = 0</span>
+      </div>
+      <div class="steps" id="frLog" style="margin-top:14px" aria-live="polite"></div>
+    </div>
+    <div class="stack">
+      <div class="panel tight"><h3>Buffer state</h3>
+        <div class="stats">
+          <div class="stat"><div class="sl">Bytes buffered</div><div class="sv acc" id="frLenV">0</div></div>
+          <div class="stat"><div class="sl">Complete frames</div><div class="sv ok" id="frDone">0</div></div>
+          <div class="stat"><div class="sl">Bytes still needed</div><div class="sv warn" id="frTail">—</div></div>
+          <div class="stat"><div class="sl">Bytes scanned</div><div class="sv" id="frScan">0</div></div>
+        </div>
+      </div>
+      <pre class="code" id="frCode">—</pre>
+      <div class="note" id="frNote"></div>
+    </div>
+  </div>
+  <div class="note" style="margin-top:14px"><b>The one-line summary of this widget.</b> A length prefix
+  costs you four bytes and one comparison per frame; a delimiter costs you a scan of every payload byte,
+  plus an escaping scheme so the delimiter cannot appear inside the payload. Venues use length prefixes
+  for exactly that reason. The arena's WebSocket layer already frames for you — which is the one piece
+  of convenience in its wire format that is also the fast choice.</div>
+</section>
+
+<!-- ══════════════ WHY ══════════════ -->
+<section id="why">
+  <div class="kicker">Part 3</div>
+  <h2><span class="secnum">3</span>Why it matters: the codec is on your critical path</h2>
+  <p class="lead">Between the byte arriving and your strategy seeing a number sits the codec, and on the
+  arena's JSON wire it is <strong>the single largest item in your tick-to-trade budget</strong>. Four
+  ways to turn the same <code>book_snapshot</code> into a best bid and ask. Race them, then read the
+  allocation column, because that is where your p99.9 lives.</p>
+
+  <div class="split-r" style="margin-top:18px">
+    <div class="panel">
+      <h3>Decode <code>book_snapshot</code> → bid, ask, mid</h3>
+      <div class="row" style="margin-bottom:12px">
+        <button class="btn primary" id="szRun" type="button" aria-label="Run the serialization race">Run the race</button>
+        <div class="sw" role="group" aria-label="Choose what to measure">
+          <button id="szNs" type="button" aria-pressed="true">decode ns</button>
+          <button id="szAlloc" type="button" aria-pressed="false">allocations</button>
+          <button id="szCopy" type="button" aria-pressed="false">bytes copied</button>
+        </div>
+      </div>
+      <div class="bars" id="szBars"></div>
+      <p class="sub" style="margin-top:12px" id="szCap"></p>
+      <div class="tablewrap" style="margin-top:12px"><table class="t" id="szTable">
+        <thead><tr><th>Approach</th><th>ns</th><th>Allocs</th><th>Copied</th><th>p99.9</th></tr></thead>
+        <tbody></tbody></table></div>
+    </div>
+    <div class="stack">
+      <div class="panel tight"><h3>Selected approach</h3>
+        <h4 id="szName">—</h4>
+        <pre class="code" id="szCode" style="margin-top:8px">—</pre>
+      </div>
+      <div class="panel tight"><h3>Budget at 200 k msg/s</h3>
+        <div class="stats">
+          <div class="stat"><div class="sl">Core time on codec</div><div class="sv acc" id="szCore">—</div></div>
+          <div class="stat"><div class="sl">Allocations / s</div><div class="sv" id="szAps">—</div></div>
+          <div class="stat"><div class="sl">vs flat memcpy</div><div class="sv warn" id="szRel">—</div></div>
+          <div class="stat"><div class="sl">p99.9 decode</div><div class="sv" id="szTail">—</div></div>
+        </div>
+      </div>
+      <div class="note" id="szNote"></div>
+    </div>
+  </div>
+  <p class="sub" style="margin-top:10px">Look at the p99.9 column rather than the mean. The DOM parser's
+  median is bad and its tail is far worse, because every one of its twenty-two allocations can be the
+  one that walks a free list or asks the kernel for a page. <em class="hi">A codec with zero allocations
+  has a tail that looks like its median</em> — that is the whole reason to hunt allocations rather than
+  instructions.</p>
+
+  <h3 style="margin-top:32px">Allocation-free parsing: <code>string_view</code> is the whole trick</h3>
+  <div class="codepair" style="margin-top:12px">
+    <div>
+      <pre class="code"><span class="c">// SLOW: every call constructs and destroys a string</span>
+std::string get_symbol(<span class="k">const</span> json&amp; j) {
+  <span class="k">return</span> j[<span class="s">"symbol"</span>].get&lt;std::string&gt;();
+}                       <span class="c">// 1 malloc + 1 free + a copy</span>
+
+<span class="c">// FAST: a view into bytes you already have</span>
+std::string_view get_symbol(std::string_view frame) {
+  <span class="k">auto</span> k = frame.find(<span class="s">"\"symbol\":\""</span>);
+  <span class="k">if</span> (k == frame.npos) <span class="k">return</span> {};
+  k += <span class="n">10</span>;
+  <span class="k">auto</span> e = frame.find(<span class="s">'"'</span>, k);
+  <span class="k">return</span> frame.substr(k, e - k);
+}                       <span class="c">// 0 malloc, 0 copy</span></pre>
+    </div>
+    <div>
+      <p class="sub">A <code>string_view</code> is a pointer and a length. Returning one costs sixteen
+      bytes in registers; returning a <code>std::string</code> costs an allocation, a copy, and a
+      destructor — three times, if the value passes through two more functions on its way to your
+      strategy.</p>
+      <p class="sub">The obligation you take on is <em class="hi">lifetime</em>. The view is only valid
+      while the receive buffer holds those bytes, so you must not store it past the end of
+      <code>on_book</code>, and you must not compact the buffer while a view into it is live. That is a
+      real constraint and it is the reason this is a deliberate technique rather than a default: you are
+      trading a guarantee the type system was giving you for about 500&#8239;ns.</p>
+      <p class="sub">The same reasoning covers <code>std::span</code> for binary payloads,
+      <code>from_chars</code> instead of <code>stod</code> (no locale, no allocation, and it tells you
+      where it stopped), and passing <code>const T&amp;</code> rather than <code>T</code> through your
+      own call chain.</p>
+    </div>
+  </div>
+
+  <h3 style="margin-top:32px">The other direction: <code>u64toa</code></h3>
+  <p>Serializing is the half people forget. Every outbound order stamps an id, a quantity and a price
+  into a buffer, and the obvious tools are both terrible: <code>snprintf</code> parses a format string
+  and consults the locale at run time, and <code>std::to_string</code> allocates a
+  <code>std::string</code> and destroys it. Twenty lines beat both. Step the digits.</p>
+
+  <div class="split" style="margin-top:14px">
+    <div class="panel">
+      <h3>Reverse-then-flip, one digit per step</h3>
+      <div class="ctl"><label for="uaIn">Value to convert <b id="uaLen">—</b></label>
+        <input type="text" id="uaIn" value="18446744073709551615" spellcheck="false" aria-label="Unsigned 64-bit value to convert to ASCII"/></div>
+      <div class="row" style="margin-bottom:12px">
+        <button class="btn" id="uaZero" type="button" aria-label="Use the value zero">v = 0</button>
+        <button class="btn" id="uaMid" type="button" aria-label="Use a mid-sized value">v = 1855000</button>
+        <button class="btn" id="uaMax" type="button" aria-label="Use UINT64_MAX">v = UINT64_MAX</button>
+      </div>
+      <h4>Scratch buffer <code>tmp[20]</code> — least significant digit first</h4>
+      <div class="digits" id="uaTmp" style="margin:6px 0 14px"></div>
+      <h4>Caller's buffer <code>out</code> — flipped, most significant first</h4>
+      <div class="digits" id="uaOut" style="margin:6px 0 14px"></div>
+      <div class="row">
+        <button class="btn primary" id="uaStep" type="button" aria-label="Run one loop iteration">Iteration →</button>
+        <button class="btn" id="uaAll" type="button" aria-label="Run to completion">Run to end</button>
+        <button class="btn" id="uaReset" type="button" aria-label="Reset the walkthrough">Reset</button>
+      </div>
+      <div class="steps" id="uaLog" style="margin-top:13px" aria-live="polite"></div>
+    </div>
+    <div class="stack">
+      <div class="panel tight"><h3>ns per conversion</h3>
+        <div class="bars" id="uaBars"></div>
+        <p class="sub" style="margin-top:10px">The grader checks <code>0, 7, 12345, 1000000,
+        9999999999, UINT64_MAX</code>, fuzzes 200,000 values against <code>std::to_string</code>, and
+        prints your <code>u64toa_ns_per_op</code> next to
+        <code>std_to_string_ns_per_op</code>.</p>
+      </div>
+      <div class="note" id="uaNote"></div>
+      <div class="panel tight"><h3>Why <code>do</code>/<code>while</code>, not <code>while</code></h3>
+        <p class="sub">A <code>while (v)</code> loop emits nothing for <code>v == 0</code> and returns
+        length zero, so your order id prints as an empty string and the venue rejects the message. A
+        <code>do</code>/<code>while</code> runs the body once regardless, so <code>0</code> becomes
+        <code>"0"</code>. It is a one-word fix and it is the first edge case the grader checks.</p>
+      </div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:32px">Skipping the kernel entirely: shared memory</h3>
+  <p>Two processes on one box do not need a network stack to talk. A ring in a shared-memory region —
+  the starter's <code>shm_ring.hpp</code> — is the same SPSC structure from Week 10 with one extra
+  constraint: <strong>no pointers</strong>, because the region maps at a different address in each
+  process. Compare it against the alternatives.</p>
+
+  <div class="split-r" style="margin-top:14px">
+    <div class="panel">
+      <h3>Hand a message to another process</h3>
+      <div class="ctl"><label for="shSize">Message size <b id="shSizeV">64 B</b></label>
+        <input type="range" id="shSize" min="8" max="4096" value="64" aria-label="Message size in bytes"/></div>
+      <div class="bars" id="shBars"></div>
+      <div class="legend" style="margin-top:12px">
+        <span><i style="background:#7c3aed"></i>shared-memory ring</span>
+        <span><i style="background:#6cb6ff"></i>Unix domain socket</span>
+        <span><i style="background:#d29922"></i>TCP loopback</span>
+        <span><i style="background:#f85149"></i>TCP over the wire</span>
+      </div>
+      <p class="sub" style="margin-top:12px" id="shCap"></p>
+    </div>
+    <div class="stack">
+      <div class="panel tight"><h3>Per message</h3>
+        <div class="stats">
+          <div class="stat"><div class="sl">Shared memory</div><div class="sv acc" id="shShm">—</div></div>
+          <div class="stat"><div class="sl">TCP loopback</div><div class="sv" id="shTcp">—</div></div>
+          <div class="stat"><div class="sl">Speed-up</div><div class="sv ok" id="shRel">—</div></div>
+          <div class="stat"><div class="sl">Syscalls · copies</div><div class="sv" id="shSys">—</div></div>
+        </div>
+      </div>
+      <pre class="code">// Project Phase 4 — a POD ring in a shared region.
+// NO pointers: they mean different things in
+// each process. Offsets and indices only.
+<span class="k">struct</span> ShmRing {
+  <span class="k">static</span> <span class="k">constexpr</span> uint32_t CAPACITY = <span class="n">1024</span>;
+  <span class="k">void</span> init();                  <span class="c">// creator, pre-fork</span>
+  <span class="k">bool</span> push(uint64_t v);         <span class="c">// producer process</span>
+  <span class="k">bool</span> pop(uint64_t&amp; out);       <span class="c">// consumer process</span>
+  std::atomic&lt;uint32_t&gt; head, tail;
+  uint64_t buf[CAPACITY];
+};</pre>
+      <div class="note" id="shNote"></div>
+    </div>
+  </div>
+  <p class="sub" style="margin-top:10px">Two details that catch everyone. First,
+  <code>std::atomic&lt;uint32_t&gt;</code> is fine across processes only because it is lock-free and
+  address-free on every platform you will use — check <code>is_always_lock_free</code> and do not put a
+  <code>std::mutex</code> in shared memory. Second, the struct must be standard-layout and contain no
+  pointers, no <code>std::vector</code>, no <code>std::string</code>: the region maps at a different
+  virtual address in each process, so a pointer written by one is garbage to the other. Indices are
+  position-independent; addresses are not.</p>
+</section>
+
+<!-- ══════════════ PITFALLS ══════════════ -->
+<section id="pitfalls">
+  <div class="kicker">Part 4</div>
+  <h2><span class="secnum">4</span>Five ways this goes wrong</h2>
+  <p class="lead">Two of these hang, two of them lie, and one of them corrupts memory. Open them.</p>
+
+  <details class="pit"><summary>Edge-triggered, one <code>recv</code> per event — and the connection hangs</summary>
+    <div class="body">
+      <p>You registered with <code>EPOLLET</code> because it was described as the fast option, then wrote
+      the obvious handler: one <code>recv</code>, process it, return to <code>epoll_wait</code>. Three
+      messages arrive in one segment. You read the first. The socket is still readable, but it did not
+      <em>become</em> readable again, so no further event fires — and the remaining two messages sit in
+      the kernel buffer forever while your loop waits patiently for nothing.</p>
+      <p>It is worse than a plain hang, because it is load-dependent. At low rates one message per
+      segment is the norm and everything works; at high rates messages coalesce and the connection
+      stalls. So this bug appears exactly when the system is busy.</p>
+      <p class="fix">Fix: with edge-triggering, always <code>for (;;) recv(...)</code> until it returns
+      <code>-1</code> with <code>EAGAIN</code>. If you do not want that obligation, use level-triggering,
+      which will simply re-notify you — a handful of extra wake-ups is a cheap price for a loop you
+      cannot deadlock.</p>
+    </div></details>
+
+  <details class="pit"><summary><code>EAGAIN</code> is treated as an error and the connection is closed</summary>
+    <div class="body">
+      <p>The mirror-image bug. On a non-blocking socket, <code>recv</code> returning <code>-1</code> with
+      <code>errno == EAGAIN</code> (or <code>EWOULDBLOCK</code>) means &ldquo;nothing right now&rdquo; —
+      the single most common outcome, and completely normal. Code that treats every negative return as
+      fatal tears down healthy connections under light load.</p>
+      <p>The neighbouring case is <code>EINTR</code>: the call was interrupted by a signal and must
+      simply be retried. And <code>recv</code> returning <code>0</code> is not an error at all — it is an
+      orderly peer close, which is a different code path from a failure.</p>
+      <p class="fix">Fix: three explicit branches. <code>n &gt; 0</code> is data;
+      <code>n == 0</code> is peer close; <code>n &lt; 0</code> splits into <code>EAGAIN</code> /
+      <code>EWOULDBLOCK</code> (stop reading, return to the loop), <code>EINTR</code> (retry), and
+      everything else (real error, close). Never a bare <code>if (n &lt; 0) close(fd);</code>.</p>
+    </div></details>
+
+  <details class="pit"><summary>A <code>string_view</code> outlives the buffer it points into</summary>
+    <div class="body">
+      <p>You did the right thing and switched to views instead of strings — then stored one in a member
+      to use on the next tick. The next <code>recv</code> overwrites the buffer, or your framing loop
+      compacts the partial tail forward, and the view now describes bytes that mean something else
+      entirely. There is no crash and no warning: the symbol field just becomes a fragment of the
+      following message.</p>
+      <p>The subtler version is a view returned from a function whose buffer was a local. That one at
+      least has a chance of being caught by <code>-Wdangling</code> or a sanitizer, but only sometimes.</p>
+      <p class="fix">Fix: treat a view as valid only within the callback that received the frame. If you
+      must keep a value, copy it into a fixed <code>char[16]</code> — the same choice the starter's
+      <code>NewOrder</code> makes for <code>symbol</code> while keeping <code>clordid</code> a view.
+      Run the build under ASan with a compaction step and it will find these immediately.</p>
+    </div></details>
+
+  <details class="pit"><summary>The benchmark says the fast codec wins, and production disagrees</summary>
+    <div class="body">
+      <p>You timed both codecs in a tight loop over the same frame two million times. The frame is in L1,
+      the branch predictor has learned it, and the allocator's free list is perfectly warm — so the DOM
+      parser looks only three times slower instead of ten, and your targeted extract looks like a modest
+      win. Then you deploy, every frame is cold, and the real gap appears.</p>
+      <p>The opposite error is just as common: reporting a mean. A codec that allocates has a bimodal
+      distribution, and the mean sits in the empty valley between the two modes, describing nothing that
+      ever happens.</p>
+      <p class="fix">Fix: benchmark on a replay tape of real frames, not one frame repeated. Report p50,
+      p99 and p99.9 side by side. And use the same harness the grade uses —
+      <code>latency_replay.py</code> feeding your bot, then <code>latency_report.py</code> — so you are
+      optimising the number you are scored on.</p>
+    </div></details>
+
+  <details class="pit"><summary>A <code>std::string</code> is put in the shared-memory ring</summary>
+    <div class="body">
+      <p>The ring itself is correct, the atomics are right, and the payload type is
+      <code>std::string</code> — which holds a pointer into the writing process's heap. The reading
+      process maps the region at a different virtual address, dereferences that pointer, and either
+      reads unrelated memory or takes a fault. The same applies to <code>std::vector</code>, any type
+      with a vtable, and any struct holding a pointer to something else in the region.</p>
+      <p>The related trap is a <code>std::mutex</code> in the region. It is not required to be
+      process-shareable, and on some platforms it stores a thread id or an address, so it silently fails
+      to provide mutual exclusion across processes.</p>
+      <p class="fix">Fix: the payload must be a POD — fixed-size, standard-layout, no pointers, no
+      virtuals. Store offsets rather than addresses if you need indirection, use
+      <code>std::atomic</code> types whose <code>is_always_lock_free</code> is true, and
+      <code>static_assert(std::is_standard_layout_v&lt;T&gt;)</code> on the payload so the compiler
+      enforces it for you.</p>
+    </div></details>
+</section>
+
+<!-- ══════════════ CHECK ══════════════ -->
+<section id="check">
+  <div class="kicker">Part 5</div>
+  <h2><span class="secnum">5</span>Check yourself</h2>
+  <p class="lead">Three questions, instant feedback, nothing recorded.</p>
+
+  <div class="mcq" data-a="2" data-exp="<b>Because select and poll cost O(registered) while epoll costs O(ready).</b> select and poll hand the kernel the entire interest set on every single call and get the entire set back, so the kernel walks 10,000 descriptors to tell you about the 20 that matter — and your code then walks them again looking for the flags. epoll registers interest once with epoll_ctl and epoll_wait returns only the ready descriptors, so the per-wake-up cost tracks activity rather than fleet size. At 0.2 % activity that is a fifty-fold difference. Note that this is not about which syscall is individually faster, and it is not about a descriptor limit: select's FD_SETSIZE ceiling is a real annoyance but poll does not have it and is still O(n).">
+    <p class="q"><span>Q1</span>You have 10,000 registered connections and about 20 are readable on any given wake-up. Why does <code>epoll</code> beat <code>poll</code> here?</p>
+    <div class="opts">
+      <button class="opt" type="button">Because <code>epoll</code> uses edge-triggering and <code>poll</code> cannot</button>
+      <button class="opt" type="button">Because <code>poll</code> is limited to 1,024 descriptors by <code>FD_SETSIZE</code></button>
+      <button class="opt" type="button">Because <code>poll</code>'s cost grows with registered descriptors while <code>epoll</code>'s grows with ready ones</button>
+      <button class="opt" type="button">Because <code>epoll</code> performs the reads for you, so there is one syscall instead of two</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+
+  <div class="mcq" data-a="0" data-exp="<b>It runs the body once even when v == 0, so zero renders as \"0\".</b> A while (v) loop tests first, emits nothing for zero, and returns a length of zero — so your order id serializes to an empty string and the venue rejects the message. The grader checks 0 as its very first edge case for exactly this reason. The other answers describe real properties of the routine but not of the do/while: tmp[20] is what makes UINT64_MAX safe (20 decimal digits), the reverse-then-flip structure comes from % 10 yielding the least significant digit first, and the two-digit lookup table is a separate optimisation that halves the number of divisions.">
+    <p class="q"><span>Q2</span>Why must <code>u64toa</code>'s digit loop be a <code>do</code>/<code>while</code> rather than a <code>while</code>?</p>
+    <div class="opts">
+      <button class="opt" type="button">So the body runs once even for <code>v == 0</code>, which would otherwise produce a zero-length result</button>
+      <button class="opt" type="button">So the scratch buffer is guaranteed large enough for <code>UINT64_MAX</code></button>
+      <button class="opt" type="button">So the digits come out most-significant-first and no reversal is needed</button>
+      <button class="opt" type="button">So the compiler can apply the two-digit lookup-table optimisation</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+
+  <div class="mcq" data-a="3" data-exp="<b>Because it holds messages back to group them, and that hold is latency you added.</b> Batching amortises a fixed per-call cost over N messages, which is a genuine throughput win — one syscall for 64 datagrams instead of 64. But the only way to have 64 messages to fetch is to wait until 64 exist, and on a tick path that wait is the number you are graded on. The correct policy is to batch the cold path (logging, telemetry, position snapshots) where nobody is timing you, and to send and receive the hot path immediately. Nagle's algorithm is the same trade made for you by the kernel, which is why TCP_NODELAY belongs on every order socket. Note that recvmmsg is not more expensive per call, and it does not reorder anything.">
+    <p class="q"><span>Q3</span><code>recvmmsg</code> with a batch of 64 clearly raises throughput. Why is it usually the wrong default on a market-data socket?</p>
+    <div class="opts">
+      <button class="opt" type="button">Because a batched syscall costs proportionally more kernel time than 64 single ones</button>
+      <button class="opt" type="button">Because messages within a batch can be delivered out of order</button>
+      <button class="opt" type="button">Because it requires level-triggered <code>epoll</code>, which wakes you more often</button>
+      <button class="opt" type="button">Because filling a batch means waiting for messages that do not exist yet — throughput bought with latency</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+</section>
+
+<!-- ══════════════ NEXT ══════════════ -->
+<section id="next">
+  <div class="kicker">Part 6</div>
+  <h2><span class="secnum">6</span>Do the work</h2>
+  <div class="grid2" style="margin-top:14px">
+    <div class="panel"><h4>In the lab (~45–60 min)</h4><ul class="plain">
+      <li>Finish <code>u64toa</code> in <code>include/u64toa.hpp</code> until <code>make u64toa</code>
+      passes <code>u64toa_edges</code> and <code>u64toa_fuzz</code>. Confirm
+      <code>u64toa_ns_per_op</code> beats <code>std_to_string_ns_per_op</code>.</li>
+      <li>Stretch: the two-digit lookup table from step 4 of the lab. Halve the divisions and
+      re-measure.</li>
+      <li>Set <code>O_NONBLOCK</code> on a socket and drain it until <code>EAGAIN</code>. Then read one
+      message per event under edge-triggering and watch the connection stall — that contrast is the
+      lesson.</li>
+      <li>Time <code>nlohmann::json::parse</code> against a targeted extract on one real
+      <code>book_snapshot</code> frame, with warm-up, a sink, and percentiles.</li>
+    </ul></div>
+    <div class="panel"><h4>After the session</h4><ul class="plain">
+      <li>Replace your bot's <code>on_book</code> parse with a targeted extract: scan for the two or
+      three keys you trade on, read them in place with <code>string_view</code>, allocate nothing.</li>
+      <li>Hand-roll the send path for <code>place_order</code> and <code>cancel_order</code> into a
+      reused buffer, using your <code>u64toa</code> for the integer fields.</li>
+      <li>Prove it offline: <code>python scripts/latency_replay.py --cmd
+      "hft/cpp_client/build/hft_bot --replay"</code> then <code>python
+      scripts/latency_report.py</code>. Show the p50 / p99 / p99.9 table for both codecs.</li>
+      <li>Turn in the fast parser and serializer plus both percentile tables. Due at the start of the
+      next session.</li>
+    </ul></div>
+  </div>
+  <div class="nextgrid" style="margin-top:18px">
+    <a class="nextcard" href="https://github.com/sdonadio/hft-cpp-starter-columbia"><div class="nl">Get the code</div>
+      <div class="nt">15-week track starter</div>
+      <div class="nd">Header stubs, the autograder and the C++ arena client, one topic per session.</div></a>
+    <a class="nextcard" href="https://github.com/sdonadio/hft-cpp-starter-uchicago"><div class="nl">Get the code</div>
+      <div class="nt">9-session track starter</div>
+      <div class="nd">The same stubs and the same grader, packaged for the condensed nine-session schedule.</div></a>
+    <a class="nextcard" href="week11.html"><div class="nl">Back</div>
+      <div class="nt">← Week 11 · Network Protocols &amp; Market Data</div>
+      <div class="nd">What the bytes mean, and how you find out that you missed some.</div></a>
+    <a class="nextcard" href="week13.html"><div class="nl">Next</div>
+      <div class="nt">Week 13 · Low-Latency Design — SIMD &amp; Kernel Bypass →</div>
+      <div class="nd">The codec is off the critical path. Now attack the syscall and the network stack.</div></a>
+  </div>
+</section>
+
+
+<footer>Low-Latency Trading Arena · an interactive companion for a course on low-latency trading systems in C++ · <a href="https://github.com/sdonadio/low-latency-trading-arena">Source</a></footer>
+
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════
+   Week 12 — Async I/O & Serialization
+   ════════════════════════════════════════════════════════════════ */
+var $ = function (id) { return document.getElementById(id); };
+/* SVG namespace taken from the document so no absolute URL appears in this file */
+var SVGNS = $("elSvg").namespaceURI;
+function mk(tag, attrs, txt) {
+  var e = document.createElementNS(SVGNS, tag), k;
+  for (k in attrs) if (Object.prototype.hasOwnProperty.call(attrs, k)) e.setAttribute(k, attrs[k]);
+  if (txt !== undefined) e.textContent = txt;
+  return e;
+}
+function clear(n) { while (n.firstChild) n.removeChild(n.firstChild); }
+function f1(x) { return (Math.round(x * 10) / 10).toFixed(1); }
+function f2(x) { return (Math.round(x * 100) / 100).toFixed(2); }
+function nsFmt(ns) {
+  if (ns < 1000) return f1(ns) + " ns";
+  if (ns < 1000000) return f1(ns / 1000) + " µs";
+  return f2(ns / 1000000) + " ms";
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   1 · Event-loop widget
+   ───────────────────────────────────────────────────────────────── */
+var EL = {
+  elBlock: { name: "thread per connection", perReg: 0, perReady: 0, ctx: 3.2, thr: "one per connection",
+    code: "// one thread each, all of them blocked in the kernel\nvoid worker(int fd) {\n  for (;;) {\n    ssize_t n = ::recv(fd, buf, sizeof buf, 0);  // BLOCKS\n    if (n <= 0) break;\n    handle(buf, n);\n  }\n}" },
+  elSelect: { name: "select", perReg: 0.014, perReady: 0.02, ctx: 0, thr: "one",
+    code: "fd_set rd; FD_ZERO(&rd);\nfor (int fd : fds_) FD_SET(fd, &rd);      // O(n) to build\nint n = ::select(maxfd_ + 1, &rd, 0, 0, &tv);\nfor (int fd : fds_)                       // O(n) to read back\n  if (FD_ISSET(fd, &rd)) on_readable(fd);\n// plus FD_SETSIZE = 1024 on most platforms" },
+  elPoll: { name: "poll", perReg: 0.008, perReady: 0.02, ctx: 0, thr: "one",
+    code: "// pfds_ is rebuilt (or at least re-scanned) every call\nint n = ::poll(pfds_.data(), pfds_.size(), timeout_ms);\nfor (auto& p : pfds_)                     // O(n) to find them\n  if (p.revents & POLLIN) on_readable(p.fd);\n// no FD_SETSIZE limit — still O(registered)" },
+  elEpoll: { name: "epoll / kqueue", perReg: 0, perReady: 0.03, ctx: 0, thr: "one",
+    code: "// register ONCE per connection\nepoll_ctl(ep_, EPOLL_CTL_ADD, fd, &ev);\n\n// then, every wake-up: only the ready ones come back\nint n = ::epoll_wait(ep_, evs_, MAX_EVENTS, timeout_ms);\nfor (int i = 0; i < n; ++i)               // O(ready)\n  on_readable(evs_[i].data.fd);" }
+};
+var elSel = "elEpoll";
+/* multiplexing overhead only, in microseconds — the recv and the handler
+   are charged separately so the O(n) vs O(ready) shape stays visible */
+function elOver(mech, nConn, nReady) {
+  var m = EL[mech];
+  if (mech === "elBlock") return nReady * m.ctx;
+  return nConn * m.perReg + nReady * m.perReady;
+}
+function elRender() {
+  var nConn = parseInt($("elN").value, 10) * 10;
+  var pct = parseInt($("elAct").value, 10);
+  var work = parseInt($("elWork").value, 10) / 10;
+  var nReady = Math.max(1, Math.round(nConn * pct / 100));
+  $("elNV").textContent = nConn.toLocaleString("en-US");
+  $("elN2").textContent = nConn.toLocaleString("en-US");
+  $("elActV").textContent = pct + " %";
+  $("elWorkV").textContent = f1(work) + " µs";
+  Object.keys(EL).forEach(function (k) { $(k).setAttribute("aria-pressed", k === elSel ? "true" : "false"); });
+
+  /* fd grid — 64 cells standing in for the fleet */
+  var grid = $("elFds"); clear(grid);
+  var cells = 64, readyCells = Math.max(1, Math.round(cells * pct / 100)), i;
+  var pick = {};
+  for (i = 0; i < readyCells; i++) pick[Math.floor((i * 7 + 3) % cells)] = true;
+  for (i = 0; i < cells; i++) {
+    var d = document.createElement("div");
+    var scanned = (elSel === "elSelect" || elSel === "elPoll");
+    d.className = "fd" + (pick[i] ? " ready" : "") + (scanned ? " scan" : "");
+    d.textContent = pick[i] ? "●" : "·";
+    d.title = pick[i] ? "fd " + i + " — readable" : "fd " + i + " — idle";
+    grid.appendChild(d);
+  }
+
+  var m = EL[elSel];
+  var oh = elOver(elSel, nConn, nReady);
+  var wk = nReady * (0.6 + work);          /* one recv (~600 ns) + your handler */
+  var total = oh + wk;
+  $("elOh").textContent = nsFmt(oh * 1000);
+  $("elWk").textContent = nsFmt(wk * 1000);
+  $("elLast").textContent = nsFmt(total * 1000);
+  $("elThr").textContent = elSel === "elBlock" ? nConn.toLocaleString("en-US") : "1";
+  $("elCode").textContent = m.code;
+
+  var svg = $("elSvg"), W = 540, H = 210, L = 52, R = 12, T = 12, B = 34;
+  clear(svg);
+  var lo = Math.log10(0.02), hi = Math.log10(400);
+  function px(n) { return L + Math.log10(Math.max(10, n) / 10) / Math.log10(200) * (W - L - R); }
+  function py(us) { return T + (1 - (Math.log10(Math.max(0.02, us)) - lo) / (hi - lo)) * (H - T - B); }
+  [0.1, 1, 10, 100].forEach(function (g) {
+    svg.appendChild(mk("line", { x1: L, y1: py(g), x2: W - R, y2: py(g), stroke: "#272c36", "stroke-width": "1" }));
+    svg.appendChild(mk("text", { x: L - 6, y: py(g) + 3.5, fill: "#5f6673", "font-size": "9", "font-family": "monospace", "text-anchor": "end" }, (g < 1 ? "0.1" : String(g)) + " µs"));
+  });
+  svg.appendChild(mk("text", { x: 4, y: 10, fill: "#5f6673", "font-size": "8.5", "font-family": "monospace" }, "wake-up"));
+  [10, 100, 1000, 2000].forEach(function (g) {
+    svg.appendChild(mk("text", { x: px(g), y: H - 16, fill: "#5f6673", "font-size": "9", "font-family": "monospace", "text-anchor": "middle" }, g.toLocaleString("en-US")));
+  });
+  svg.appendChild(mk("text", { x: (L + W - R) / 2, y: H - 3, fill: "#5f6673", "font-size": "9", "font-family": "monospace", "text-anchor": "middle" }, "registered connections"));
+  function series(key, col) {
+    var d = "", n, first = true;
+    for (n = 10; n <= 2000; n = Math.round(n * 1.22)) {
+      var r = Math.max(1, Math.round(n * pct / 100));
+      var y = py(elOver(key, n, r));
+      d += (first ? "M " : " L ") + f1(px(n)) + " " + f1(y);
+      first = false;
+    }
+    svg.appendChild(mk("path", { d: d, stroke: col, "stroke-width": key === elSel ? "2.4" : "1.4", fill: "none",
+      opacity: key === elSel ? "1" : "0.5" }));
+  }
+  series("elSelect", "#f85149");
+  series("elPoll", "#fb8f8a");
+  series("elEpoll", "#7c3aed");
+  series("elBlock", "#d29922");
+  svg.appendChild(mk("line", { x1: px(nConn), y1: T, x2: px(nConn), y2: H - B, stroke: "#c4b5fd", "stroke-width": "1", "stroke-dasharray": "3 3" }));
+  svg.appendChild(mk("circle", { cx: px(nConn), cy: py(oh), r: 4.5, fill: "#c4b5fd", stroke: "#0f1115", "stroke-width": "1.5" }));
+
+  var note = $("elNote");
+  if (elSel === "elBlock") {
+    note.innerHTML = "<b>" + nConn.toLocaleString("en-US") + " threads.</b> Each one costs 8 MB of " +
+      "virtual stack and a scheduler entry, and every message costs a context switch — about 3 µs of " +
+      "pure overhead that no amount of optimising your handler removes. It is also unbounded: a spike in " +
+      "connections is a spike in kernel memory. This model is fine for a dozen sockets and hopeless for " +
+      "a thousand.";
+  } else if (elSel === "elEpoll") {
+    note.innerHTML = "<b>Registered once, notified selectively.</b> " + nReady.toLocaleString("en-US") +
+      " ready of " + nConn.toLocaleString("en-US") + " registered, so the wake-up overhead is " +
+      nsFmt(oh * 1000) + " and the rest is the recv plus your own handler. This is why one pinned thread can serve a " +
+      "whole fleet — and why the thing to optimise next is the handler, not the loop.";
+  } else {
+    var ep = elOver("elEpoll", nConn, nReady);
+    note.innerHTML = "<b>" + m.name + " pays for descriptors it is not going to tell you about.</b> " +
+      "Building and re-scanning " + nConn.toLocaleString("en-US") + " entries costs " +
+      nsFmt(nConn * m.perReg * 1000) + " per wake-up before a single byte is read — " +
+      f1(oh / Math.max(0.001, ep)) + "× epoll's multiplexing cost here." +
+      (elSel === "elSelect" ? " <code>select</code> additionally caps out at <code>FD_SETSIZE</code>, " +
+        "typically 1,024, and silently corrupts memory if you exceed it." : "");
+  }
+}
+Object.keys(EL).forEach(function (k) { $(k).addEventListener("click", function () { elSel = k; elRender(); }); });
+["elN", "elAct", "elWork"].forEach(function (id) { $(id).addEventListener("input", elRender); });
+elRender();
+
+/* ─────────────────────────────────────────────────────────────────
+   2 · Edge vs level triggering
+   ───────────────────────────────────────────────────────────────── */
+var ET_MSGS = [40, 40, 40];      /* three 40-byte messages arriving in one segment */
+var et = { mode: "level", drain: false, kern: 120, done: 0, wake: 0, log: [], stuck: false, started: false };
+function etRender() {
+  $("etLevel").setAttribute("aria-pressed", et.mode === "level" ? "true" : "false");
+  $("etEdge").setAttribute("aria-pressed", et.mode === "edge" ? "true" : "false");
+  $("etDrainTg").className = "tg" + (et.drain ? " on" : "");
+  $("etDrain").checked = et.drain;
+  $("etKern").textContent = et.kern + " B";
+  $("etDone").textContent = et.done + " / 3";
+  $("etWake").textContent = et.wake;
+  var stuck = et.kern > 0 && et.mode === "edge" && !et.drain && et.started;
+  $("etState").textContent = et.kern === 0 ? "idle" : stuck ? "STALLED" : "readable";
+  $("etState").className = "sv " + (et.kern === 0 ? "ok" : stuck ? "bad" : "warn");
+  var v = $("etVerdict");
+  if (stuck) { v.textContent = "DEADLOCK — " + (3 - et.done) + " message(s) unreachable"; v.className = "verdict miss"; }
+  else if (et.done === 3) { v.textContent = "ALL DELIVERED in " + et.wake + " wake-up(s)"; v.className = "verdict met"; }
+  else { v.textContent = "in progress"; v.className = "verdict"; }
+  var log = $("etLog"); clear(log);
+  et.log.slice(-7).forEach(function (l, k, a) {
+    var e = document.createElement("div");
+    e.className = /STALL|no event|never/.test(l) ? "bad" : (/EAGAIN|delivered all/.test(l) ? "ok" : (k === a.length - 1 ? "on" : "past"));
+    e.textContent = l;
+    log.appendChild(e);
+  });
+  $("etCode").textContent = et.drain
+    ? "// correct for BOTH modes\nvoid on_readable(int fd) {\n  for (;;) {\n    ssize_t n = ::recv(fd, buf_ + len_, cap_ - len_, 0);\n    if (n > 0) { len_ += n; continue; }\n    if (n < 0 && errno == EAGAIN) break;   // drained\n    if (n == 0) { close(fd); return; }     // peer closed\n    if (n < 0 && errno == EINTR) continue; // retry\n    close(fd); return;                     // real error\n  }\n  frame_and_dispatch();\n}"
+    : "// one recv per event — safe ONLY level-triggered\nvoid on_readable(int fd) {\n  ssize_t n = ::recv(fd, buf_ + len_, cap_ - len_, 0);\n  if (n > 0) { len_ += n; frame_and_dispatch(); }\n  else if (n == 0) close(fd);\n  // and then straight back to epoll_wait()\n}";
+  var note = $("etNote");
+  if (stuck) {
+    note.innerHTML = "<b>This is the bug, and it is load-dependent.</b> Edge-triggered means the event " +
+      "fires when the socket <em>becomes</em> readable. It already did that once, and it will not do it " +
+      "again until new data arrives — so " + et.kern + " bytes sit in the kernel buffer and your loop " +
+      "waits forever. At low rates one message per segment is normal and this code works; at high rates " +
+      "messages coalesce and the connection stalls. <em class='hi'>The bug appears exactly when the " +
+      "system is busy.</em>";
+  } else if (et.mode === "level" && !et.drain) {
+    note.innerHTML = "<b>Level-triggered forgives you.</b> The socket is <em>still</em> readable, so " +
+      "<code>epoll_wait</code> returns immediately and hands you the same descriptor again. You get " +
+      "there in three wake-ups instead of one — a few hundred nanoseconds of extra syscall — and you " +
+      "cannot deadlock. For most code that is the right trade.";
+  } else if (et.drain) {
+    note.innerHTML = "<b>Draining to <code>EAGAIN</code> is correct in both modes.</b> One wake-up, one " +
+      "<code>recv</code> loop, everything consumed. Note that <code>EAGAIN</code> here is not an error " +
+      "and not an edge case — it is the <em>normal</em> way this loop terminates, and code that treats a " +
+      "negative return as fatal will close a perfectly healthy connection.";
+  } else {
+    note.innerHTML = "<b>Press the button.</b> Three 40-byte messages arrive in a single TCP segment — " +
+      "the ordinary case at any real message rate. Watch what each trigger mode does about it.";
+  }
+}
+function etStep() {
+  et.started = true;
+  if (et.kern === 0) { et.log.push("epoll_wait: nothing ready; loop idles"); etRender(); return; }
+  if (et.mode === "edge" && et.wake >= 1 && !et.drain) {
+    et.log.push("epoll_wait: no event — the socket did not BECOME readable again");
+    et.log.push("STALLED: " + et.kern + " bytes unreachable, " + (3 - et.done) + " message(s) never delivered");
+    etRender(); return;
+  }
+  et.wake++;
+  et.log.push("epoll_wait -> fd readable (wake-up " + et.wake + ")");
+  if (et.drain) {
+    var reads = 0;
+    while (et.kern > 0) { et.kern -= 40; et.done++; reads++; et.log.push("  recv -> 40 B  (message " + et.done + ")"); }
+    et.log.push("  recv -> -1 EAGAIN after " + reads + " read(s): socket drained");
+    et.log.push("delivered all 3 messages in " + et.wake + " wake-up");
+  } else {
+    et.kern -= 40; et.done++;
+    et.log.push("  recv -> 40 B  (message " + et.done + "); return to epoll_wait");
+  }
+  etRender();
+}
+function etReset() {
+  et.kern = 120; et.done = 0; et.wake = 0; et.stuck = false; et.started = false;
+  et.log = ["// 120 bytes = 3 x 40-byte messages arrive in ONE segment"];
+  etRender();
+}
+$("etStep").addEventListener("click", etStep);
+$("etReset").addEventListener("click", etReset);
+$("etLevel").addEventListener("click", function () { et.mode = "level"; etReset(); });
+$("etEdge").addEventListener("click", function () { et.mode = "edge"; etReset(); });
+$("etDrain").addEventListener("change", function () { et.drain = $("etDrain").checked; etReset(); });
+etReset();
+
+/* ─────────────────────────────────────────────────────────────────
+   3 · Syscall budget: busy-poll vs wait, and recvmmsg batching
+   ───────────────────────────────────────────────────────────────── */
+var SY = {
+  syWait: { name: "epoll_wait, then recv", wake: 620, idleCpu: "≈ 0 %",
+    code: "int n = ::epoll_wait(ep_, evs_, MAX, -1);   // ~620 ns\nfor (int i = 0; i < n; ++i)\n  drain(evs_[i].data.fd);                  // ~600 ns / recv",
+    note: "<b>Two kernel transitions per wake-up.</b> One for <code>epoll_wait</code> and one (at least) " +
+      "for the <code>recv</code>. About 1.2 µs of overhead before your handler runs, and the thread " +
+      "sleeps between messages so the core is available for other work. This is the correct default for " +
+      "everything except the one socket you are graded on." },
+  syPoll: { name: "busy-poll recv", wake: 0, idleCpu: "100 %",
+    code: "for (;;) {                                 // no epoll at all\n  ssize_t n = ::recv(fd, buf_, cap_, 0);   // ~600 ns, mostly EAGAIN\n  if (n > 0) { handle(buf_, n); continue; }\n  if (errno == EAGAIN) continue;           // spin\n}",
+    note: "<b>You removed <code>epoll_wait</code> and kept the <code>recv</code>.</b> That saves about " +
+      "620 ns of latency per message and costs a whole core, because the loop calls <code>recv</code> " +
+      "flat out and gets <code>EAGAIN</code> almost every time. Worth it on a dedicated core for a " +
+      "single hot socket; absurd for a fleet." },
+  syBusyKern: { name: "SO_BUSY_POLL", wake: 180, idleCpu: "≈ 70 %",
+    code: "int us = 50;\n::setsockopt(fd, SOL_SOCKET, SO_BUSY_POLL, &us, sizeof us);\n// the KERNEL polls the NIC queue inside recv instead of\n// sleeping — the wake-up path skips the interrupt entirely",
+    note: "<b>The kernel does the spinning for you.</b> <code>SO_BUSY_POLL</code> makes " +
+      "<code>recv</code> poll the device queue directly for a bounded number of microseconds, skipping " +
+      "the interrupt and softirq path. You get most of the latency win of a user-space spin while " +
+      "keeping one thread and one socket API — and it is the last stop before kernel bypass, which is " +
+      "next session." }
+};
+var sySel = "syWait";
+function syRender() {
+  var rate = parseInt($("syRate").value, 10);
+  var batch = parseInt($("syBatch").value, 10);
+  $("syRateV").textContent = rate + " k/s";
+  $("syBatchV").textContent = batch;
+  Object.keys(SY).forEach(function (k) { $(k).setAttribute("aria-pressed", k === sySel ? "true" : "false"); });
+  var d = SY[sySel];
+  var recvNs = 600;
+  var interArrivalUs = 1000 / rate;                        /* µs between messages */
+  /* to fill a batch of `batch` you must wait for batch-1 more arrivals */
+  var addedQueueUs = (batch - 1) * interArrivalUs / 2;
+  var syscallsPerMsg = 1 / batch + (sySel === "syWait" ? 1 / batch : 0);
+  var kernelNs = (recvNs + (batch - 1) * 60) / batch + (sySel === "syWait" ? d.wake / batch : 0);
+  if (sySel === "syPoll") kernelNs = recvNs / batch + (batch - 1) * 60 / batch;
+  if (sySel === "syBusyKern") kernelNs = (recvNs + d.wake + (batch - 1) * 60) / batch;
+  var total = kernelNs + addedQueueUs * 1000;
+
+  var bars = $("syBars"); clear(bars);
+  var rows = [
+    ["kernel overhead", kernelNs, "#7c3aed"],
+    ["added queueing", addedQueueUs * 1000, "#d29922"],
+    ["total per message", total, total > 2000 ? "#f85149" : "#3fb950"]
+  ];
+  var maxV = Math.max(2500, total * 1.1);
+  rows.forEach(function (r, i) {
+    var row = document.createElement("div"); row.className = "bar" + (i === 2 ? " win" : "");
+    var l = document.createElement("div"); l.className = "bl"; l.textContent = r[0];
+    var t = document.createElement("div"); t.className = "bt";
+    var f = document.createElement("i"); f.style.background = r[2];
+    f.style.width = Math.min(100, r[1] / maxV * 100) + "%";
+    t.appendChild(f);
+    var v = document.createElement("div"); v.className = "bv"; v.textContent = nsFmt(r[1]);
+    row.appendChild(l); row.appendChild(t); row.appendChild(v);
+    bars.appendChild(row);
+  });
+  $("syCap").textContent = "At " + rate + " k msg/s the mean gap between messages is " +
+    f1(interArrivalUs) + " µs. " + (batch === 1
+      ? "No batching: one recv per message, so nothing is held back."
+      : "A batch of " + batch + " must wait for " + (batch - 1) +
+        " more arrivals before the syscall can return full.");
+  $("sySys").textContent = f2(syscallsPerMsg);
+  $("syOh").textContent = nsFmt(kernelNs);
+  $("syQ").textContent = addedQueueUs === 0 ? "none" : nsFmt(addedQueueUs * 1000);
+  $("syQ").className = "sv " + (addedQueueUs * 1000 > kernelNs ? "bad" : addedQueueUs > 0 ? "warn" : "ok");
+  $("syCpu").textContent = d.idleCpu;
+  $("syTotal").textContent = nsFmt(total);
+  $("syCode").textContent = batch > 1
+    ? "mmsghdr msgs[" + batch + "];                       // one syscall, " + batch + " datagrams\n" +
+      "int n = ::recvmmsg(fd, msgs, " + batch + ", MSG_DONTWAIT, 0);\nfor (int i = 0; i < n; ++i)              // n may be < " + batch + "\n  handle(msgs[i].msg_hdr.msg_iov[0].iov_base,\n         msgs[i].msg_len);"
+    : d.code;
+  var note = $("syNote");
+  if (batch > 1 && addedQueueUs * 1000 > kernelNs) {
+    note.innerHTML = "<b>The batch is now costing more than it saves.</b> You amortised " +
+      nsFmt(recvNs - kernelNs) + " of kernel overhead and paid " + nsFmt(addedQueueUs * 1000) +
+      " of queueing to do it. That is a good trade for a logging pipeline and a losing one for a tick " +
+      "path — <em class='hi'>batch the cold path, send the hot path immediately</em>. Nagle's algorithm " +
+      "is this same trade made for you by the kernel, which is why <code>TCP_NODELAY</code> belongs on " +
+      "every order socket.";
+  } else if (batch > 1) {
+    note.innerHTML = "<b>A batch of " + batch + " at " + rate + " k/s.</b> The rate is high enough that " +
+      (batch - 1) + " more messages are usually already waiting, so <code>recvmmsg</code> returns full " +
+      "and you amortise the syscall for almost nothing. Note the honest caveat: it returns <em>up to</em> " +
+      batch + ", so your loop must handle a short return — and if the rate drops, the same code silently " +
+      "becomes the losing trade above.";
+  } else {
+    note.innerHTML = d.note;
+  }
+}
+Object.keys(SY).forEach(function (k) { $(k).addEventListener("click", function () { sySel = k; syRender(); }); });
+["syRate", "syBatch"].forEach(function (id) { $(id).addEventListener("input", syRender); });
+syRender();
+
+/* ─────────────────────────────────────────────────────────────────
+   4 · Framing under partial reads
+   ───────────────────────────────────────────────────────────────── */
+/* three messages of 6, 4 and 5 payload bytes, arriving in awkward chunks */
+var FR_MSGS = [6, 4, 5];
+var FR_CHUNKS_LEN = [3, 9, 4, 8];       /* bytes delivered per recv, length-prefix mode */
+var FR_CHUNKS_DEL = [3, 8, 3, 5];       /* delimiter mode: payload + '\n' */
+var fr = { mode: "len", i: 0, buf: [], done: 0, scanned: 0, log: [] };
+function frBuild() {
+  /* build the full wire byte list once, tagged by role */
+  var out = [], k;
+  if (fr.mode === "len") {
+    FR_MSGS.forEach(function (n, mi) {
+      for (k = 0; k < 4; k++) out.push({ r: "len", m: mi, t: k === 3 ? String(n) : "00" });
+      for (k = 0; k < n; k++) out.push({ r: "pay", m: mi, t: "b" + k });
+    });
+  } else {
+    FR_MSGS.forEach(function (n, mi) {
+      for (k = 0; k < n; k++) out.push({ r: "pay", m: mi, t: "b" + k });
+      out.push({ r: "len", m: mi, t: "\\n" });
+    });
+  }
+  return out;
+}
+function frRender() {
+  var wire = frBuild();
+  var chunks = fr.mode === "len" ? FR_CHUNKS_LEN : FR_CHUNKS_DEL;
+  var node = $("frBuf"); clear(node);
+  fr.buf.forEach(function (b) {
+    var d = document.createElement("div");
+    d.className = "bb " + (b.r === "len" ? "len" : "pay") + (b.partial ? " part" : "");
+    d.textContent = b.t;
+    node.appendChild(d);
+  });
+  if (fr.buf.length === 0) {
+    var e = document.createElement("div"); e.className = "bb free"; e.textContent = "empty";
+    node.appendChild(e);
+  }
+  $("frLenV").textContent = fr.buf.length;
+  $("frDone").textContent = fr.done;
+  var need = "—";
+  if (fr.buf.length > 0) {
+    if (fr.mode === "len") {
+      need = fr.buf.length < 4
+        ? (4 - fr.buf.length) + " B of header"
+        : (4 + parseInt(fr.buf[3].t, 10) - fr.buf.length) + " B of payload";
+    } else { need = "a '\\n'"; }
+  }
+  $("frTail").textContent = need;
+  $("frScan").textContent = fr.scanned;
+  $("frPill").textContent = "len_ = " + fr.buf.length;
+  $("frStep").disabled = fr.i >= chunks.length;
+  $("frLen").setAttribute("aria-pressed", fr.mode === "len" ? "true" : "false");
+  $("frDelim").setAttribute("aria-pressed", fr.mode === "del" ? "true" : "false");
+  $("frCode").textContent = fr.mode === "len"
+    ? "// length-prefix: one comparison per frame\nsize_t off = 0;\nwhile (len_ - off >= 4) {\n  uint32_t n = be32toh(load32(buf_ + off));\n  if (n > MAX_FRAME) { close(fd); return; }  // sanity\n  if (len_ - off < 4 + n) break;             // incomplete\n  dispatch(buf_ + off + 4, n);\n  off += 4 + n;\n}\nstd::memmove(buf_, buf_ + off, len_ - off);  // compact\nlen_ -= off;"
+    : "// delimiter: a scan of EVERY payload byte\nsize_t off = 0;\nfor (;;) {\n  void* nl = std::memchr(buf_ + off, '\\n', len_ - off);\n  if (!nl) break;                            // incomplete\n  size_t n = (char*)nl - (buf_ + off);\n  dispatch(buf_ + off, n);                   // + unescape\n  off += n + 1;\n}\nstd::memmove(buf_, buf_ + off, len_ - off);\nlen_ -= off;";
+  var log = $("frLog"); clear(log);
+  fr.log.slice(-6).forEach(function (l, k, a) {
+    var e2 = document.createElement("div");
+    e2.className = /incomplete|partial/.test(l) ? "" : (/dispatch/.test(l) ? "ok" : (k === a.length - 1 ? "on" : "past"));
+    e2.textContent = l;
+    log.appendChild(e2);
+  });
+  var note = $("frNote");
+  if (fr.i === 0) {
+    note.innerHTML = "<b>Three messages, four <code>recv</code> calls.</b> None of the chunk boundaries " +
+      "line up with a message boundary — which is the normal case, not a contrived one. Press the button " +
+      "and watch the buffer accumulate, frame, dispatch, and keep the remainder.";
+  } else if (fr.buf.length > 0) {
+    note.innerHTML = "<b>" + fr.buf.length + " bytes of partial tail.</b> This is the state that a naive " +
+      "one-recv-one-message parser gets wrong: it would hand these bytes to the decoder as if they were " +
+      "a whole message. You must keep them, <code>memmove</code> them to the front, and wait.";
+  } else if (fr.done === 3) {
+    note.innerHTML = "<b>All three dispatched, buffer empty.</b> Note the byte counts: length-prefix " +
+      "framing touched " + fr.scanned + " bytes to find three boundaries, while the delimiter version " +
+      "has to <code>memchr</code> every payload byte — and needs an escaping scheme so a newline inside " +
+      "a payload does not split a message in half.";
+  } else {
+    note.innerHTML = "<b>Buffer drained cleanly on this chunk.</b> A boundary happened to align. Keep " +
+      "stepping — the next one will not.";
+  }
+}
+function frStep() {
+  var wire = frBuild();
+  var chunks = fr.mode === "len" ? FR_CHUNKS_LEN : FR_CHUNKS_DEL;
+  if (fr.i >= chunks.length) return;
+  var already = 0, k;
+  for (k = 0; k < fr.i; k++) already += chunks[k];
+  var take = chunks[fr.i];
+  var got = wire.slice(already, already + take);
+  fr.i++;
+  fr.buf = fr.buf.concat(got.map(function (b) { return { r: b.r, m: b.m, t: b.t }; }));
+  fr.log.push("recv -> " + take + " B   (len_ = " + fr.buf.length + ")");
+  /* frame */
+  for (;;) {
+    if (fr.mode === "len") {
+      if (fr.buf.length < 4) { if (fr.buf.length) fr.log.push("  " + fr.buf.length + " B < 4-byte header: incomplete, keep it"); break; }
+      var n = parseInt(fr.buf[3].t, 10);
+      fr.scanned += 4;
+      if (fr.buf.length < 4 + n) { fr.log.push("  header says " + n + " B payload, have " + (fr.buf.length - 4) + ": incomplete"); break; }
+      fr.buf = fr.buf.slice(4 + n);
+      fr.done++;
+      fr.log.push("  dispatch(payload, " + n + ") -> message " + fr.done + "; compact");
+    } else {
+      var idx = -1, j;
+      for (j = 0; j < fr.buf.length; j++) { fr.scanned++; if (fr.buf[j].t === "\\n") { idx = j; break; } }
+      if (idx < 0) { if (fr.buf.length) fr.log.push("  memchr found no '\\n' in " + fr.buf.length + " B: incomplete"); break; }
+      fr.buf = fr.buf.slice(idx + 1);
+      fr.done++;
+      fr.log.push("  dispatch(payload, " + idx + ") -> message " + fr.done + "; compact");
+    }
+  }
+  frRender();
+}
+function frReset() {
+  fr.i = 0; fr.buf = []; fr.done = 0; fr.scanned = 0;
+  fr.log = [fr.mode === "len" ? "// 4-byte length prefix + payload, x3" : "// payload + '\\n' delimiter, x3"];
+  frRender();
+}
+$("frStep").addEventListener("click", frStep);
+$("frReset").addEventListener("click", frReset);
+$("frLen").addEventListener("click", function () { fr.mode = "len"; frReset(); });
+$("frDelim").addEventListener("click", function () { fr.mode = "del"; frReset(); });
+frReset();
+
+/* ─────────────────────────────────────────────────────────────────
+   5 · Serialization race
+   ───────────────────────────────────────────────────────────────── */
+var SZ = [
+  { name: "flat struct memcpy", ns: 9, alloc: 0, copy: 34, tail: 14, col: "#7c3aed",
+    code: "// the binary endgame: the wire IS the struct\nif (n < sizeof(BookTop)) return;\nBookTop t;\nstd::memcpy(&t, p, sizeof t);      // 34 B, one copy\ndouble bid = t.bid_px / 10000.0;   // scaled int -> price",
+    note: "<b>The floor.</b> Nine nanoseconds is a bounds check, a 34-byte copy and two integer " +
+      "divides. You cannot get meaningfully below this, and you cannot use it on the arena's wire — it " +
+      "is here as the reference point that tells you how much of the other three numbers is avoidable " +
+      "rather than intrinsic." },
+  { name: "hand-rolled binary decode", ns: 16, alloc: 0, copy: 0, tail: 24, col: "#3fb950",
+    code: "// no copy at all: read fields where they lie\nconst auto* p = reinterpret_cast<const std::byte*>(frame);\nif (n < 34) return;\nuint32_t bid = be32toh(load32(p + 2));\nuint32_t ask = be32toh(load32(p + 6));   // ~1 cycle each",
+    note: "<b>Zero copies, two byte-swaps.</b> Marginally slower than the <code>memcpy</code> version " +
+      "because the loads are unaligned, and marginally safer because nothing is duplicated. This is what " +
+      "an ITCH feed handler looks like on the inside, and it is the shape you should aim your " +
+      "own internal book format at." },
+  { name: "JSON, targeted extract", ns: 78, alloc: 0, copy: 0, tail: 96, col: "#d29922",
+    code: "// what you will write after this session\ninline double find_num(std::string_view f, std::string_view key) {\n  const auto k = f.find(key);\n  if (k == f.npos) return 0.0;\n  double out = 0.0;\n  const char* b = f.data() + k + key.size();\n  std::from_chars(b, f.data() + f.size(), out);   // no alloc\n  return out;\n}\ndouble mid = find_num(frame, \"\\\"mid_price\\\":\");",
+    note: "<b>The realistic target.</b> Eight times the cost of a binary decode and eight times " +
+      "<em>cheaper</em> than the DOM — on a wire format you do not control. You scan for three keys, " +
+      "read three numbers in place with <code>from_chars</code>, and allocate nothing. The p99.9 is " +
+      "close to the median precisely because there is no allocator on the path." },
+  { name: "nlohmann DOM parse", ns: 620, alloc: 22, copy: 214, tail: 4100, col: "#f85149",
+    code: "// the correctness baseline the reference client ships\nauto j = nlohmann::json::parse(frame);   // full document\ndouble bid = j[\"bids\"][0][0];            // 22 allocations,\ndouble ask = j[\"asks\"][0][0];            // 214 B copied,\ndouble mid = j[\"mid_price\"];             // 8 keys tokenised",
+    note: "<b>Correct, pleasant, and 69× the floor.</b> Look at the p99.9 rather than the mean: 4.1 µs " +
+      "against a 620 ns median, because any one of the twenty-two allocations can walk a free list or " +
+      "fault in a page. <em class='hi'>This is the number you are asked to beat</em>, and beating it " +
+      "does not require a new library — only refusing to build a document you do not read." }
+];
+var szMetric = "ns", szSel = 3;
+function szRender(animate) {
+  var maxes = { ns: 620, alloc: 22, copy: 214 };
+  var keyOf = { ns: "ns", alloc: "alloc", copy: "copy" };
+  var bars = $("szBars"); clear(bars);
+  SZ.forEach(function (s, i) {
+    var row = document.createElement("div"); row.className = "bar" + (i === szSel ? " win" : "");
+    var btn = document.createElement("button");
+    btn.className = "bl"; btn.type = "button";
+    btn.style.cssText = "text-align:left;background:none;border:none;cursor:pointer;font-family:inherit;padding:0";
+    btn.textContent = s.name;
+    btn.setAttribute("aria-label", "Inspect " + s.name);
+    if (i === szSel) btn.style.color = "var(--ink)";
+    btn.addEventListener("click", function () { szSel = i; szRender(false); });
+    var t = document.createElement("div"); t.className = "bt";
+    var f = document.createElement("i"); f.style.background = s.col;
+    var val = s[keyOf[szMetric]];
+    var frac = val / maxes[szMetric];
+    f.style.width = animate ? "0%" : (frac * 100) + "%";
+    t.appendChild(f);
+    var v = document.createElement("div"); v.className = "bv";
+    v.textContent = szMetric === "ns" ? s.ns + " ns" : szMetric === "alloc" ? (s.alloc === 0 ? "none" : s.alloc) : s.copy + " B";
+    row.appendChild(btn); row.appendChild(t); row.appendChild(v);
+    bars.appendChild(row);
+    if (animate) window.setTimeout(function () { f.style.width = (frac * 100) + "%"; }, 40 + i * 90);
+  });
+  $("szNs").setAttribute("aria-pressed", szMetric === "ns" ? "true" : "false");
+  $("szAlloc").setAttribute("aria-pressed", szMetric === "alloc" ? "true" : "false");
+  $("szCopy").setAttribute("aria-pressed", szMetric === "copy" ? "true" : "false");
+  $("szCap").textContent = szMetric === "ns"
+    ? "Median decode of one book_snapshot into bid, ask and mid on a ~3 GHz core. Lower is better."
+    : szMetric === "alloc"
+      ? "Heap allocations per message. This column, not the ns column, is what sets your p99.9."
+      : "Bytes copied out of the receive buffer into somewhere else, per message.";
+  var tb = $("szTable").querySelector("tbody"); clear(tb);
+  SZ.forEach(function (s, i) {
+    var tr = document.createElement("tr");
+    [s.name, s.ns + " ns", s.alloc === 0 ? "none" : String(s.alloc), s.copy + " B", nsFmt(s.tail)].forEach(function (c, k) {
+      var td = document.createElement("td");
+      if (k === 0) td.className = "n";
+      td.textContent = c;
+      if (i === szSel) td.style.color = "var(--ink)";
+      tr.appendChild(td);
+    });
+    tb.appendChild(tr);
+  });
+  var s2 = SZ[szSel];
+  $("szName").textContent = s2.name;
+  $("szCode").textContent = s2.code;
+  $("szCore").textContent = f1(s2.ns * 200000 / 1e7) + " % of a core";
+  $("szAps").textContent = s2.alloc === 0 ? "none" : (s2.alloc * 200000 / 1e6) + " M/s";
+  $("szRel").textContent = szSel === 0 ? "baseline" : f1(s2.ns / SZ[0].ns) + "×";
+  $("szTail").textContent = nsFmt(s2.tail);
+  $("szNote").innerHTML = s2.note;
+}
+$("szRun").addEventListener("click", function () { szRender(true); });
+["szNs", "szAlloc", "szCopy"].forEach(function (id) {
+  $(id).addEventListener("click", function () {
+    szMetric = id === "szNs" ? "ns" : id === "szAlloc" ? "alloc" : "copy";
+    szRender(true);
+  });
+});
+szRender(false);
+
+/* ─────────────────────────────────────────────────────────────────
+   6 · u64toa stepper + micro-benchmark
+   ───────────────────────────────────────────────────────────────── */
+var UA_BENCH = [
+  ["snprintf(\"%llu\")", 118, "#f85149"],
+  ["std::to_string", 46, "#d29922"],
+  ["u64toa, reverse-flip", 11, "#3fb950"],
+  ["u64toa, 2-digit table", 7, "#7c3aed"]
+];
+var ua = { digits: [], out: [], rem: "0", done: false, log: [], n: 0 };
+function uaDigitsOf(str) {
+  /* long division by 10 on the decimal string, so UINT64_MAX is exact */
+  var s = str.replace(/^0+(?=\d)/, ""), out = [], i, cur, carry, q;
+  if (s === "") s = "0";
+  for (;;) {
+    carry = 0; q = "";
+    for (i = 0; i < s.length; i++) {
+      cur = carry * 10 + (s.charCodeAt(i) - 48);
+      q += String(Math.floor(cur / 10));
+      carry = cur % 10;
+    }
+    out.push(carry);
+    q = q.replace(/^0+(?=\d)/, "");
+    s = q;
+    if (s === "0" || s === "") break;
+  }
+  return out;                                   /* least significant first */
+}
+function uaReset() {
+  var raw = $("uaIn").value.replace(/[^0-9]/g, "");
+  if (raw === "") raw = "0";
+  if (raw.length > 20) { raw = raw.substring(0, 20); $("uaIn").value = raw; }
+  ua.all = uaDigitsOf(raw);
+  ua.digits = []; ua.out = []; ua.done = false; ua.n = 0;
+  ua.log = ["char tmp[20];  int n = 0;  // v = " + raw];
+  uaRender();
+}
+function uaRender() {
+  var raw = $("uaIn").value.replace(/[^0-9]/g, "") || "0";
+  $("uaLen").textContent = ua.done ? "returns " + ua.out.length : raw.length + " digits";
+  function fill(node, arr, cls) {
+    clear(node);
+    if (arr.length === 0) {
+      var z = document.createElement("div"); z.className = "dg"; z.textContent = "—"; node.appendChild(z);
+      return;
+    }
+    arr.forEach(function (d, i) {
+      var e = document.createElement("div");
+      e.className = "dg" + (cls === "out" ? " out" : (i === arr.length - 1 ? " on" : ""));
+      e.textContent = d;
+      node.appendChild(e);
+    });
+  }
+  fill($("uaTmp"), ua.digits, "tmp");
+  fill($("uaOut"), ua.out, "out");
+  var log = $("uaLog"); clear(log);
+  ua.log.slice(-5).forEach(function (l, k, a) {
+    var e = document.createElement("div");
+    e.className = /return/.test(l) ? "ok" : (k === a.length - 1 ? "on" : "past");
+    e.textContent = l;
+    log.appendChild(e);
+  });
+  var bars = $("uaBars"); clear(bars);
+  UA_BENCH.forEach(function (b) {
+    var row = document.createElement("div"); row.className = "bar";
+    var l = document.createElement("div"); l.className = "bl"; l.textContent = b[0];
+    var t = document.createElement("div"); t.className = "bt";
+    var f = document.createElement("i"); f.style.background = b[2];
+    f.style.width = (b[1] / 118 * 100) + "%"; t.appendChild(f);
+    var v = document.createElement("div"); v.className = "bv"; v.textContent = b[1] + " ns";
+    row.appendChild(l); row.appendChild(t); row.appendChild(v);
+    bars.appendChild(row);
+  });
+  $("uaStep").disabled = ua.done;
+  var note = $("uaNote");
+  if (ua.done) {
+    note.innerHTML = "<b>" + ua.out.length + " digit(s), no allocation, no format string.</b> " +
+      (ua.out.length === 1 && ua.out[0] === 0
+        ? "This is the case a <code>while (v)</code> loop gets wrong: it would emit nothing and return " +
+          "zero, so your order id serializes as an empty string. The <code>do</code>/<code>while</code> " +
+          "runs the body once and gives you <code>\"0\"</code>."
+        : ua.out.length === 20
+          ? "Twenty digits — <code>UINT64_MAX</code>, which is exactly why the scratch buffer is " +
+            "<code>tmp[20]</code> and can never overflow."
+          : "The caller null-terminates if it wants to; the routine returns a length, which is what a " +
+            "buffer-writing serializer actually needs.");
+  } else if (ua.digits.length === 0) {
+    note.innerHTML = "<b>Press the button.</b> Each iteration is one <code>% 10</code> and one " +
+      "<code>/ 10</code>. The division is the bottleneck, which is what the two-digit table halves — " +
+      "and it is why this beats <code>snprintf</code> by an order of magnitude without any cleverness.";
+  } else {
+    note.innerHTML = "<b>Iteration " + ua.digits.length + ".</b> <code>tmp[" + (ua.digits.length - 1) +
+      "] = '0' + v % 10</code> then <code>v /= 10</code>. Digits come out least-significant-first — " +
+      "which is why the flip at the end exists.";
+  }
+}
+$("uaStep").addEventListener("click", function () {
+  if (ua.done) return;
+  if (ua.digits.length < ua.all.length) {
+    var d = ua.all[ua.digits.length];
+    ua.digits.push(d);
+    ua.log.push("tmp[" + (ua.digits.length - 1) + "] = '0' + v % 10 = '" + d + "';  v /= 10;");
+    if (ua.digits.length === ua.all.length) ua.log.push("while (v) -> false; n = " + ua.digits.length);
+  } else if (ua.out.length < ua.digits.length) {
+    var i = ua.out.length;
+    ua.out.push(ua.digits[ua.digits.length - 1 - i]);
+    ua.log.push("out[" + i + "] = tmp[" + (ua.digits.length - 1 - i) + "] = '" + ua.out[i] + "';");
+    if (ua.out.length === ua.digits.length) { ua.done = true; ua.log.push("return n;  // " + ua.out.length); }
+  }
+  uaRender();
+});
+$("uaAll").addEventListener("click", function () {
+  var guard = 0;
+  while (!ua.done && guard++ < 64) $("uaStep").click();
+});
+$("uaReset").addEventListener("click", uaReset);
+$("uaIn").addEventListener("input", uaReset);
+$("uaZero").addEventListener("click", function () { $("uaIn").value = "0"; uaReset(); });
+$("uaMid").addEventListener("click", function () { $("uaIn").value = "1855000"; uaReset(); });
+$("uaMax").addEventListener("click", function () { $("uaIn").value = "18446744073709551615"; uaReset(); });
+uaReset();
+
+/* ─────────────────────────────────────────────────────────────────
+   7 · Shared memory vs sockets
+   ───────────────────────────────────────────────────────────────── */
+function shRender() {
+  var sz = parseInt($("shSize").value, 10);
+  $("shSizeV").textContent = sz + " B";
+  /* ns per message: shm is one store + a release; sockets add syscalls and copies */
+  var perByte = sz / 64;
+  var shm = 26 + sz * 0.09;
+  var uds = 1450 + sz * 0.11;
+  var tcpl = 2900 + sz * 0.14;
+  var tcpw = 45000 + sz * 0.14;
+  var rows = [["shared-memory ring", shm, "#7c3aed", "0 syscalls · 1 copy"],
+              ["Unix domain socket", uds, "#6cb6ff", "2 syscalls · 2 copies"],
+              ["TCP loopback", tcpl, "#d29922", "2 syscalls · 2 copies + stack"],
+              ["TCP over the wire", tcpw, "#f85149", "2 syscalls · 2 copies + NIC"]];
+  var bars = $("shBars"); clear(bars);
+  var lo = Math.log10(20), hi = Math.log10(60000);
+  rows.forEach(function (r) {
+    var row = document.createElement("div"); row.className = "bar";
+    var l = document.createElement("div"); l.className = "bl"; l.textContent = r[0];
+    var t = document.createElement("div"); t.className = "bt";
+    var f = document.createElement("i"); f.style.background = r[2];
+    f.style.width = ((Math.log10(r[1]) - lo) / (hi - lo) * 100) + "%"; t.appendChild(f);
+    var v = document.createElement("div"); v.className = "bv"; v.textContent = nsFmt(r[1]);
+    row.appendChild(l); row.appendChild(t); row.appendChild(v);
+    bars.appendChild(row);
+  });
+  $("shCap").textContent = "One-way handoff of a " + sz + "-byte message between two processes on the " +
+    "same host, log scale. The wire figure is a colocated 45 µs path for comparison.";
+  $("shShm").textContent = nsFmt(shm);
+  $("shTcp").textContent = nsFmt(tcpl);
+  $("shRel").textContent = f1(tcpl / shm) + "×";
+  $("shSys").textContent = "0 · 1";
+  var note = $("shNote");
+  if (sz <= 64) {
+    note.innerHTML = "<b>At small sizes the entire difference is the syscall.</b> " + nsFmt(shm) +
+      " against " + nsFmt(tcpl) + " for a " + sz + "-byte message — the ring does a store, a release " +
+      "and nothing else, while the socket crosses into the kernel twice and copies the payload twice. " +
+      "This is the same SPSC structure from Week 10, with <code>init()</code> called once by the creator " +
+      "before <code>fork()</code>.";
+  } else if (sz <= 1024) {
+    note.innerHTML = "<b>The gap is narrowing but the ranking does not change.</b> As the payload grows, " +
+      "copy cost starts to matter and the fixed syscall overhead is amortised over more bytes — so " +
+      "shared memory's advantage shrinks from " + f1(tcpl / shm) + "× toward the ratio of copies (1 " +
+      "versus 2). If your messages are kilobytes, the interesting optimisation moves from the transport " +
+      "to the encoding.";
+  } else {
+    note.innerHTML = "<b>Above the MTU, other things dominate.</b> A " + sz + "-byte message no longer " +
+      "fits in one Ethernet frame, so the wire path pays segmentation as well, and the local paths pay " +
+      "mostly memory bandwidth. Note that a shared-memory ring of this payload size needs a real " +
+      "capacity decision: <code>CAPACITY = 1024</code> slots of " + sz + " bytes is " +
+      f1(sz * 1024 / 1048576) + " MB of region, and the region size is fixed at creation.";
+  }
+}
+$("shSize").addEventListener("input", shRender);
+shRender();
+
+/* ── MCQ engine (shared across week pages) ───────────────────── */
+Array.prototype.forEach.call(document.querySelectorAll(".mcq"), function (q) {
+  var answer = parseInt(q.getAttribute("data-a"), 10);
+  var opts = Array.prototype.slice.call(q.querySelectorAll(".opt"));
+  var fb = q.querySelector(".fb");
+  opts.forEach(function (o, i) {
+    o.addEventListener("click", function () {
+      if (q.dataset.done === "1") return;
+      q.dataset.done = "1";
+      var right = i === answer;
+      opts.forEach(function (b, j) {
+        b.disabled = true;
+        if (j === answer) b.classList.add("right");
+        else if (j === i) b.classList.add("wrong");
+        else b.classList.add("dim");
+      });
+      fb.innerHTML = (right ? "<b>Correct.</b> " : "<b>Not quite.</b> ") + q.getAttribute("data-exp");
+      fb.className = "fb show " + (right ? "good" : "poor");
+    });
+  });
+});
+</script>
+</body>
+</html>

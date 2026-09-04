@@ -1,0 +1,1334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" href="data:," />
+<title>Week 15 · Latency Arbitrage, Multi-Venue &amp; the Tournament — Low-Latency Trading Arena</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    /* ── Low-Latency Trading Arena · shared palette (identical on every page) ── */
+    --accent:       #7c3aed;
+    --accent-2:     #c4b5fd;
+    --accent-3:     #ede9fe;
+    --accent-rgb:   124,58,237;
+    --accent-2-rgb: 196,181,253;
+    --bg:           #0f1115;
+    --panel:        #181b22;
+    --panel2:       #1e222b;
+    --panel-2:      #13161b;
+    --ink:          #e8e6e3;
+    --ink-dim:      #c6c3bf;
+    --ink-mute:     #6f757f;
+    --muted:        #9aa0a6;
+    --dim:          #5f6673;
+    --line:         #272c36;
+    --line-2:       #333a47;
+    --border:       #272c36;
+    --ok:           #3fb950;
+    --warn:         #d29922;
+    --bad:          #f85149;
+    --info:         #6cb6ff;
+    --sky:          #58a6ff;
+    --violet:       #a78bfa;
+    --teal:         #2dd4bf;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.62;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent-2);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  /* ── nav / footer ─────────────────────────────────────────── */
+  nav.top{position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+    padding:11px 22px;background:rgba(15,17,21,.94);border-bottom:1px solid var(--line)}
+  nav.top>a:first-child{font-weight:800;letter-spacing:-.2px;color:var(--ink);font-size:14.5px;
+    border-left:3px solid var(--accent);padding-left:10px}
+  nav.top .crumbs{font-size:12px;color:var(--muted)}
+  nav.top .crumbs b{color:var(--ink);font-weight:700}
+  footer{border-top:1px solid var(--line);background:var(--panel);
+    padding:26px 22px 34px;text-align:center;font-size:11.5px;color:var(--dim);letter-spacing:.3px}
+
+  /* ── sections & typography ────────────────────────────────── */
+  section{max-width:1180px;margin:0 auto;padding:36px 22px 42px;border-top:1px solid var(--line)}
+  section#hero{border-top:none}
+  .kicker{font-size:10.5px;font-weight:800;letter-spacing:1.9px;text-transform:uppercase;color:var(--accent-2)}
+  h1{font-size:clamp(26px,4.2vw,40px);font-weight:800;letter-spacing:-.9px;line-height:1.13;margin:10px 0 6px}
+  h2{font-size:21px;font-weight:700;letter-spacing:-.3px;margin:4px 0 4px}
+  h3{font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);margin-bottom:11px}
+  h4{font-size:13.5px;font-weight:700;margin-bottom:5px}
+  p{margin:9px 0;max-width:82ch}
+  .lead{color:var(--muted);font-size:15px;max-width:84ch}
+  .sub{color:var(--muted);font-size:12.5px}
+  strong{color:#fff;font-weight:650}
+  em.hi{color:var(--accent-2);font-style:normal;font-weight:600}
+  code,.mono{font-family:var(--mono);font-size:12.5px}
+  code{background:rgba(var(--accent-2-rgb),.13);color:#ddd6fe;padding:1px 5px;border-radius:4px}
+  ul.you{list-style:none;margin:16px 0 0;display:grid;gap:8px}
+  ul.you li{position:relative;padding-left:26px;font-size:13.5px;color:var(--ink);max-width:78ch}
+  ul.you li::before{content:"";position:absolute;left:4px;top:8px;width:8px;height:8px;border-radius:2px;
+    background:var(--accent);box-shadow:0 0 0 3px rgba(var(--accent-rgb),.22)}
+  ul.plain{list-style:none;display:grid;gap:7px;font-size:13px;color:var(--muted)}
+  ul.plain li{padding-left:16px;position:relative}
+  ul.plain li::before{content:"\2022";position:absolute;left:2px;color:var(--accent-2)}
+
+  /* ── panels & layout ──────────────────────────────────────── */
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .panel.tight{padding:13px 14px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;align-items:start}
+  .split{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:18px;align-items:start}
+  .split-r{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:18px;align-items:start}
+  .stack{display:grid;gap:14px}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+
+  /* ── controls ─────────────────────────────────────────────── */
+  .btn{font-family:inherit;font-size:12px;font-weight:650;cursor:pointer;color:var(--ink);
+    background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:7px 14px;transition:.15s}
+  .btn:hover:not(:disabled){border-color:var(--accent-2);color:#fff}
+  .btn:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .btn:disabled{opacity:.35;cursor:not-allowed}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.primary:hover:not(:disabled){filter:brightness(1.25)}
+  .btn.on{background:rgba(var(--accent-rgb),.28);border-color:var(--accent-2);color:#fff}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+  .tab{font-family:inherit;font-size:12px;font-weight:650;cursor:pointer;color:var(--muted);
+    background:transparent;border:1px solid var(--line);border-radius:20px;padding:6px 14px;transition:.15s}
+  .tab:hover{color:var(--ink)}
+  .tab[aria-selected="true"]{background:rgba(var(--accent-rgb),.3);border-color:var(--accent-2);color:#fff}
+  .tab:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .ctl{display:grid;gap:4px;margin-bottom:12px}
+  .ctl label{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);
+    display:flex;justify-content:space-between;gap:10px}
+  .ctl label b{font-family:var(--mono);color:var(--accent-2);font-size:12px;text-transform:none;letter-spacing:0}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:3px;
+    background:#2b313d;outline:none;cursor:pointer}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;
+    background:var(--accent-2);border:2px solid var(--bg);cursor:pointer}
+  input[type=range]::-moz-range-thumb{width:15px;height:15px;border-radius:50%;background:var(--accent-2);
+    border:2px solid var(--bg);cursor:pointer}
+  input[type=range]:focus-visible{box-shadow:0 0 0 3px rgba(var(--accent-2-rgb),.4)}
+  select,textarea,input[type=text]{font-family:var(--mono);font-size:12.5px;color:var(--ink);
+    background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:7px 9px;width:100%}
+  select:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px solid var(--accent-2);outline-offset:1px}
+  textarea{line-height:1.55;resize:vertical}
+
+  /* ── stats / pills / code ─────────────────────────────────── */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:1px;
+    background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .stat{background:var(--panel);padding:10px 12px}
+  .stat .sl{font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--dim)}
+  .stat .sv{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--ink);margin-top:3px}
+  .stat .sv.ok{color:var(--ok)} .stat .sv.bad{color:var(--bad)} .stat .sv.warn{color:var(--warn)}
+  .stat .sv.acc{color:var(--accent-2)}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;letter-spacing:.5px;
+    padding:3px 9px;border-radius:20px;border:1px solid var(--line);color:var(--muted)}
+  .pill.ok{color:var(--ok);border-color:rgba(63,185,80,.5);background:rgba(63,185,80,.1)}
+  .pill.bad{color:var(--bad);border-color:rgba(248,81,73,.5);background:rgba(248,81,73,.1)}
+  .pill.warn{color:var(--warn);border-color:rgba(210,153,34,.5);background:rgba(210,153,34,.1)}
+  .pill.acc{color:var(--accent-2);border-color:rgba(var(--accent-2-rgb),.5);background:rgba(var(--accent-rgb),.18)}
+  pre.code{font-family:var(--mono);font-size:11.8px;line-height:1.62;background:#0b0e14;color:#dbe3ea;
+    border:1px solid var(--line);border-radius:10px;padding:13px 14px;overflow-x:auto;white-space:pre}
+  pre.code .k{color:#6cb6ff} pre.code .s{color:#8ddb8c} pre.code .c{color:#6b7484;font-style:italic}
+  pre.code .n{color:#e0b070} pre.code .b{color:#ddd6fe;font-weight:700}
+  .note{border-left:3px solid var(--accent);background:rgba(var(--accent-rgb),.12);border-radius:0 8px 8px 0;
+    padding:10px 13px;font-size:12.5px;color:var(--muted)}
+  .note b{color:var(--ink)}
+  .log{font-family:var(--mono);font-size:11.5px;max-height:230px;overflow-y:auto;display:grid;gap:5px}
+  .log div{background:var(--panel2);border-left:3px solid var(--line);border-radius:0 6px 6px 0;padding:6px 9px;color:var(--muted)}
+  .log div.hl{border-left-color:var(--accent-2);color:var(--ink);background:rgba(var(--accent-rgb),.15)}
+  .log div.ok{border-left-color:var(--ok)} .log div.bad{border-left-color:var(--bad)}
+  svg{display:block;max-width:100%;height:auto}
+  .svgwrap{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px;overflow-x:auto}
+  table.t{width:100%;border-collapse:collapse;font-size:12px}
+  table.t th{font-size:9.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--dim);
+    text-align:left;padding:0 8px 7px;border-bottom:1px solid var(--line)}
+  table.t td{padding:7px 8px;border-bottom:1px solid rgba(39,44,54,.6);color:var(--muted);font-family:var(--mono);font-size:11.8px}
+  table.t td.n{color:var(--ink);font-weight:600}
+
+  /* ── pitfalls ─────────────────────────────────────────────── */
+  details.pit{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:10px;overflow:hidden}
+  details.pit>summary{cursor:pointer;padding:12px 15px;font-size:13.5px;font-weight:650;color:var(--ink);
+    list-style:none;display:flex;gap:11px;align-items:flex-start}
+  details.pit>summary::-webkit-details-marker{display:none}
+  details.pit>summary::before{content:"\25B8";color:var(--accent-2);font-size:12px;line-height:1.5;transition:.2s}
+  details.pit[open]>summary::before{transform:rotate(90deg)}
+  details.pit>summary:focus-visible{outline:2px solid var(--accent-2);outline-offset:-2px}
+  details.pit .body{padding:0 15px 15px 39px;font-size:13px;color:var(--muted);display:grid;gap:9px}
+  details.pit .body .fix{color:var(--ok);font-weight:600}
+
+  /* ── MCQ ──────────────────────────────────────────────────── */
+  .mcq{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 17px;margin-bottom:13px}
+  .mcq .q{font-size:13.8px;font-weight:650;color:var(--ink);margin:0 0 11px;max-width:84ch}
+  .mcq .q span{color:var(--accent-2);font-family:var(--mono);margin-right:7px}
+  .opts{display:grid;gap:7px}
+  .opt{text-align:left;font-family:inherit;font-size:13px;cursor:pointer;color:var(--muted);
+    background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:9px 12px;transition:.15s}
+  .opt:hover:not(:disabled){border-color:var(--accent-2);color:var(--ink)}
+  .opt:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .opt.right{border-color:var(--ok);background:rgba(63,185,80,.13);color:#bce8c4}
+  .opt.wrong{border-color:var(--bad);background:rgba(248,81,73,.12);color:#f4b6b1}
+  .opt.dim{opacity:.5}
+  .fb{margin-top:11px;font-size:12.5px;line-height:1.6;color:var(--muted);display:none;
+    border-left:3px solid var(--line);padding-left:11px}
+  .fb.show{display:block}
+  .fb.show.good{border-left-color:var(--ok)} .fb.show.poor{border-left-color:var(--bad)}
+  .fb b{color:var(--ink)}
+
+  /* ── next ─────────────────────────────────────────────────── */
+  .nextgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+  .nextcard{display:block;background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:15px 17px;transition:.18s;color:inherit}
+  .nextcard:hover{border-color:var(--accent-2);transform:translateY(-2px);text-decoration:none}
+  .nextcard .nl{font-size:10px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--accent-2)}
+  .nextcard .nt{font-size:14.5px;font-weight:700;color:var(--ink);margin-top:5px}
+  .nextcard .nd{font-size:12px;color:var(--muted);margin-top:5px}
+
+  @media (max-width:720px){
+    .grid2,.grid3,.split,.split-r{grid-template-columns:1fr}
+    section{padding:26px 15px 32px}
+    nav.top{padding:10px 15px;gap:8px}
+    nav.top .crumbs{font-size:11px}
+    p,.lead{max-width:none}
+  }
+
+  /* ── week-page shared ─────────────────────────────────────── */
+  #hero{padding:52px 22px 40px;
+    background:radial-gradient(ellipse 820px 340px at 22% -14%,rgba(var(--accent-rgb),.3),transparent 66%)}
+  #hero .wk{font-family:var(--mono);font-size:12px;letter-spacing:2px;color:var(--accent-2);font-weight:700}
+  #hero h1{max-width:24ch}
+  #hero .promise{font-size:16.5px;color:var(--ink);max-width:74ch;margin-top:10px;line-height:1.55}
+  .secnum{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;
+    background:rgba(var(--accent-rgb),.35);border:1px solid var(--accent-2);color:#fff;font-family:var(--mono);
+    font-size:11px;font-weight:700;margin-right:9px;vertical-align:2px}
+  .sw{display:inline-flex;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex-wrap:wrap}
+  .sw button{font-family:inherit;font-size:11.5px;font-weight:650;cursor:pointer;color:var(--muted);
+    background:var(--panel2);border:none;padding:7px 13px;transition:.15s}
+  .sw button[aria-pressed="true"]{background:rgba(var(--accent-rgb),.32);color:#fff}
+  .sw button:focus-visible{outline:2px solid var(--accent-2);outline-offset:-2px}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-top:10px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
+
+  /* ── week-4 specific ──────────────────────────────────────── */
+  .tablewrap{overflow-x:auto}
+  .codepair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+  .lanes{display:grid;gap:12px}
+  .toggles{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:16px;align-items:start}
+  .dash{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}
+  a.btn{display:inline-flex;align-items:center;text-decoration:none}
+  a.btn:hover{text-decoration:none}
+  .verdict{border:1px solid var(--accent-2);border-radius:12px;padding:14px 16px;
+    background:rgba(var(--accent-rgb),.14)}
+  .verdict .vt{font-size:15px;font-weight:750;color:#fff}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:5px 12px;font-size:12px;color:var(--muted)}
+  .kv b{font-family:var(--mono);font-size:11.5px;color:var(--ink-dim);font-weight:600;white-space:nowrap}
+
+
+  /* keep a long code line from stretching a grid column at any width */
+  .split>*,.split-r>*,.grid2>*,.grid3>*,.board>*,.toggles>*,.codepair>*,.stack>*{min-width:0}
+  pre.code{max-width:100%}
+  /* ── week-15 specific ───────────────────────────── */
+  .board{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:18px;align-items:start}
+  table.t td.rank{color:var(--accent-2);font-weight:700}
+  table.t tr.me td{background:rgba(var(--accent-rgb),.14)}
+  table.t td.pos{color:var(--ok)} table.t td.neg{color:var(--bad)}
+  .wsli{display:grid;gap:4px;margin-bottom:9px}
+  #ttSvg g[role="button"]{cursor:pointer}
+  #ttSvg g[role="button"]:focus-visible{outline:2px solid var(--accent-2);outline-offset:1px}
+  #ttSvg g[role="button"]:hover rect{stroke:var(--accent-2)}
+
+  /* ── mobile guard (identical on every page): single column under 720px,
+        no horizontal overflow. Must stay last in the sheet. ───────────── */
+  @media (max-width:720px){
+    .grid2,.grid3,.grid2.narrow-right,.split,.split-r,.codepair,
+    .nextgrid,.dash,.toggles,.lanes,.weeknav,.weeks,.roles,.stack,.board{
+      grid-template-columns:minmax(0,1fr)}
+    [class*="grid"]>*,.stack>*,.wrap>*,.panel,.panel.tight,.nextcard,.wk,.row>*{min-width:0}
+    pre,pre.code,.svgwrap,svg,canvas,table,select,input,textarea,.mono{max-width:100%}
+    pre,pre.code,.svgwrap,.tablewrap{overflow-x:auto}
+    code,.mono{overflow-wrap:anywhere}
+    .ctl,.ctl>*,.controls>*,.row,.legend>*{min-width:0}
+    .ctl{flex-wrap:wrap} .ctl select,.ctl input[type=range]{flex:1 1 100%;width:100%}
+    p,.lead,.sub,.promise{max-width:none}
+  }
+</style>
+
+</head>
+<body>
+
+<nav class="top"><a href="index.html">Low-Latency Trading Arena</a><span class="crumbs"><a href="week14.html">← Week 14</a> · <b>Week 15 · Latency Arbitrage, Multi-Venue &amp; the Tournament</b> · <a href="index.html">Home · start again</a></span></nav>
+
+<!-- ══════════════ HERO ══════════════ -->
+<section id="hero">
+  <div class="wk">WEEK 15 · 15-WEEK TRACK  ·  SESSION 9 · 9-SESSION TRACK</div>
+  <h1>Latency Arbitrage, Multi-Venue &amp; the Tournament</h1>
+  <p class="promise">The same instrument trades in two places at once, and for a few microseconds the
+  two places disagree. That gap is a trade, and it belongs to whoever gets there first. Everything from
+  the term arrives at once here — the parse, the book, the pool, the codec, the lock-free pipeline, the
+  killed tail — and it is scored live on a <em class="hi">composite</em>, not on latency alone.</p>
+  <ul class="you">
+    <li>Compute a cross-venue edge <strong>net of both sides' fees</strong>, and say how wide the stale-quote window was in µs.</li>
+    <li>Argue the <em class="hi">speed versus alpha</em> trade-off with a number: when does a slower, smarter bot beat a faster, dumber one?</li>
+    <li>Budget messages under a scarce <code>order_quota</code> and keep your <strong>order-to-trade ratio</strong> out of the penalty tiers.</li>
+    <li>Compute a risk-adjusted <strong>market-maker score</strong> — spread captured, minus adverse selection, minus inventory risk — and defend the ranking it produces.</li>
+    <li>Point at any stage of tick-to-trade and name the week that owns it.</li>
+  </ul>
+  <div class="row" style="margin-top:22px">
+    <span class="pill acc">Finale scenario: multi-venue, futures, long auctions, an FPGA IPO mid-session</span>
+    <span class="pill">Final project: a tournament-ready bot + a short performance writeup</span>
+    <span class="pill warn">Final exam: on-site, closed-book, the whole term</span>
+  </div>
+</section>
+
+<!-- ══════════════ WHAT ══════════════ -->
+<section id="what">
+  <div class="kicker">Part 1</div>
+  <h2><span class="secnum">1</span>What is it? One name, two books, a few microseconds of disagreement</h2>
+  <p class="lead">Liquidity is fragmented: the same symbol has its own book, its own touch and its own
+  queue on every venue. A trade or a cancel on venue A takes time to be reflected in what venue B is
+  showing, and during that time the consolidated best bid can sit <em class="hi">above</em> the
+  consolidated best offer. A crossed book across venues is not an error — it is a stale quote with a
+  timer on it.</p>
+
+  <div class="grid2" style="margin-top:16px">
+    <div class="panel tight"><h3>Reading a crossed consolidated book</h3><pre class="code"> VENUE A          VENUE B (stale)
+ bid     ask      bid     ask
+ 100.05  100.07   100.02  100.04   ← lagging
+
+ NBBO bid = max(100.05, 100.02) = 100.05
+ NBBO ask = min(100.07, 100.04) = 100.04
+ → crossed: B.ask 100.04 &lt; A.bid 100.05
+
+ ACTION: buy B @ 100.04, sell A @ 100.05
+ EDGE:   1.00 ¢ gross, minus BOTH sides' fees
+ SIZE:   min(A.bid_sz, B.ask_sz) — the thin side</pre>
+      <p class="sub" style="margin-top:9px">A <em class="hi">locked</em> market is best bid equal to best
+      offer; a <em class="hi">crossed</em> one is bid above offer. Both are transient and both are public —
+      which is exactly why they are a race and not an insight.</p></div>
+    <div class="panel"><h4>Why the window exists at all</h4>
+      <p class="sub">Nothing is instantaneous. A print on A has to reach B's participants, who then have
+      to decide, send, and be processed. Every one of those steps is a queue with a service time, so B's
+      displayed quote is always a picture of a slightly older world. The window is the sum of those
+      delays minus your own reaction time.</p>
+      <p class="sub" style="margin-top:8px">That is the entire economic content of low-latency trading:
+      not prediction, but <strong>arriving inside a window somebody else's latency created</strong>. It is
+      also why the edge per trade is tiny and the count is enormous, and why fees decide whether the
+      trade exists at all.</p>
+      <div class="note" style="margin-top:11px"><b>In the arena.</b> The finale scenario turns
+      <code>multi_venue</code> on: the same symbols list on two venues, each forming its own price from
+      its own book, and the exchange server timestamps who got to the stale side first. Set
+      <code>EXCHANGE_URLS</code> to a comma-separated list and one process sees both books.</div></div>
+  </div>
+
+  <h3 style="margin-top:30px">Interactive · the two-venue race</h3>
+  <p class="sub" style="margin-bottom:12px">The mid moves on venue A at t = 0. B's quote is stale until
+  the news propagates and B's maker cancels. You have to see it, decide, and land an order on B inside
+  that window — before the competitor does. Move the latencies and watch who collects.</p>
+
+  <div class="split">
+    <div class="stack">
+      <div class="svgwrap">
+        <svg id="rcSvg" viewBox="0 0 640 260" role="img" aria-label="A timeline in microseconds showing the stale-quote window on venue B and when your order and a competitor's order arrive"></svg>
+      </div>
+      <div class="stats" id="rcStats"></div>
+      <div class="legend">
+        <span><i style="background:var(--accent)"></i>your path</span>
+        <span><i style="background:#58a6ff"></i>competitor</span>
+        <span><i style="background:rgba(63,185,80,.5)"></i>stale-quote window</span>
+      </div>
+    </div>
+    <div class="stack">
+      <div class="panel tight">
+        <div class="ctl"><label for="rcFeed">Your feed latency from A <b id="rcFeedv">12 µs</b></label>
+          <input type="range" id="rcFeed" min="2" max="200" step="2" value="12" aria-label="Microseconds for venue A's update to reach you" /></div>
+        <div class="ctl"><label for="rcTick">Your tick-to-trade (decide + serialize) <b id="rcTickv">9 µs</b></label>
+          <input type="range" id="rcTick" min="1" max="200" step="1" value="9" aria-label="Your own tick to trade time in microseconds" /></div>
+        <div class="ctl"><label for="rcOut">Your outbound latency to B <b id="rcOutv">20 µs</b></label>
+          <input type="range" id="rcOut" min="2" max="300" step="2" value="20" aria-label="Microseconds for your order to reach venue B" /></div>
+        <div class="ctl"><label for="rcProp">B's maker reacts after <b id="rcPropv">95 µs</b></label>
+          <input type="range" id="rcProp" min="10" max="400" step="5" value="95" aria-label="Microseconds before venue B's maker cancels the stale quote" /></div>
+        <div class="ctl"><label for="rcComp">Competitor's total reaction <b id="rcCompv">55 µs</b></label>
+          <input type="range" id="rcComp" min="5" max="400" step="5" value="55" aria-label="The competitor's total reaction time in microseconds" /></div>
+        <div class="row"><label style="font-size:12px;color:var(--muted)"><input type="checkbox" id="rcColo" style="vertical-align:-2px" /> Buy the colocated tier — cuts feed and outbound wire time</label></div>
+      </div>
+      <div class="verdict"><div class="vt" id="rcVerdict">—</div>
+        <p class="sub" id="rcWhy" style="margin-top:7px"></p></div>
+      <div class="panel tight"><h3>The decision, as a pure function</h3><pre class="code"><span class="k">struct</span> <span class="b">Top</span> { <span class="k">double</span> bid = <span class="n">0.0</span>, ask = <span class="n">0.0</span>, bid_sz = <span class="n">0.0</span>, ask_sz = <span class="n">0.0</span>; };
+
+<span class="c">// +1 = buy on B, sell on A.  -1 = the mirror.  0 = no edge.</span>
+<span class="k">int</span> <span class="b">cross_venue_arb</span>(<span class="k">const</span> Top&amp; a, <span class="k">const</span> Top&amp; b, <span class="k">double</span> fee_per_side) {
+  <span class="k">if</span> (a.bid &lt;= <span class="n">0.0</span> || a.ask &lt;= <span class="n">0.0</span> ||
+      b.bid &lt;= <span class="n">0.0</span> || b.ask &lt;= <span class="n">0.0</span>) <span class="k">return</span> <span class="n">0</span>;
+  <span class="k">const</span> <span class="k">double</span> edge_buy_b = a.bid - b.ask - <span class="n">2.0</span> * fee_per_side;
+  <span class="k">const</span> <span class="k">double</span> edge_buy_a = b.bid - a.ask - <span class="n">2.0</span> * fee_per_side;
+  <span class="k">if</span> (edge_buy_b &gt; <span class="n">0.0</span> &amp;&amp; edge_buy_b &gt;= edge_buy_a) <span class="k">return</span> +<span class="n">1</span>;
+  <span class="k">if</span> (edge_buy_a &gt; <span class="n">0.0</span>)                          <span class="k">return</span> -<span class="n">1</span>;
+  <span class="k">return</span> <span class="n">0</span>;                        <span class="c">// most ticks: do nothing</span>
+}
+
+<span class="c">// never send for more than rests on the thin side</span>
+<span class="k">double</span> <span class="b">tradable_size</span>(<span class="k">const</span> Top&amp; a, <span class="k">const</span> Top&amp; b, <span class="k">int</span> dir, <span class="k">double</span> clip) {
+  <span class="k">const</span> <span class="k">double</span> sz = (dir &gt; <span class="n">0</span>) ? std::min(a.bid_sz, b.ask_sz)
+                              : std::min(b.bid_sz, a.ask_sz);
+  <span class="k">return</span> std::min(sz, clip);
+}</pre></div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ HOW ══════════════ -->
+<section id="how">
+  <div class="kicker">Part 2</div>
+  <h2><span class="secnum">2</span>How it works — fastest, smartest, and the cost of every message</h2>
+  <p class="lead">Being first is one way to win and it is not the only one. A latency-arbitrage window
+  rewards pure speed; a market-making book rewards being right about fair value and being disciplined
+  about inventory. Most of the term's engineering serves both, but the budget you spend on each is a
+  real choice with a measurable optimum.</p>
+
+  <h3 style="margin-top:24px">Interactive · speed versus alpha</h3>
+  <p class="sub" style="margin-bottom:12px">You have one engineering budget. Spend it on latency and you
+  win more races at a lower edge per race; spend it on the signal and you win fewer races but you are
+  right more often — and being wrong quickly is the most expensive thing in this course.</p>
+
+  <div class="split-r">
+    <div class="stack">
+      <div class="panel tight">
+        <div class="ctl"><label for="saMix">Budget on latency vs signal <b id="saMixv">50 / 50</b></label>
+          <input type="range" id="saMix" min="0" max="100" step="5" value="50" aria-label="Share of the engineering budget spent on latency rather than signal quality" /></div>
+        <div class="ctl"><label for="saField">Competitors in the race <b id="saFieldv">6</b></label>
+          <input type="range" id="saField" min="1" max="20" step="1" value="6" aria-label="Number of competitors racing for the same window" /></div>
+        <div class="ctl"><label for="saCost">Cost of being wrong (¢/share) <b id="saCostv">1.2</b></label>
+          <input type="range" id="saCost" min="2" max="80" step="2" value="12" aria-label="Cost in tenths of a cent of a trade that turns out to be wrong" /></div>
+      </div>
+      <div class="svgwrap">
+        <svg id="saSvg" viewBox="0 0 620 210" role="img" aria-label="A curve of expected profit per tick against how the engineering budget is split between latency and signal quality"></svg>
+      </div>
+      <div class="stats" id="saStats"></div>
+    </div>
+    <div class="stack">
+      <div class="verdict"><div class="vt" id="saVerdict">—</div>
+        <p class="sub" id="saWhy" style="margin-top:7px"></p></div>
+      <div class="panel"><h4>Two different games</h4>
+        <ul class="plain">
+          <li><b>Pure latency arbitrage.</b> The signal is arithmetic — the books are crossed or they are
+          not. There is nothing to be clever about, so the whole contest is arrival time, and the
+          winner takes all of it.</li>
+          <li><b>Market making.</b> The signal is fair value, and speed buys you the ability to
+          <em class="hi">cancel</em> before you are picked off. Here latency is defensive, and alpha is what
+          decides whether you should have been quoting at all.</li>
+          <li><b>Everything in between</b> is where the arena's composite score lives, which is why it
+          refuses to rank you on one number.</li>
+        </ul>
+        <div class="note" style="margin-top:11px"><b>The scoring consequence.</b> The arena can charge
+        your measured reaction latency against your P&amp;L, so a slow-but-clever bot genuinely can lose to
+        a fast-but-simple one — and an expensive signal that slows your p99 has to pay for the
+        microseconds it consumed.</div></div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:30px">Interactive · the message budget and your order-to-trade ratio</h3>
+  <p class="sub" style="margin-bottom:12px">Messages are a resource. The finale scenario cuts
+  <code>order_quota</code> to roughly six messages per tick, and real venues police the
+  <strong>order-to-trade ratio</strong> — orders and cancels sent per trade actually done — with fees,
+  throttles and rejects. Spend messages where the edge is, not where the excitement is.</p>
+
+  <div class="split">
+    <div class="stack">
+      <div class="svgwrap">
+        <svg id="otSvg" viewBox="0 0 640 250" role="img" aria-label="A chart of messages spent per tick against the penalty tiers of the order-to-trade ratio"></svg>
+      </div>
+      <div class="stats" id="otStats"></div>
+      <div class="panel tight"><h3>Where your messages went</h3><div class="kv" id="otKv"></div></div>
+    </div>
+    <div class="stack">
+      <div class="panel tight">
+        <div class="ctl"><label for="otQuota">Venue quota (messages / tick) <b id="otQuotav">6</b></label>
+          <input type="range" id="otQuota" min="2" max="40" step="1" value="6" aria-label="Messages allowed per tick by the venue" /></div>
+        <div class="ctl"><label for="otQuotes">New quotes per tick <b id="otQuotesv">4</b></label>
+          <input type="range" id="otQuotes" min="0" max="20" step="1" value="4" aria-label="New quotes you send per tick" /></div>
+        <div class="ctl"><label for="otCancels">Cancels per tick <b id="otCancelsv">3</b></label>
+          <input type="range" id="otCancels" min="0" max="20" step="1" value="3" aria-label="Cancels you send per tick" /></div>
+        <div class="ctl"><label for="otFill">Fill rate on a resting quote <b id="otFillv">4%</b></label>
+          <input type="range" id="otFill" min="1" max="60" step="1" value="4" aria-label="Percentage of your resting quotes that trade" /></div>
+      </div>
+      <div class="verdict"><div class="vt" id="otVerdict">—</div>
+        <p class="sub" id="otWhy" style="margin-top:7px"></p></div>
+      <div class="panel tight"><h3>The requote decision that saves messages</h3><pre class="code"><span class="k">enum class</span> <span class="b">Action</span> { Hold, Requote, Cancel };
+
+Action <span class="b">requote_decision</span>(<span class="k">double</span> my_px, <span class="k">double</span> best_px,
+                        <span class="k">long</span> queue_ahead, <span class="k">long</span> level_qty,
+                        <span class="k">bool</span> moved_against) {
+  <span class="k">if</span> (moved_against)               <span class="k">return</span> Action::Cancel;  <span class="c">// stale: pull</span>
+  <span class="k">if</span> (my_px &lt; best_px)             <span class="k">return</span> Action::Requote; <span class="c">// not at best</span>
+  <span class="k">if</span> (queue_ahead &gt; level_qty / <span class="n">2</span>) <span class="k">return</span> Action::Requote; <span class="c">// buried</span>
+  <span class="k">return</span> Action::Hold;               <span class="c">// good spot: keep the message</span>
+}</pre>
+        <p class="sub" style="margin-top:9px">A cancel-and-repost costs a message <em class="hi">and</em>
+        sends you to the back of the FIFO at the new price. The winning move on most ticks is
+        <code>Hold</code> — which is the hardest thing to make a bot do.</p></div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:30px">Interactive · the market-maker score</h3>
+  <p class="sub" style="margin-bottom:12px">Raw P&amp;L flatters a maker: the rebate arrives immediately
+  and the adverse selection arrives later. The score is built in the spirit of the arena's season
+  math — a risk-adjusted quantity, penalised by drawdown — over the four components a maker actually
+  controls. Move the weights and watch three plausible market makers change places.</p>
+
+  <div class="board">
+    <div class="stack">
+      <div class="tablewrap"><table class="t" id="mmTable">
+        <thead><tr><th>#</th><th>maker</th><th>spread</th><th>rebate</th><th>adverse</th><th>inv. carry</th><th>max DD</th><th>score</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+      <div class="svgwrap">
+        <svg id="mmSvg" viewBox="0 0 620 190" role="img" aria-label="A stacked bar chart of each market maker's score components"></svg>
+      </div>
+      <div class="panel tight"><h3>The formula on the page</h3><pre class="code">gross     = spread_captured + rebate
+net       = gross − w_adv × adverse_selection
+                  − w_inv × inventory_carry
+risk_adj  = net / max(vol, vol_floor)
+score     = risk_adj × max(0, 1 − pen × max_drawdown)
+                     (pen defaults to 2.0: a 25% drawdown halves it)</pre></div>
+    </div>
+    <div class="stack">
+      <div class="panel tight">
+        <div class="ctl"><label for="mmAdv">Weight on adverse selection <b id="mmAdvv">1.0</b></label>
+          <input type="range" id="mmAdv" min="0" max="30" step="1" value="10" aria-label="Weight applied to adverse selection" /></div>
+        <div class="ctl"><label for="mmInv">Weight on inventory carry <b id="mmInvv">1.0</b></label>
+          <input type="range" id="mmInv" min="0" max="30" step="1" value="10" aria-label="Weight applied to inventory carry" /></div>
+        <div class="ctl"><label for="mmPen">Drawdown penalty <b id="mmPenv">2.0</b></label>
+          <input type="range" id="mmPen" min="0" max="60" step="1" value="20" aria-label="Drawdown penalty multiplier" /></div>
+      </div>
+      <div class="verdict"><div class="vt" id="mmVerdict">—</div>
+        <p class="sub" id="mmWhy" style="margin-top:7px"></p></div>
+      <div class="panel"><h4>The three makers</h4>
+        <ul class="plain" id="mmWho"></ul>
+        <div class="note" style="margin-top:11px"><b>Why divide by volatility.</b> Without it, the way to
+        win is leverage: quote enormous size, accept an enormous swing, and hope the session ends on a
+        good tick. Dividing by realised volatility and then penalising the drawdown makes the same P&amp;L
+        earned smoothly beat the P&amp;L earned by surviving a near-miss — and the penalty is applied by
+        sign, so a big drawdown always hurts.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ WHY ══════════════ -->
+<section id="why">
+  <div class="kicker">Part 3</div>
+  <h2><span class="secnum">3</span>Why it matters — the tournament, and the whole course in one path</h2>
+  <p class="lead">The finale turns every market-structure flag on at once: two venues, futures, the
+  longest opening and closing auctions of the season, the scarcest borrow, the tightest message quota
+  and the widest position limit — plus an FPGA maker's IPO listing mid-session. There is nowhere left to
+  hide a weak stage.</p>
+
+  <div class="grid2" style="margin-top:16px">
+    <div class="panel"><h4>The finale scenario, in numbers</h4>
+      <div class="tablewrap"><table class="t">
+        <thead><tr><th>flag</th><th>setting</th><th>what it does to you</th></tr></thead>
+        <tbody>
+          <tr><td class="n">multi_venue</td><td>on</td><td>the same symbol on two books — cross-venue races and a consolidated touch</td></tr>
+          <tr><td class="n">futures_enabled</td><td>on</td><td>an index future to hedge or to basis-trade against the constituents</td></tr>
+          <tr><td class="n">opening auction</td><td>15</td><td>the longest of the season: a single clearing price, not a queue to race</td></tr>
+          <tr><td class="n">closing auction</td><td>12</td><td>your last chance to flatten at a print everyone gets</td></tr>
+          <tr><td class="n">order_quota</td><td>≈6 / tick</td><td>messages are the scarce resource; a wasted cancel is a missed quote</td></tr>
+          <tr><td class="n">position_limit</td><td>1200</td><td>the widest of the season — room to be wrong at scale</td></tr>
+          <tr><td class="n">short locate cap</td><td>600</td><td>the tightest borrow: shorting is a privilege you have to secure</td></tr>
+          <tr><td class="n">IPO</td><td>mid-session</td><td>a listing-day primary event, priced fast, against a hardware-floor field</td></tr>
+        </tbody></table></div>
+      <div class="note" style="margin-top:11px"><b>Auctions are not races.</b> Everything you built for
+      continuous trading — queue position, cancel latency, the pickoff — does nothing in a single-price
+      auction. Submit into it on the merits and spend the microseconds elsewhere. Knowing when
+      <em class="hi">not</em> to be fast is part of the grade.</div></div>
+    <div class="panel"><h4>Ethics, briefly, and for real</h4>
+      <p class="sub"><b>The case for.</b> Tighter spreads, deeper books, continuous liquidity, and price
+      discovery knitted across venues — measurably lower costs for everybody who is not racing.</p>
+      <p class="sub" style="margin-top:8px"><b>The case against.</b> An arms race spends real resources
+      to move wealth a few microseconds earlier, and the edge is partly purchased: colocation and
+      proprietary feeds are for sale, so access is not equal.</p>
+      <p class="sub" style="margin-top:8px"><b>Stability.</b> Fast, correlated withdrawal of liquidity is
+      how a flash crash starts, which is why circuit breakers, LULD bands, tick sizes, speed bumps and
+      kill switches exist — market structure is a design, and you are now someone who designs it.</p>
+      <p class="sub" style="margin-top:8px"><b>Your part.</b> Fast code that respects its risk limits and
+      does not destabilise a book. You should be able to argue both sides of this in the exam without
+      reaching for a slogan.</p></div>
+  </div>
+
+  <h3 style="margin-top:30px">Interactive · the tournament scoreboard</h3>
+  <p class="sub" style="margin-bottom:12px">Five metrics, each normalised to 0–100 so they are
+  commensurable, then weighted. Move the weights and watch the ranking move — that is not a bug in the
+  rubric, it is the rubric telling you that "best bot" is a question about what you are measuring.</p>
+
+  <div class="board">
+    <div class="stack">
+      <div class="tablewrap"><table class="t" id="sbTable">
+        <thead><tr><th>#</th><th>team</th><th>p99.9</th><th>fill quality</th><th>P&amp;L</th><th>OTR</th><th>throughput</th><th>composite</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+      <div class="svgwrap">
+        <svg id="sbSvg" viewBox="0 0 620 200" role="img" aria-label="A bar chart of each team's composite tournament score, broken into its weighted components"></svg>
+      </div>
+    </div>
+    <div class="stack">
+      <div class="panel tight" id="sbCtl"></div>
+      <div class="verdict"><div class="vt" id="sbVerdict">—</div>
+        <p class="sub" id="sbWhy" style="margin-top:7px"></p></div>
+      <div class="panel tight"><h3>How each metric is normalised</h3><ul class="plain">
+        <li><b>p99.9</b> — tail latency, inverted and log-scaled: 20 µs scores 100, 20 ms scores 0.</li>
+        <li><b>fill quality</b> — fill rate weighted by markout, so fills that lose money do not count.</li>
+        <li><b>P&amp;L</b> — risk-adjusted and drawdown-penalised, as in the season math.</li>
+        <li><b>OTR</b> — orders and cancels per trade; inside the venue's tier scores 100, over it decays.</li>
+        <li><b>throughput</b> — messages per second sustained when the whole class fires at once.</li>
+      </ul></div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:30px">Interactive · the course in one path</h3>
+  <p class="sub" style="margin-bottom:12px">Every stage of tick-to-trade was somebody's week. Click a
+  stage — or tab to it and press Enter — to see which week owns it, what it costs, and what you did to
+  it. This is the recap: fifteen weeks, one number.</p>
+
+  <div class="split">
+    <div class="stack">
+      <div class="svgwrap">
+        <svg id="ttSvg" viewBox="0 0 640 210" role="img" aria-label="The tick to trade path as clickable stages, each labelled with the week of the course that owns it"></svg>
+      </div>
+      <div class="stats" id="ttStats"></div>
+    </div>
+    <div class="stack">
+      <div class="panel"><h4 id="ttName">—</h4>
+        <span class="pill acc" id="ttPill">—</span>
+        <p class="sub" id="ttWhat" style="margin-top:11px"></p>
+        <div class="kv" id="ttKv" style="margin-top:12px"></div>
+      </div>
+      <div class="note" id="ttNote"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ PITFALLS ══════════════ -->
+<section id="pitfalls">
+  <div class="kicker">Part 4</div>
+  <h2><span class="secnum">4</span>Five ways the finale goes wrong</h2>
+  <p class="lead">Every one of these is a bot that works perfectly and loses.</p>
+
+  <details class="pit"><summary>An arb that is gross-profitable and net-negative</summary>
+    <div class="body">
+      <p>The books are crossed by a tick, you lift and hit, and you pay a taker fee on
+      <em class="hi">both</em> legs. A one-cent gross edge against two aggressive fees is frequently a loss,
+      and it is a loss you will make thousands of times before you notice, because each one is tiny and
+      your fill rate looks superb.</p>
+      <p>The same arithmetic kills the marginal arb under a scarce quota: a trade whose edge rounds to
+      zero has still consumed a message that a real opportunity needed.</p>
+      <p class="fix">Fix: compute the edge net of both sides' fees, require a margin above zero rather
+      than a sign, and size to the thin side. Then check it against the markout — an arb whose second leg
+      never fills is not an arb, it is a position.</p>
+    </div></details>
+
+  <details class="pit"><summary>Cancelling your way to a perfect queue position</summary>
+    <div class="body">
+      <p>Requote on every mid tick and you will always be at the best price and you will almost never
+      trade: each cancel-and-repost puts you at the <em class="hi">back</em> of the FIFO at the new price,
+      and you spend your entire message budget doing it.</p>
+      <p>Worse, it looks like diligence. The dashboards show you at the touch constantly; the fill rate
+      quietly collapses, the OTR climbs into a penalty tier, and the venue starts rejecting you.</p>
+      <p class="fix">Fix: make <code>Hold</code> the default. Requote when you are no longer at best, or
+      when you are buried behind more than about half the level; cancel when the price moved against you.
+      Otherwise keep the spot and the message.</p>
+    </div></details>
+
+  <details class="pit"><summary>Racing an auction</summary>
+    <div class="body">
+      <p>An auction matches everybody at one clearing price. Queue position is irrelevant, cancel
+      latency is irrelevant, and a burst of aggressive orders in the last milliseconds achieves nothing
+      except spending your quota and possibly moving the indicative price against yourself.</p>
+      <p>The finale has the longest auctions of the season at both ends of the session, so a bot that
+      only knows how to race will spend a meaningful fraction of the day being wrong about what game it
+      is playing.</p>
+      <p class="fix">Fix: branch on the market state. In an auction, submit on the merits — size and
+      limit — and use the microseconds you saved on the continuous session that follows.</p>
+    </div></details>
+
+  <details class="pit"><summary>Trading two venues from one cached top of book</summary>
+    <div class="body">
+      <p><code>on_book</code> fires <em class="hi">per venue</em>. If you keep one <code>Top</code> per
+      symbol instead of one per venue, every update overwrites the other venue's picture and your
+      "crossed book" is you comparing venue A against venue A a moment ago. It will fire constantly and
+      it will be wrong every time.</p>
+      <p>The subtler version: you keep both, but you never age them. A quote from 400 ms ago is not a
+      quote — it is a memory, and acting on it is how you become the stale side.</p>
+      <p class="fix">Fix: <code>touch_[symbol][venue]</code>, POD, no allocation, with a timestamp per
+      entry and a staleness bound. If the other venue's picture is older than the window you are trying
+      to exploit, there is no trade.</p>
+    </div></details>
+
+  <details class="pit"><summary>Bringing a binary that does not build from your repo</summary>
+    <div class="body">
+      <p>The tournament is a demo with a deadline. A bot that only builds on your laptop, needs a file
+      that is in <code>.gitignore</code>, or depends on a local uncommitted patch does not enter — and a
+      late submission cannot enter either. This is not a technicality; it is the same discipline as
+      deterministic replay.</p>
+      <p class="fix">Fix: clean clone, clean build, run the replay harness, check the release flags, and
+      do it the day <em class="hi">before</em>. Then bring the numbers: p50, p99, p99.9, and one page on
+      where your budget goes and what you would cut next.</p>
+    </div></details>
+</section>
+
+<!-- ══════════════ CHECK ══════════════ -->
+<section id="check">
+  <div class="kicker">Part 5</div>
+  <h2><span class="secnum">5</span>Check yourself</h2>
+  <p class="lead">Three questions, instant feedback, nothing recorded.</p>
+
+  <div class="mcq" data-a="1" data-exp="<b>No trade: the gross edge is one tick and the two taker fees eat it.</b> Buying B's ask at 100.04 and selling A's bid at 100.05 grosses 1.00 ¢ per share. Crossing on both venues pays a taker fee on both legs — at 0.6 ¢ per side that is 1.2 ¢ of cost against 1.0 ¢ of edge, so the &ldquo;free spread&rdquo; is a 0.2 ¢ loss per share, repeatable thousands of times. This is why <code>cross_venue_arb</code> subtracts <code>2 × fee_per_side</code> before it looks at the sign, and why a scarce message budget should require a margin above zero rather than merely a positive number.">
+    <p class="q"><span>Q1</span>A's bid is 100.05, B's ask is 100.04, both with size. Your taker fee is 0.6 ¢ per share per side. What is the trade?</p>
+    <div class="opts">
+      <button class="opt" type="button">Buy B, sell A — a crossed book is riskless by definition</button>
+      <button class="opt" type="button">No trade — 1.0 ¢ gross against 1.2 ¢ of fees is a loss</button>
+      <button class="opt" type="button">Buy B only, and work the other leg passively on A</button>
+      <button class="opt" type="button">Sell A, sell B — the market is about to fall</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+
+  <div class="mcq" data-a="2" data-exp="<b>Hold.</b> You are at the best price and you are ahead of most of the level, so your fill odds are good and a requote would throw that away: a cancel-and-repost costs a message <em>and</em> puts you at the back of the FIFO at the new price. Under a six-message quota that is two mistakes for the price of one. Requote when you are no longer at best, or when you are buried behind more than roughly half the level; cancel when the price has moved against you. On most ticks the correct action is to do nothing, which is the hardest behaviour to give a bot.">
+    <p class="q"><span>Q2</span>Your bid is at the best price, <code>queue_ahead</code> is 120 of a 1000-share level, the mid has not moved, and your quota is six messages this tick. What is the right action?</p>
+    <div class="opts">
+      <button class="opt" type="button">Requote — refreshing the order keeps it competitive</button>
+      <button class="opt" type="button">Cancel and re-post one tick better to move up the book</button>
+      <button class="opt" type="button">Hold — you are at best and near the front; spend the message elsewhere</button>
+      <button class="opt" type="button">Cancel — a resting order is an option you wrote for free</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+
+  <div class="mcq" data-a="3" data-exp="<b>The one with the second-best tail and a positive markout.</b> The composite normalises five metrics — tail latency, fill quality weighted by markout, risk-adjusted P&amp;L, OTR and throughput — precisely so that being fastest cannot carry a bot that trades badly. A negative markout means the fills lose money after the fact, so the fill-quality term collapses and the P&amp;L term follows it; an OTR in a penalty tier compounds the damage with fees and rejects. Fastest is a component of the score, never the score.">
+    <p class="q"><span>Q3</span>Bot A has the best p99.9 in the room, a negative +1 s markout and an OTR in the venue's penalty tier. Bot B is second on the tail with a positive markout and a clean OTR. Who wins the composite?</p>
+    <div class="opts">
+      <button class="opt" type="button">Bot A — the board sorts on the tail, and it owns the tail</button>
+      <button class="opt" type="button">Neither: the composite is dominated by throughput, which is not given here</button>
+      <button class="opt" type="button">It is a tie — latency and markout are weighted equally by construction</button>
+      <button class="opt" type="button">Bot B — fill quality and P&amp;L collapse when the markout is negative</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+</section>
+
+<!-- ══════════════ NEXT ══════════════ -->
+<section id="next">
+  <div class="kicker">Part 6</div>
+  <h2><span class="secnum">6</span>Do the work — and then compete</h2>
+  <div class="grid2" style="margin-top:14px">
+    <div class="panel"><h4>In the lab (~45–60 min)</h4><ul class="plain">
+      <li>Read the finale scenario before you code: two venues, auctions at both ends, a tight
+      <code>order_quota</code>, an FPGA IPO mid-session.</li>
+      <li>Sketch the cross-venue stale-quote detector as a pure function, fees on both legs, sized to the
+      thin side — then unit-test it without a socket in sight.</li>
+      <li>Sketch the queue-aware requote from <code>on_ack</code> / <code>on_queue</code> state, with
+      <code>Hold</code> as the default branch.</li>
+      <li>Map every metric of the composite to the lever you built for it, and name the metric each lever
+      hurts. Optimising one wrecks another; the grade rewards the balance.</li>
+      <li>Re-run <code>latency_replay.py</code> and <code>latency_report.py</code> one last time. Those
+      are the numbers you bring.</li>
+    </ul></div>
+    <div class="panel"><h4>Final project &amp; final exam</h4><ul class="plain">
+      <li><b>Tournament-ready bot.</b> Your best binary for the finale scenario — multi-venue,
+      quota-aware, tail-optimised, colocated if you decided the economics work.</li>
+      <li><b>Performance writeup (1–2 pages).</b> Where your latency budget goes today, your
+      p50/p99/p99.9, and what you would cut next.</li>
+      <li><b>Strict deadline.</b> Both due before the finale session; a late bot cannot enter.</li>
+      <li><b>Bring a clean build from your repo.</b> You compete with what compiles.</li>
+      <li><b>Final exam.</b> On-site, closed-book, coding questions across the whole term:
+      microstructure and the order book; memory hierarchy, alignment and benchmarking; pools, arenas and
+      no-alloc hot paths; templates, CRTP and constexpr; cache-friendly books and ring buffers; memory
+      order and SPSC queues; kernel bypass and zero-copy parsing; perf, flame graphs, tick-to-trade and
+      the tail.</li>
+    </ul></div>
+  </div>
+  <div class="nextgrid" style="margin-top:18px">
+    <div class="nextcard"><div class="nl">Code</div>
+      <div class="nt">Get the code</div>
+      <div class="nd">Both tracks share one starter tree. The finale runs the full-structure scenario;
+      <code>latency_report.py</code> prints the percentiles the composite consumes.</div>
+      <div class="row" style="margin-top:11px">
+        <a class="btn" href="https://github.com/sdonadio/hft-cpp-starter-columbia">15-week track starter</a>
+        <a class="btn" href="https://github.com/sdonadio/hft-cpp-starter-uchicago">9-session track starter</a>
+      </div></div>
+    <a class="nextcard" href="week14.html"><div class="nl">Previous</div>
+      <div class="nt">← Week 14 · Profiling, the Tail &amp; Production</div>
+      <div class="nd">The tail you killed last week is the reason you are in this race at all.</div></a>
+    <a class="nextcard" href="index.html"><div class="nl">The whole course</div>
+      <div class="nt">Home · start again →</div>
+      <div class="nd">Fifteen weeks, one number: tick-to-trade. Measure, don't guess; kill the tail; own every cycle.</div></a>
+  </div>
+</section>
+
+<footer>Low-Latency Trading Arena · an interactive companion for a course on low-latency trading systems in C++ · <a href="https://github.com/sdonadio/low-latency-trading-arena">Source</a></footer>
+
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════
+   Week 15 — Latency Arbitrage, Multi-Venue & the Tournament
+   ════════════════════════════════════════════════════════════════ */
+var $ = function (id) { return document.getElementById(id); };
+/* SVG namespace taken from the document so no absolute URL appears in this file */
+var SVGNS = $("rcSvg").namespaceURI;
+function mk(tag, attrs) {
+  var e = document.createElementNS(SVGNS, tag);
+  for (var k in attrs) { if (attrs.hasOwnProperty(k)) e.setAttribute(k, attrs[k]); }
+  return e;
+}
+function txt(x, y, s, size, fill, anchor, weight) {
+  var t = mk("text", { x: x, y: y, "font-size": size || 10, "font-family": "monospace", fill: fill || "#9aa0a6" });
+  if (anchor) t.setAttribute("text-anchor", anchor);
+  if (weight) t.setAttribute("font-weight", weight);
+  t.textContent = s;
+  return t;
+}
+function clear(n) { while (n.firstChild) n.removeChild(n.firstChild); }
+function stats(host, rows) {
+  clear(host);
+  rows.forEach(function (r) {
+    var d = document.createElement("div"); d.className = "stat";
+    var a = document.createElement("div"); a.className = "sl"; a.textContent = r[0];
+    var b = document.createElement("div"); b.className = "sv" + (r[2] ? " " + r[2] : ""); b.textContent = r[1];
+    d.appendChild(a); d.appendChild(b); host.appendChild(d);
+  });
+}
+function swWire(host, fn) {
+  var btns = Array.prototype.slice.call(host.querySelectorAll("button"));
+  btns.forEach(function (b) {
+    b.addEventListener("click", function () {
+      btns.forEach(function (o) { o.setAttribute("aria-pressed", o === b ? "true" : "false"); });
+      fn(b);
+    });
+  });
+}
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+function fit(str, px, perChar) {
+  var max = Math.floor(px / perChar);
+  if (max < 3) return "";
+  return str.length <= max ? str : str.slice(0, max - 1) + "…";
+}
+function kv(host, rows) {
+  clear(host);
+  rows.forEach(function (r) {
+    var b = document.createElement("b"); b.textContent = r[0];
+    var s = document.createElement("span"); s.textContent = r[1];
+    host.appendChild(b); host.appendChild(s);
+  });
+}
+
+/* ════ 1. Two-venue race ══════════════════════════════════════ */
+var RC = { feed: 12, tick: 9, out: 20, prop: 95, comp: 55, colo: false };
+function rcModel() {
+  var wireF = RC.colo ? RC.feed * 0.35 : RC.feed;
+  var wireO = RC.colo ? RC.out * 0.35 : RC.out;
+  var arrive = wireF + RC.tick + wireO;
+  var T = Math.min(RC.prop, RC.comp);
+  var jit = Math.max(0.4, RC.tick * 0.25);            /* mean of the arrival tail */
+  var pWin = arrive >= T ? 0 : 1 - Math.exp(-(T - arrive) / jit);
+  return { wireF: wireF, wireO: wireO, arrive: arrive, p99: arrive + jit * 4.6,
+    T: T, pWin: pWin, beatMaker: arrive < RC.prop, beatComp: arrive < RC.comp };
+}
+function rcDraw() {
+  var m = rcModel(), svg = $("rcSvg"); clear(svg);
+  var X0 = 24, W = 560, Y0 = 44, RH = 22, GAP = 16;
+  var span = Math.max(m.p99, RC.prop, RC.comp) * 1.12;
+  var sx = function (t) { return X0 + (t / span) * W; };
+  svg.setAttribute("viewBox", "0 0 640 " + (Y0 + 3 * (RH + GAP) + 34));
+  svg.appendChild(txt(X0, 16, "t = 0: the mid moves on venue A · timeline in µs", 11, "#c4b5fd", null, 700));
+  /* axis */
+  var ticks = 5, i;
+  for (i = 0; i <= ticks; i++) {
+    var t = (span / ticks) * i;
+    svg.appendChild(mk("line", { x1: sx(t), y1: Y0 - 8, x2: sx(t), y2: Y0 + 3 * (RH + GAP), stroke: "#272c36" }));
+    svg.appendChild(txt(sx(t), Y0 + 3 * (RH + GAP) + 16, t.toFixed(0), 9, "#6f757f", "middle"));
+  }
+  /* stale window */
+  svg.appendChild(mk("rect", { x: sx(0), y: Y0 - 6, width: sx(RC.prop) - sx(0), height: 3 * (RH + GAP) + 6,
+    fill: "rgba(63,185,80,.16)", stroke: "rgba(63,185,80,.5)", rx: 3 }));
+  svg.appendChild(txt(sx(RC.prop) - 4, Y0 - 12, "B's quote is stale until " + RC.prop + " µs", 9.5, "#3fb950", "end"));
+  /* your path, segmented */
+  var segs = [["feed", m.wireF, "#4c1d95"], ["decide", RC.tick, "#7c3aed"], ["wire out", m.wireO, "#a78bfa"]];
+  var acc = 0;
+  segs.forEach(function (s) {
+    svg.appendChild(mk("rect", { x: sx(acc), y: Y0, width: Math.max(1.5, sx(acc + s[1]) - sx(acc)), height: RH, rx: 2, fill: s[2] }));
+    if (sx(acc + s[1]) - sx(acc) > 40) svg.appendChild(txt(sx(acc) + 4, Y0 + 15, s[0], 8.5, "#e8e6e3"));
+    acc += s[1];
+  });
+  svg.appendChild(txt(X0, Y0 - 12, "you", 9.5, "#c4b5fd"));
+  svg.appendChild(mk("circle", { cx: sx(m.arrive), cy: Y0 + RH / 2, r: 4, fill: "#c4b5fd" }));
+  svg.appendChild(txt(sx(m.arrive) + 7, Y0 + 15, "order lands " + m.arrive.toFixed(0) + " µs", 9.5, "#c4b5fd"));
+  /* your p99 */
+  svg.appendChild(mk("line", { x1: sx(m.p99), y1: Y0 - 2, x2: sx(m.p99), y2: Y0 + RH + 2,
+    stroke: "#d29922", "stroke-dasharray": "3 2" }));
+  svg.appendChild(txt(sx(m.p99) + 4, Y0 + RH + 12, "your p99 arrival " + m.p99.toFixed(0) + " µs", 9, "#d29922"));
+  /* competitor */
+  var yC = Y0 + (RH + GAP);
+  svg.appendChild(mk("rect", { x: sx(0), y: yC, width: Math.max(1.5, sx(RC.comp) - sx(0)), height: RH, rx: 2, fill: "rgba(88,166,255,.55)" }));
+  svg.appendChild(txt(X0, yC - 4, "competitor", 9.5, "#58a6ff"));
+  svg.appendChild(mk("circle", { cx: sx(RC.comp), cy: yC + RH / 2, r: 4, fill: "#58a6ff" }));
+  svg.appendChild(txt(sx(RC.comp) + 7, yC + 15, RC.comp + " µs", 9.5, "#58a6ff"));
+  /* maker cancel */
+  var yM = Y0 + 2 * (RH + GAP);
+  svg.appendChild(mk("line", { x1: sx(RC.prop), y1: yM - 4, x2: sx(RC.prop), y2: yM + RH + 4, stroke: "#3fb950", "stroke-width": 2 }));
+  svg.appendChild(txt(X0, yM + 15, "B's maker cancels →", 9.5, "#3fb950"));
+  svg.appendChild(txt(sx(RC.prop) + 6, yM + 15, "window closes", 9.5, "#3fb950"));
+
+  stats($("rcStats"), [
+    ["your arrival", m.arrive.toFixed(0) + " µs", "acc"],
+    ["window width", RC.prop + " µs"],
+    ["margin", (m.T - m.arrive).toFixed(0) + " µs", m.arrive < m.T ? "ok" : "bad"],
+    ["P(win the race)", (m.pWin * 100).toFixed(0) + "%", m.pWin > 0.6 ? "ok" : (m.pWin < 0.2 ? "bad" : "warn")],
+    ["races won per 100", Math.round(m.pWin * 100).toString(), "acc"]
+  ]);
+  var V, why;
+  if (!m.beatMaker) {
+    V = "Too slow: the quote is gone before you arrive";
+    why = "Your order lands at " + m.arrive.toFixed(0) + " µs and B's maker cancelled at " + RC.prop +
+      " µs. You will send into a quote that no longer exists and collect a reject — or worse, a fill on " +
+      "whatever replaced it. Cut the wire (colocation) or cut the compute (weeks 13 and 14); the arithmetic " +
+      "does not care which.";
+  } else if (!m.beatComp) {
+    V = "Inside the window, behind the competitor";
+    why = "You beat the maker by " + (RC.prop - m.arrive).toFixed(0) + " µs and lost to the competitor by " +
+      (m.arrive - RC.comp).toFixed(0) + " µs. Second place in a latency race pays exactly zero: the size was " +
+      "taken. This is the winner-take-all property that makes pure arbitrage a bad place to be second-best.";
+  } else {
+    V = "You win — with " + (m.T - m.arrive).toFixed(0) + " µs to spare";
+    why = "You arrive before both the cancel and the competitor. Note the amber p99 marker: your " +
+      "<em class=\"hi\">median</em> arrival wins and your tail may not, which is why the board sorts on p99.9. " +
+      "One slow tick in a thousand is one lost race in a thousand — and the races are the P&amp;L.";
+  }
+  $("rcVerdict").textContent = V;
+  $("rcWhy").innerHTML = why;
+}
+["rcFeed:feed: µs", "rcTick:tick: µs", "rcOut:out: µs", "rcProp:prop: µs", "rcComp:comp: µs"].forEach(function (spec) {
+  var parts = spec.split(":"), id = parts[0], key = parts[1];
+  $(id).addEventListener("input", function () {
+    RC[key] = +this.value; $(id + "v").textContent = this.value + " µs"; rcDraw();
+  });
+});
+$("rcColo").addEventListener("change", function () { RC.colo = this.checked; rcDraw(); });
+rcDraw();
+
+/* ════ 2. Speed versus alpha ══════════════════════════════════ */
+var SA = { mix: 50, field: 6, cost: 12 };
+var SA_EDGE = 1.8;                             /* ¢/share when the trade is right */
+function saEv(mix) {
+  /* both axes have diminishing returns: the last microsecond and the last
+     basis point of hit rate are the expensive ones */
+  var react = 15 + 45 * Math.pow(1 - mix / 100, 0.8);      /* 15..60 µs */
+  var hit = 0.50 + 0.40 * Math.pow(1 - mix / 100, 0.35);   /* 0.50..0.90 */
+  var rivals = Math.max(0.5, SA.field / 4);                /* effective independent rivals */
+  var pFast = Math.pow(clamp((60 - react) / 45, 0, 1), rivals);
+  var pWin = 0.06 + 0.94 * pFast;              /* you still trade when you are not first */
+  var ev = pWin * (hit * SA_EDGE - (1 - hit) * (SA.cost / 10));
+  return { react: react, hit: hit, pWin: pWin, ev: ev };
+}
+function saDraw() {
+  var svg = $("saSvg"); clear(svg);
+  var X0 = 46, W = 530, Y0 = 20, H = 130, m;
+  var vals = [], best = { ev: -1e9, mix: 0 }, i;
+  for (i = 0; i <= 100; i += 2) {
+    m = saEv(i); vals.push([i, m.ev]);
+    if (m.ev > best.ev) { best.ev = m.ev; best.mix = i; }
+  }
+  var ys = vals.map(function (v) { return v[1]; });
+  var lo = Math.min.apply(null, ys), hi = Math.max.apply(null, ys);
+  var pad = (hi - lo) * 0.15 || 0.1;
+  var sx = function (x) { return X0 + (x / 100) * W; };
+  var sy = function (v) { return Y0 + H - ((v - lo + pad) / (hi - lo + 2 * pad)) * H; };
+  if (lo <= 0 && hi >= 0) {
+    svg.appendChild(mk("line", { x1: X0, y1: sy(0), x2: X0 + W, y2: sy(0), stroke: "#6f757f", "stroke-dasharray": "4 3" }));
+    svg.appendChild(txt(X0 - 6, sy(0) + 3, "0", 9, "#6f757f", "end"));
+  }
+  svg.appendChild(txt(X0 - 6, sy(hi) + 3, hi.toFixed(2), 9, "#6f757f", "end"));
+  svg.appendChild(txt(X0 - 6, sy(lo) + 3, lo.toFixed(2), 9, "#6f757f", "end"));
+  var d = "";
+  vals.forEach(function (v, k) { d += (k ? "L" : "M") + sx(v[0]).toFixed(1) + " " + sy(v[1]).toFixed(1) + " "; });
+  svg.appendChild(mk("path", { d: d, fill: "none", stroke: "#7c3aed", "stroke-width": 2.2 }));
+  svg.appendChild(mk("line", { x1: sx(best.mix), y1: Y0, x2: sx(best.mix), y2: Y0 + H, stroke: "#3fb950", "stroke-dasharray": "3 3" }));
+  svg.appendChild(txt(sx(best.mix) + (best.mix > 55 ? -5 : 5), Y0 + 12,
+    "optimum " + best.mix + "% on latency", 9.5, "#3fb950", best.mix > 55 ? "end" : null));
+  m = saEv(SA.mix);
+  svg.appendChild(mk("circle", { cx: sx(SA.mix), cy: sy(m.ev), r: 5, fill: "#c4b5fd" }));
+  [0, 50, 100].forEach(function (x) {
+    svg.appendChild(txt(sx(x), Y0 + H + 15, x === 0 ? "all signal" : (x === 100 ? "all latency" : "50 / 50"), 9.5, "#6f757f", "middle"));
+  });
+  svg.appendChild(txt(X0 + W / 2, Y0 + H + 32, "expected ¢/share per opportunity ↑ · budget split →", 10, "#9aa0a6", "middle"));
+  stats($("saStats"), [
+    ["your reaction", m.react.toFixed(0) + " µs", "acc"],
+    ["hit rate", (m.hit * 100).toFixed(0) + "%"],
+    ["P(first to the window)", (m.pWin * 100).toFixed(0) + "%"],
+    ["EV / opportunity", m.ev.toFixed(3) + " ¢", m.ev > 0 ? "ok" : "bad"],
+    ["optimum split", best.mix + "% latency", "acc"]
+  ]);
+  $("saVerdict").textContent = SA.mix > best.mix + 12 ? "Over-invested in speed"
+    : (SA.mix < best.mix - 12 ? "Over-invested in the signal" : "Near the optimum for this field");
+  $("saWhy").innerHTML = "With " + SA.field + " competitors and a " + (SA.cost / 10).toFixed(1) +
+    " ¢ cost of being wrong against a " + SA_EDGE.toFixed(1) + " ¢ edge when you are right, the optimum here is <b>" + best.mix + "% on latency</b>. Widen the field and " +
+    "the optimum slides toward speed, because winning the race becomes the binding constraint; raise the " +
+    "cost of being wrong and it slides toward the signal, because a fast wrong trade is the most expensive " +
+    "thing you can build. Neither extreme ever wins: at 100% latency you are first into trades you should " +
+    "not take, and at 0% you are right about windows that closed before you arrived.";
+}
+$("saMix").addEventListener("input", function () {
+  SA.mix = +this.value; $("saMixv").textContent = this.value + " / " + (100 - this.value); saDraw();
+});
+$("saField").addEventListener("input", function () { SA.field = +this.value; $("saFieldv").textContent = this.value; saDraw(); });
+$("saCost").addEventListener("input", function () { SA.cost = +this.value; $("saCostv").textContent = (this.value / 10).toFixed(1); saDraw(); });
+saDraw();
+
+/* ════ 3. Message budget / order-to-trade ratio ═══════════════ */
+var OT = { quota: 6, quotes: 4, cancels: 3, fill: 4 };
+var OT_TIERS = [[100, "clean", "#3fb950"], [250, "surcharge per message", "#d29922"],
+                [500, "throttled: quota halved", "#f0883e"], [1e9, "rejects and a warning", "#f85149"]];
+function otModel() {
+  var want = OT.quotes + OT.cancels;
+  var quotesSent = Math.min(OT.quotes, OT.quota);
+  var cancelsSent = Math.min(OT.cancels, Math.max(0, OT.quota - quotesSent));
+  var sent = quotesSent + cancelsSent;
+  var rejected = want - sent;
+  var trades = quotesSent * (OT.fill / 100);
+  var otr = trades > 0 ? sent / trades : Infinity;
+  var tier = OT_TIERS.filter(function (t) { return otr <= t[0]; })[0] || OT_TIERS[3];
+  return { want: want, sent: sent, rejected: rejected, quotesSent: quotesSent,
+    cancelsSent: cancelsSent, trades: trades, otr: otr, tier: tier };
+}
+function otDraw() {
+  var m = otModel(), svg = $("otSvg"); clear(svg);
+  var X0 = 30, W = 570, Y0 = 34;
+  /* messages vs quota */
+  var maxMsg = Math.max(m.want, OT.quota) * 1.15;
+  var sx = function (v) { return X0 + (v / maxMsg) * W; };
+  svg.appendChild(txt(X0, 18, "messages this tick · quota " + OT.quota, 11, "#c4b5fd", null, 700));
+  svg.appendChild(mk("rect", { x: sx(0), y: Y0, width: Math.max(1.5, sx(m.quotesSent) - sx(0)), height: 24, rx: 2, fill: "#7c3aed" }));
+  svg.appendChild(mk("rect", { x: sx(m.quotesSent), y: Y0, width: Math.max(0, sx(m.quotesSent + m.cancelsSent) - sx(m.quotesSent)), height: 24, rx: 2, fill: "#a78bfa" }));
+  if (m.rejected > 0) {
+    svg.appendChild(mk("rect", { x: sx(m.sent), y: Y0, width: Math.max(1.5, sx(m.want) - sx(m.sent)), height: 24, rx: 2,
+      fill: "rgba(248,81,73,.5)", stroke: "#f85149" }));
+    svg.appendChild(txt(sx(m.want) + 6, Y0 + 17, m.rejected + " rejected", 9.5, "#f85149"));
+  }
+  svg.appendChild(mk("line", { x1: sx(OT.quota), y1: Y0 - 8, x2: sx(OT.quota), y2: Y0 + 32, stroke: "#d29922", "stroke-width": 2 }));
+  svg.appendChild(txt(sx(OT.quota), Y0 - 12, "quota", 9.5, "#d29922", "middle"));
+  svg.appendChild(txt(X0, Y0 + 46, "quotes " + m.quotesSent + " · cancels " + m.cancelsSent +
+    " · trades " + m.trades.toFixed(2) + " per tick", 9.5, "#9aa0a6"));
+  /* OTR gauge */
+  var GY = 130, GW = 570;
+  svg.setAttribute("viewBox", "0 0 640 " + (GY + 94));
+  svg.appendChild(txt(X0, GY - 14, "order-to-trade ratio · venue penalty tiers", 11, "#c4b5fd", null, 700));
+  var bands = [[0, 100], [100, 250], [250, 500], [500, 800]];
+  var gsx = function (v) { return X0 + (clamp(v, 0, 800) / 800) * GW; };
+  bands.forEach(function (b, i) {
+    svg.appendChild(mk("rect", { x: gsx(b[0]), y: GY, width: gsx(b[1]) - gsx(b[0]), height: 22,
+      fill: OT_TIERS[i][2], opacity: 0.22, stroke: OT_TIERS[i][2] }));
+    svg.appendChild(txt((gsx(b[0]) + gsx(b[1])) / 2, GY + 15, OT_TIERS[i][0] === 1e9 ? "500+" : "≤" + OT_TIERS[i][0], 9, OT_TIERS[i][2], "middle"));
+  });
+  var pos = isFinite(m.otr) ? gsx(m.otr) : gsx(800);
+  svg.appendChild(mk("line", { x1: pos, y1: GY - 5, x2: pos, y2: GY + 32, stroke: "#e8e6e3", "stroke-width": 2 }));
+  svg.appendChild(txt(clamp(pos, X0 + 34, X0 + GW - 34), GY + 45,
+    isFinite(m.otr) ? "OTR " + m.otr.toFixed(0) : "OTR ∞ (no trades)", 9.5, "#e8e6e3", "middle", 700));
+  svg.appendChild(txt(X0, GY + 66, "orders and cancels sent per trade actually done — over 100, tick and cancel", 9.5, "#9aa0a6"));
+  svg.appendChild(txt(X0, GY + 82, "fees start; over 500 the venue stops taking you seriously.", 9.5, "#9aa0a6"));
+  stats($("otStats"), [
+    ["wanted", m.want + " msgs"],
+    ["sent", m.sent + " msgs", m.rejected ? "warn" : "ok"],
+    ["rejected", String(m.rejected), m.rejected ? "bad" : "ok"],
+    ["trades / 100 ticks", (m.trades * 100).toFixed(0)],
+    ["OTR", isFinite(m.otr) ? m.otr.toFixed(0) : "∞", m.tier[1] === "clean" ? "ok" : "bad"]
+  ]);
+  kv($("otKv"), [
+    ["quotes", m.quotesSent + " sent of " + OT.quotes + " wanted"],
+    ["cancels", m.cancelsSent + " sent of " + OT.cancels + " wanted"],
+    ["rejected", m.rejected + " (quota exhausted)"],
+    ["fills", m.trades.toFixed(2) + " per tick at a " + OT.fill + "% fill rate"],
+    ["tier", m.tier[1]]
+  ]);
+  $("otVerdict").textContent = m.tier[1] === "clean"
+    ? (m.rejected ? "Inside the OTR tier, but over quota" : "Inside quota and inside the tier")
+    : "Penalty tier: " + m.tier[1];
+  $("otWhy").innerHTML = m.rejected
+    ? "You are trying to send " + m.want + " messages into a " + OT.quota + "-message quota, so " +
+      m.rejected + " are rejected — and the ones that survive are whichever the venue saw first, not the " +
+      "ones you cared most about. Prioritise in <em class=\"hi\">your</em> code: decide which quote matters " +
+      "before the quota decides for you."
+    : (m.tier[1] === "clean"
+      ? "An OTR of " + m.otr.toFixed(0) + " is inside the clean tier. Note how quickly it degrades if you " +
+        "add cancels or lose fill rate: the ratio has your fill rate in the denominator, so being " +
+        "picked-off-shy and cancel-happy is charged twice."
+      : "An OTR of " + m.otr.toFixed(0) + " puts you in the &ldquo;" + m.tier[1] + "&rdquo; tier. The " +
+        "quickest way out is not fewer quotes — it is <em class=\"hi\">more fills per quote</em>: hold your " +
+        "queue position instead of chasing, and stop quoting names where your markout is negative.");
+}
+["otQuota:quota", "otQuotes:quotes", "otCancels:cancels", "otFill:fill"].forEach(function (spec) {
+  var parts = spec.split(":"), id = parts[0], key = parts[1];
+  $(id).addEventListener("input", function () {
+    OT[key] = +this.value;
+    $(id + "v").textContent = key === "fill" ? this.value + "%" : this.value;
+    otDraw();
+  });
+});
+otDraw();
+
+/* ════ 4. Market-maker score ══════════════════════════════════ */
+var MM_MAKERS = [
+  { n: "MM-A · tight and fast", spread: 42, rebate: 11, adverse: 26, inv: 6, vol: 1.00, mdd: 0.06,
+    d: "Quotes inside the touch on every name, requotes hard, and gets filled constantly. Captures the most spread of the three and pays for it in adverse selection." },
+  { n: "MM-B · wide and patient", spread: 28, rebate: 6, adverse: 7, inv: 4, vol: 0.62, mdd: 0.03,
+    d: "Quotes a wider spread, holds queue position, and skips the names where its markout is negative. Less gross, far less given back, and the smoothest equity curve." },
+  { n: "MM-C · size hunter", spread: 68, rebate: 19, adverse: 44, inv: 22, vol: 2.10, mdd: 0.28,
+    d: "Quotes large size on both sides and carries whatever inventory it accumulates. Biggest gross number on the board and the biggest drawdown by a distance." }
+];
+var MM = { adv: 10, inv: 10, pen: 20 };
+function mmScore(k) {
+  var wA = MM.adv / 10, wI = MM.inv / 10, pen = MM.pen / 10;
+  var gross = k.spread + k.rebate;
+  var net = gross - wA * k.adverse - wI * k.inv;
+  var ra = net / Math.max(k.vol, 0.5);
+  var score = ra >= 0 ? ra * Math.max(0, 1 - pen * k.mdd) : ra * (1 + pen * k.mdd);
+  return { gross: gross, net: net, ra: ra, score: score };
+}
+function mmDraw() {
+  var rows = MM_MAKERS.map(function (k) { var s = mmScore(k); return { k: k, s: s }; });
+  rows.sort(function (a, b) { return b.s.score - a.s.score; });
+  var tb = $("mmTable").querySelector("tbody"); clear(tb);
+  rows.forEach(function (r, i) {
+    var tr = document.createElement("tr");
+    if (i === 0) tr.className = "me";
+    [[String(i + 1), "rank"], [r.k.n, "n"], ["$" + r.k.spread + "k", ""], ["$" + r.k.rebate + "k", ""],
+     ["−$" + r.k.adverse + "k", "neg"], ["−$" + r.k.inv + "k", "neg"],
+     [(r.k.mdd * 100).toFixed(0) + "%", r.k.mdd > 0.2 ? "neg" : ""],
+     [r.s.score.toFixed(1), r.s.score > 0 ? "pos" : "neg"]].forEach(function (c) {
+      var td = document.createElement("td"); td.textContent = c[0]; if (c[1]) td.className = c[1]; tr.appendChild(td);
+    });
+    tb.appendChild(tr);
+  });
+  var svg = $("mmSvg"); clear(svg);
+  var X0 = 130, W = 420, Y0 = 26, RH = 30, GAP = 22;
+  var mx = Math.max.apply(null, rows.map(function (r) { return Math.abs(r.s.gross); }));
+  svg.appendChild(txt(12, 14, "components, $k: spread + rebate, minus weighted adverse selection and inventory carry", 9.5, "#9aa0a6"));
+  rows.forEach(function (r, i) {
+    var y = Y0 + i * (RH + GAP), x = X0, wA = MM.adv / 10, wI = MM.inv / 10;
+    svg.appendChild(txt(X0 - 8, y + 19, r.k.n.split(" · ")[0], 10, "#e8e6e3", "end", 700));
+    [[r.k.spread, "#7c3aed", "spread"], [r.k.rebate, "#c4b5fd", "rebate"],
+     [-wA * r.k.adverse, "#f85149", "adverse"], [-wI * r.k.inv, "#d29922", "inventory"]].forEach(function (c) {
+      var w = (Math.abs(c[0]) / mx) * W * 0.55;
+      if (w < 0.6) return;
+      if (c[0] >= 0) { svg.appendChild(mk("rect", { x: x, y: y, width: w, height: RH * 0.55, rx: 2, fill: c[1] })); x += w; }
+      else { svg.appendChild(mk("rect", { x: x - w, y: y + RH * 0.6, width: w, height: RH * 0.4, rx: 2, fill: c[1], opacity: 0.85 })); x -= w; }
+    });
+    svg.appendChild(txt(X0 + W * 0.6 + 12, y + 19, "score " + r.s.score.toFixed(1), 10, "#c4b5fd", null, 700));
+  });
+  var wl = $("mmWho"); clear(wl);
+  MM_MAKERS.forEach(function (k) {
+    var li = document.createElement("li");
+    li.innerHTML = "<b>" + k.n + "</b> — " + k.d;
+    wl.appendChild(li);
+  });
+  var win = rows[0], last = rows[rows.length - 1];
+  $("mmVerdict").textContent = win.k.n + " wins";
+  $("mmWhy").innerHTML = "At these weights the ranking is " + rows.map(function (r) { return r.k.n.split(" · ")[0]; }).join(" → ") +
+    ". <b>" + win.k.n.split(" · ")[0] + "</b> wins on " +
+    (win.k.vol < 1 ? "smoothness: the same net divided by a smaller volatility and barely touched by the drawdown penalty"
+      : "gross capture, and it survives the penalties at this setting") +
+    ". Set the adverse-selection weight to 0 and the size hunter takes the top spot — which is exactly the " +
+    "mistake raw P&amp;L makes, because the rebate lands today and the adverse move lands later. " +
+    last.k.n.split(" · ")[0] + " is last here; find the weights that rescue it and you have found the " +
+    "argument it would make in its own defence.";
+}
+["mmAdv:adv", "mmInv:inv", "mmPen:pen"].forEach(function (spec) {
+  var parts = spec.split(":"), id = parts[0], key = parts[1];
+  $(id).addEventListener("input", function () {
+    MM[key] = +this.value; $(id + "v").textContent = (this.value / 10).toFixed(1); mmDraw();
+  });
+});
+mmDraw();
+
+/* ════ 5. Tournament scoreboard ═══════════════════════════════ */
+var SB_TEAMS = [
+  { n: "gamma-ray", p999: 41, fq: 74, pnl: 1.9, otr: 88, thr: 9200, me: false },
+  { n: "your team", p999: 68, fq: 81, pnl: 2.2, otr: 61, thr: 7400, me: true },
+  { n: "tick-tock", p999: 26, fq: 44, pnl: 0.7, otr: 340, thr: 11800, me: false },
+  { n: "queue-jump", p999: 190, fq: 88, pnl: 2.6, otr: 47, thr: 4100, me: false },
+  { n: "spread-eagle", p999: 520, fq: 69, pnl: 1.1, otr: 122, thr: 2600, me: false },
+  { n: "cold-start", p999: 3100, fq: 52, pnl: -0.4, otr: 205, thr: 1500, me: false }
+];
+var SB_METRICS = [
+  { id: "lat", l: "p99.9 tail latency", w: 30 },
+  { id: "fq", l: "fill quality (markout-weighted)", w: 25 },
+  { id: "pnl", l: "risk-adjusted P&L", w: 25 },
+  { id: "otr", l: "order-to-trade ratio", w: 10 },
+  { id: "thr", l: "throughput under load", w: 10 }
+];
+function sbNorm(t) {
+  return {
+    lat: clamp(100 * (Math.log(20000 / t.p999) / Math.log(20000 / 20)), 0, 100),
+    fq: clamp(t.fq, 0, 100),
+    pnl: clamp(((t.pnl + 1) / 4) * 100, 0, 100),
+    otr: t.otr <= 100 ? 100 : clamp(100 * Math.exp(-(t.otr - 100) / 220), 0, 100),
+    thr: clamp((t.thr / 12000) * 100, 0, 100)
+  };
+}
+function sbDraw() {
+  var wsum = SB_METRICS.reduce(function (a, m) { return a + m.w; }, 0) || 1;
+  var rows = SB_TEAMS.map(function (t) {
+    var n = sbNorm(t);
+    var comp = SB_METRICS.reduce(function (a, m) { return a + (m.w / wsum) * n[m.id]; }, 0);
+    return { t: t, n: n, comp: comp };
+  });
+  rows.sort(function (a, b) { return b.comp - a.comp; });
+  var tb = $("sbTable").querySelector("tbody"); clear(tb);
+  rows.forEach(function (r, i) {
+    var tr = document.createElement("tr");
+    if (r.t.me) tr.className = "me";
+    [[String(i + 1), "rank"], [r.t.n, "n"],
+     [r.t.p999 >= 1000 ? (r.t.p999 / 1000).toFixed(1) + " ms" : r.t.p999 + " µs", ""],
+     [r.n.fq.toFixed(0), ""], [r.t.pnl.toFixed(1), r.t.pnl >= 0 ? "pos" : "neg"],
+     [String(r.t.otr), r.t.otr <= 100 ? "pos" : "neg"],
+     [(r.t.thr / 1000).toFixed(1) + "k/s", ""],
+     [r.comp.toFixed(1), "rank"]].forEach(function (c) {
+      var td = document.createElement("td"); td.textContent = c[0]; if (c[1]) td.className = c[1]; tr.appendChild(td);
+    });
+    tb.appendChild(tr);
+  });
+  var svg = $("sbSvg"); clear(svg);
+  var X0 = 96, W = 470, Y0 = 22, RH = 20, GAP = 8;
+  var COL = { lat: "#7c3aed", fq: "#c4b5fd", pnl: "#3fb950", otr: "#d29922", thr: "#58a6ff" };
+  svg.appendChild(txt(10, 12, "weighted contributions: " + SB_METRICS.map(function (m) { return m.l.split(" ")[0]; }).join(" · "), 9.5, "#9aa0a6"));
+  rows.forEach(function (r, i) {
+    var y = Y0 + i * (RH + GAP), x = X0;
+    svg.appendChild(txt(X0 - 8, y + 14, r.t.n, 10, r.t.me ? "#c4b5fd" : "#e8e6e3", "end", r.t.me ? 700 : 400));
+    SB_METRICS.forEach(function (m) {
+      var w = ((m.w / wsum) * r.n[m.id] / 100) * W;
+      if (w < 0.6) return;
+      svg.appendChild(mk("rect", { x: x, y: y, width: w, height: RH, rx: 2, fill: COL[m.id] }));
+      x += w;
+    });
+    svg.appendChild(txt(x + 6, y + 14, r.comp.toFixed(0), 9.5, "#c4b5fd", null, 700));
+  });
+  var me = rows.filter(function (r) { return r.t.me; })[0];
+  var mePos = rows.indexOf(me) + 1;
+  var top = SB_METRICS.slice().sort(function (a, b) { return b.w - a.w; })[0];
+  $("sbVerdict").textContent = "You are " + mePos + " of " + rows.length + " · " + rows[0].t.n + " leads";
+  $("sbWhy").innerHTML = "These weights put the most emphasis on <b>" + top.l + "</b>. Push the latency " +
+    "weight to the top and <b>tick-tock</b> climbs despite a 44 fill quality and an OTR of 340 — the fastest " +
+    "bot in the room, trading badly. Push fill quality and P&amp;L and <b>queue-jump</b> wins on a 190 µs " +
+    "tail. Your bot is built to survive both, which is the only stable answer when you do not get to " +
+    "choose the rubric.";
+}
+function sbBuild() {
+  var host = $("sbCtl");
+  SB_METRICS.forEach(function (m) {
+    var wrap = document.createElement("div"); wrap.className = "ctl";
+    var lab = document.createElement("label"); lab.setAttribute("for", "sb_" + m.id);
+    lab.textContent = m.l + " ";
+    var b = document.createElement("b"); b.id = "sbv_" + m.id; b.textContent = m.w + "%";
+    lab.appendChild(b);
+    var r = document.createElement("input");
+    r.type = "range"; r.id = "sb_" + m.id; r.min = "0"; r.max = "60"; r.step = "5"; r.value = String(m.w);
+    r.setAttribute("aria-label", "Weight on " + m.l);
+    r.addEventListener("input", function () {
+      m.w = +r.value; $("sbv_" + m.id).textContent = r.value + "%"; sbDraw();
+    });
+    wrap.appendChild(lab); wrap.appendChild(r); host.appendChild(wrap);
+  });
+}
+sbBuild();
+sbDraw();
+
+/* ════ 6. The course in one path ══════════════════════════════ */
+var TT = [
+  { n: "wire in", wk: "Week 13", us: [1, 3], what: "The frame arrives and reaches your code. Kernel bypass removes the stack, the interrupt, the copy and the wake-up; a poll-mode driver reads a descriptor you were already spinning on.",
+    did: "kernel bypass, busy-poll, pinned and isolated cores", breaks: "a blocking socket puts a scheduler decision in the middle of a race" },
+  { n: "parse / decode", wk: "Weeks 6 & 12", us: [1, 2], what: "Bytes become a book update without being copied. A compile-time codec turns field access into pointer arithmetic the compiler can inline; branch-lean parsing keeps the predictor happy.",
+    did: "zero-copy parse, compile-time message codec, no allocation", breaks: "one std::string per field, and the allocator owns your p99.9" },
+  { n: "book update", wk: "Week 7", us: [2, 5], what: "Apply the deltas to your levels and keep the queue estimate current. The widest stage, and the one where data layout pays: contiguous levels, hot fields packed, cold fields elsewhere.",
+    did: "cache-friendly book, SoA for scanned fields, queue awareness", breaks: "a sorted std::map of price levels, re-sorted per update" },
+  { n: "signal", wk: "Weeks 8 & 13", us: [1, 2], what: "Microprice, imbalance, trade-flow — computed incrementally, never recomputed. Vectorized where the loop is clean, branchless where it is not.",
+    did: "incremental state, SIMD reduction over aligned data, prefetch", breaks: "an O(window) recompute per tick, which is the HW14 pathology" },
+  { n: "decide + risk", wk: "Weeks 14 & 15", us: [1, 2], what: "Should you trade, at what size, and are you allowed to? Position, notional, rate and price-band checks — before the send, always, even on the fast path.",
+    did: "hard pre-trade limits, a kill switch, queue-aware requoting", breaks: "a limit checked after the send, which is a post-mortem" },
+  { n: "serialize", wk: "Week 6", us: [1, 2], what: "Build the outbound message. The trick is to have built it already: pre-render the template at startup and patch the price and size in place.",
+    did: "pre-serialized order templates, no formatting on the hot path", breaks: "sprintf into a std::string, per order, forever" },
+  { n: "wire out", wk: "Weeks 13 & 15", us: [1, 3], what: "The order reaches the venue. This is the stage you can buy rather than build: colocation cuts the wire delay the venue adds, shifting p50 and the tail together.",
+    did: "colocation when the economics work, and not before", breaks: "buying colo while a millisecond software tail is still live" }
+];
+var TTs = { sel: 0 };
+function ttDraw() {
+  var svg = $("ttSvg"); clear(svg);
+  var X0 = 16, W = 610, Y0 = 46, RH = 40;
+  var tot = TT.reduce(function (a, s) { return a + (s.us[0] + s.us[1]) / 2; }, 0);
+  svg.appendChild(txt(X0, 18, "tick → trade · " + TT.length + " stages · median budget ≈ " + tot.toFixed(1) + " µs", 11.5, "#c4b5fd", null, 700));
+  svg.appendChild(txt(X0, 34, "click a stage — or tab to it and press Enter", 9.5, "#6f757f"));
+  var acc = 0;
+  TT.forEach(function (s, i) {
+    var mid = (s.us[0] + s.us[1]) / 2, w = (mid / tot) * W;
+    var g = mk("g", { role: "button", tabindex: "0", "aria-label": s.n + ", owned by " + s.wk + ", about " + mid + " microseconds" });
+    g.appendChild(mk("rect", { x: X0 + acc, y: Y0, width: Math.max(2, w - 2), height: RH, rx: 4,
+      fill: i === TTs.sel ? "#7c3aed" : "rgba(124,58,237,.36)",
+      stroke: i === TTs.sel ? "#c4b5fd" : "#272c36" }));
+    if (w > 46) {
+      g.appendChild(txt(X0 + acc + 5, Y0 + 17, fit(s.n, w - 10, 5.8), 9.5, "#e8e6e3"));
+      g.appendChild(txt(X0 + acc + 5, Y0 + 31, fit(s.wk.replace("Weeks ", "W").replace("Week ", "W"), w - 10, 5.5), 9, "#c4b5fd"));
+    }
+    g.addEventListener("click", function () { TTs.sel = i; ttDraw(); });
+    g.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); TTs.sel = i; ttDraw(); } });
+    svg.appendChild(g);
+    acc += w;
+  });
+  /* cross-cutting band */
+  var CY = Y0 + RH + 26;
+  svg.appendChild(txt(X0, CY - 8, "underneath every stage, all term:", 9.5, "#6f757f"));
+  [["W2-4 memory, RAII, pools", 0], ["W5 templates, zero-cost", 1],
+   ["W9-10 lock-free pipeline", 2], ["W14 profiling and the tail", 3]].forEach(function (c) {
+    var bw = W / 4;
+    svg.appendChild(mk("rect", { x: X0 + c[1] * bw, y: CY, width: bw - 6, height: 24, rx: 3,
+      fill: "rgba(196,181,253,.14)", stroke: "#272c36" }));
+    svg.appendChild(txt(X0 + c[1] * bw + 6, CY + 16, fit(c[0], bw - 16, 5.2), 8.5, "#c4b5fd"));
+  });
+  svg.setAttribute("viewBox", "0 0 640 " + (CY + 44));
+  var s = TT[TTs.sel], mid = (s.us[0] + s.us[1]) / 2;
+  stats($("ttStats"), [
+    ["stages", String(TT.length)],
+    ["median budget", tot.toFixed(1) + " µs", "acc"],
+    ["this stage", mid.toFixed(1) + " µs"],
+    ["share", ((mid / tot) * 100).toFixed(0) + "%"],
+    ["owned by", s.wk.replace("Weeks ", "W").replace("Week ", "W"), "acc"]
+  ]);
+  $("ttName").textContent = s.n;
+  $("ttPill").textContent = s.wk;
+  $("ttWhat").textContent = s.what;
+  kv($("ttKv"), [["typical", s.us[0] + "–" + s.us[1] + " µs"], ["you built", s.did]]);
+  $("ttNote").innerHTML = "<b>How this stage goes wrong:</b> " + s.breaks + ".";
+}
+ttDraw();
+
+/* ── MCQ engine (shared across week pages) ───────────────────── */
+Array.prototype.forEach.call(document.querySelectorAll(".mcq"), function (q) {
+  var answer = parseInt(q.getAttribute("data-a"), 10);
+  var opts = Array.prototype.slice.call(q.querySelectorAll(".opt"));
+  var fb = q.querySelector(".fb");
+  opts.forEach(function (o, i) {
+    o.addEventListener("click", function () {
+      if (q.dataset.done === "1") return;
+      q.dataset.done = "1";
+      var right = i === answer;
+      opts.forEach(function (b, j) {
+        b.disabled = true;
+        if (j === answer) b.classList.add("right");
+        else if (j === i) b.classList.add("wrong");
+        else b.classList.add("dim");
+      });
+      fb.innerHTML = (right ? "<b>Correct.</b> " : "<b>Not quite.</b> ") + q.getAttribute("data-exp");
+      fb.className = "fb show " + (right ? "good" : "poor");
+    });
+  });
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,1620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" href="data:," />
+<title>Week 11 · Network Protocols &amp; Market Data — Low-Latency Trading Arena</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    /* ── Low-Latency Trading Arena · shared palette (identical on every page) ── */
+    --accent:       #7c3aed;
+    --accent-2:     #c4b5fd;
+    --accent-3:     #ede9fe;
+    --accent-rgb:   124,58,237;
+    --accent-2-rgb: 196,181,253;
+    --bg:           #0f1115;
+    --panel:        #181b22;
+    --panel2:       #1e222b;
+    --panel-2:      #13161b;
+    --ink:          #e8e6e3;
+    --ink-dim:      #c6c3bf;
+    --ink-mute:     #6f757f;
+    --muted:        #9aa0a6;
+    --dim:          #5f6673;
+    --line:         #272c36;
+    --line-2:       #333a47;
+    --border:       #272c36;
+    --ok:           #3fb950;
+    --warn:         #d29922;
+    --bad:          #f85149;
+    --info:         #6cb6ff;
+    --sky:          #58a6ff;
+    --violet:       #a78bfa;
+    --teal:         #2dd4bf;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.62;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent-2);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  /* ── nav / footer ─────────────────────────────────────────── */
+  nav.top{position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+    padding:11px 22px;background:rgba(15,17,21,.94);border-bottom:1px solid var(--line)}
+  nav.top>a:first-child{font-weight:800;letter-spacing:-.2px;color:var(--ink);font-size:14.5px;
+    border-left:3px solid var(--accent);padding-left:10px}
+  nav.top .crumbs{font-size:12px;color:var(--muted)}
+  nav.top .crumbs b{color:var(--ink);font-weight:700}
+  footer{border-top:1px solid var(--line);background:var(--panel);
+    padding:26px 22px 34px;text-align:center;font-size:11.5px;color:var(--dim);letter-spacing:.3px}
+
+  /* ── sections & typography ────────────────────────────────── */
+  section{max-width:1180px;margin:0 auto;padding:36px 22px 42px;border-top:1px solid var(--line)}
+  section#hero{border-top:none}
+  .kicker{font-size:10.5px;font-weight:800;letter-spacing:1.9px;text-transform:uppercase;color:var(--accent-2)}
+  h1{font-size:clamp(26px,4.2vw,40px);font-weight:800;letter-spacing:-.9px;line-height:1.13;margin:10px 0 6px}
+  h2{font-size:21px;font-weight:700;letter-spacing:-.3px;margin:4px 0 4px}
+  h3{font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);margin-bottom:11px}
+  h4{font-size:13.5px;font-weight:700;margin-bottom:5px}
+  p{margin:9px 0;max-width:82ch}
+  .lead{color:var(--muted);font-size:15px;max-width:84ch}
+  .sub{color:var(--muted);font-size:12.5px}
+  strong{color:#fff;font-weight:650}
+  em.hi{color:var(--accent-2);font-style:normal;font-weight:600}
+  code,.mono{font-family:var(--mono);font-size:12.5px}
+  code{background:rgba(var(--accent-2-rgb),.13);color:#ddd4fb;padding:1px 5px;border-radius:4px}
+  ul.you{list-style:none;margin:16px 0 0;display:grid;gap:8px}
+  ul.you li{position:relative;padding-left:26px;font-size:13.5px;color:var(--ink);max-width:78ch}
+  ul.you li::before{content:"";position:absolute;left:4px;top:8px;width:8px;height:8px;border-radius:2px;
+    background:var(--accent);box-shadow:0 0 0 3px rgba(var(--accent-rgb),.22)}
+  ul.plain{list-style:none;display:grid;gap:7px;font-size:13px;color:var(--muted)}
+  ul.plain li{padding-left:16px;position:relative}
+  ul.plain li::before{content:"\2022";position:absolute;left:2px;color:var(--accent-2)}
+
+  /* ── panels & layout ──────────────────────────────────────── */
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .panel.tight{padding:13px 14px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;align-items:start}
+  .split{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:18px;align-items:start}
+  .split-r{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:18px;align-items:start}
+  .stack{display:grid;gap:14px}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+
+  /* ── controls ─────────────────────────────────────────────── */
+  .btn{font-family:inherit;font-size:12px;font-weight:650;cursor:pointer;color:var(--ink);
+    background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:7px 14px;transition:.15s}
+  .btn:hover:not(:disabled){border-color:var(--accent-2);color:#fff}
+  .btn:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .btn:disabled{opacity:.35;cursor:not-allowed}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.primary:hover:not(:disabled){filter:brightness(1.25)}
+  .btn.on{background:rgba(var(--accent-rgb),.28);border-color:var(--accent-2);color:#fff}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+  .tab{font-family:inherit;font-size:12px;font-weight:650;cursor:pointer;color:var(--muted);
+    background:transparent;border:1px solid var(--line);border-radius:20px;padding:6px 14px;transition:.15s}
+  .tab:hover{color:var(--ink)}
+  .tab[aria-selected="true"]{background:rgba(var(--accent-rgb),.3);border-color:var(--accent-2);color:#fff}
+  .tab:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .ctl{display:grid;gap:4px;margin-bottom:12px}
+  .ctl label{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);
+    display:flex;justify-content:space-between;gap:10px}
+  .ctl label b{font-family:var(--mono);color:var(--accent-2);font-size:12px;text-transform:none;letter-spacing:0}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:3px;
+    background:#2b313d;outline:none;cursor:pointer}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;
+    background:var(--accent-2);border:2px solid var(--bg);cursor:pointer}
+  input[type=range]::-moz-range-thumb{width:15px;height:15px;border-radius:50%;background:var(--accent-2);
+    border:2px solid var(--bg);cursor:pointer}
+  input[type=range]:focus-visible{box-shadow:0 0 0 3px rgba(var(--accent-2-rgb),.4)}
+  select,textarea,input[type=text]{font-family:var(--mono);font-size:12.5px;color:var(--ink);
+    background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:7px 9px;width:100%}
+  select:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px solid var(--accent-2);outline-offset:1px}
+  textarea{line-height:1.55;resize:vertical}
+
+  /* ── stats / pills / code ─────────────────────────────────── */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:1px;
+    background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .stat{background:var(--panel);padding:10px 12px}
+  .stat .sl{font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--dim)}
+  .stat .sv{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--ink);margin-top:3px}
+  .stat .sv.ok{color:var(--ok)} .stat .sv.bad{color:var(--bad)} .stat .sv.warn{color:var(--warn)}
+  .stat .sv.acc{color:var(--accent-2)}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;letter-spacing:.5px;
+    padding:3px 9px;border-radius:20px;border:1px solid var(--line);color:var(--muted)}
+  .pill.ok{color:var(--ok);border-color:rgba(63,185,80,.5);background:rgba(63,185,80,.1)}
+  .pill.bad{color:var(--bad);border-color:rgba(248,81,73,.5);background:rgba(248,81,73,.1)}
+  .pill.warn{color:var(--warn);border-color:rgba(210,153,34,.5);background:rgba(210,153,34,.1)}
+  .pill.acc{color:var(--accent-2);border-color:rgba(var(--accent-2-rgb),.5);background:rgba(var(--accent-rgb),.18)}
+  pre.code{font-family:var(--mono);font-size:11.8px;line-height:1.62;background:#0b0e14;color:#dbe3ea;
+    border:1px solid var(--line);border-radius:10px;padding:13px 14px;overflow-x:auto;white-space:pre}
+  pre.code .k{color:#6cb6ff} pre.code .s{color:#8ddb8c} pre.code .c{color:#6b7484;font-style:italic}
+  pre.code .n{color:#e0b070} pre.code .b{color:#ddd4fb;font-weight:700}
+  .note{border-left:3px solid var(--accent);background:rgba(var(--accent-rgb),.12);border-radius:0 8px 8px 0;
+    padding:10px 13px;font-size:12.5px;color:var(--muted)}
+  .note b{color:var(--ink)}
+  .log{font-family:var(--mono);font-size:11.5px;max-height:230px;overflow-y:auto;display:grid;gap:5px}
+  .log div{background:var(--panel2);border-left:3px solid var(--line);border-radius:0 6px 6px 0;padding:6px 9px;color:var(--muted)}
+  .log div.hl{border-left-color:var(--accent-2);color:var(--ink);background:rgba(var(--accent-rgb),.15)}
+  .log div.ok{border-left-color:var(--ok)} .log div.bad{border-left-color:var(--bad)}
+  svg{display:block;max-width:100%;height:auto}
+  .svgwrap{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px;overflow-x:auto}
+  table.t{width:100%;border-collapse:collapse;font-size:12px}
+  table.t th{font-size:9.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--dim);
+    text-align:left;padding:0 8px 7px;border-bottom:1px solid var(--line)}
+  table.t td{padding:7px 8px;border-bottom:1px solid rgba(39,44,54,.6);color:var(--muted);font-family:var(--mono);font-size:11.8px}
+  table.t td.n{color:var(--ink);font-weight:600}
+
+  /* ── pitfalls ─────────────────────────────────────────────── */
+  details.pit{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:10px;overflow:hidden}
+  details.pit>summary{cursor:pointer;padding:12px 15px;font-size:13.5px;font-weight:650;color:var(--ink);
+    list-style:none;display:flex;gap:11px;align-items:flex-start}
+  details.pit>summary::-webkit-details-marker{display:none}
+  details.pit>summary::before{content:"\25B8";color:var(--accent-2);font-size:12px;line-height:1.5;transition:.2s}
+  details.pit[open]>summary::before{transform:rotate(90deg)}
+  details.pit>summary:focus-visible{outline:2px solid var(--accent-2);outline-offset:-2px}
+  details.pit .body{padding:0 15px 15px 39px;font-size:13px;color:var(--muted);display:grid;gap:9px}
+  details.pit .body .fix{color:var(--ok);font-weight:600}
+
+  /* ── MCQ ──────────────────────────────────────────────────── */
+  .mcq{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 17px;margin-bottom:13px}
+  .mcq .q{font-size:13.8px;font-weight:650;color:var(--ink);margin:0 0 11px;max-width:84ch}
+  .mcq .q span{color:var(--accent-2);font-family:var(--mono);margin-right:7px}
+  .opts{display:grid;gap:7px}
+  .opt{text-align:left;font-family:inherit;font-size:13px;cursor:pointer;color:var(--muted);
+    background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:9px 12px;transition:.15s}
+  .opt:hover:not(:disabled){border-color:var(--accent-2);color:var(--ink)}
+  .opt:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .opt.right{border-color:var(--ok);background:rgba(63,185,80,.13);color:#bce8c4}
+  .opt.wrong{border-color:var(--bad);background:rgba(248,81,73,.12);color:#f4b6b1}
+  .opt.dim{opacity:.5}
+  .fb{margin-top:11px;font-size:12.5px;line-height:1.6;color:var(--muted);display:none;
+    border-left:3px solid var(--line);padding-left:11px}
+  .fb.show{display:block}
+  .fb.show.good{border-left-color:var(--ok)} .fb.show.poor{border-left-color:var(--bad)}
+  .fb b{color:var(--ink)}
+
+  /* ── next ─────────────────────────────────────────────────── */
+  .nextgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+  .nextcard{display:block;background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:15px 17px;transition:.18s;color:inherit}
+  .nextcard:hover{border-color:var(--accent-2);transform:translateY(-2px);text-decoration:none}
+  .nextcard .nl{font-size:10px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--accent-2)}
+  .nextcard .nt{font-size:14.5px;font-weight:700;color:var(--ink);margin-top:5px}
+  .nextcard .nd{font-size:12px;color:var(--muted);margin-top:5px}
+
+  @media (max-width:720px){
+    .grid2,.grid3,.split,.split-r{grid-template-columns:1fr}
+    section{padding:26px 15px 32px}
+    nav.top{padding:10px 15px;gap:8px}
+    nav.top .crumbs{font-size:11px}
+    p,.lead{max-width:none}
+  }
+
+  /* ── week-page shared ─────────────────────────────────────── */
+  #hero{padding:52px 22px 40px;
+    background:radial-gradient(ellipse 820px 340px at 22% -14%,rgba(var(--accent-rgb),.3),transparent 66%)}
+  #hero .wk{font-family:var(--mono);font-size:12px;letter-spacing:2px;color:var(--accent-2);font-weight:700}
+  #hero h1{max-width:24ch}
+  #hero .promise{font-size:16.5px;color:var(--ink);max-width:74ch;margin-top:10px;line-height:1.55}
+  .secnum{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;
+    background:rgba(var(--accent-rgb),.35);border:1px solid var(--accent-2);color:#fff;font-family:var(--mono);
+    font-size:11px;font-weight:700;margin-right:9px;vertical-align:2px}
+  .sw{display:inline-flex;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex-wrap:wrap}
+  .sw button{font-family:inherit;font-size:11.5px;font-weight:650;cursor:pointer;color:var(--muted);
+    background:var(--panel2);border:none;padding:7px 13px;transition:.15s}
+  .sw button[aria-pressed="true"]{background:rgba(var(--accent-rgb),.32);color:#fff}
+  .sw button:focus-visible{outline:2px solid var(--accent-2);outline-offset:-2px}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-top:10px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
+
+
+
+  /* ── week-11 specific ─────────────────────────────────────── */
+  .tablewrap{overflow-x:auto}
+  .bars{display:grid;gap:7px;margin-top:10px}
+  .bar{display:grid;grid-template-columns:150px minmax(0,1fr) 104px;gap:9px;align-items:center}
+  .bar .bl{font-size:11px;font-weight:650;color:var(--muted)}
+  .bar .bt{position:relative;height:18px;border-radius:5px;background:#0b0e14;
+    border:1px solid var(--line);overflow:hidden}
+  .bar .bt i{display:block;height:100%;width:0;transition:width .5s cubic-bezier(.2,.7,.3,1)}
+  .bar .bv{font-family:var(--mono);font-size:11px;color:var(--accent-2);text-align:right}
+  .bar.win .bl{color:var(--ink)}
+  .steps{display:grid;gap:5px;font-family:var(--mono);font-size:11.5px}
+  .steps div{background:var(--panel2);border-left:3px solid var(--line);border-radius:0 6px 6px 0;
+    padding:6px 10px;color:var(--dim);white-space:pre-wrap;overflow-wrap:anywhere}
+  .steps div.on{border-left-color:var(--accent-2);color:var(--ink);background:rgba(var(--accent-rgb),.16)}
+  .steps div.past{color:var(--muted)}
+  .steps div.bad{border-left-color:var(--bad);color:#f4b6b1}
+  .steps div.ok{border-left-color:var(--ok)}
+  .big{font-family:var(--mono);font-size:26px;font-weight:700;color:var(--accent-2);letter-spacing:-.5px}
+  .bigsub{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--dim);margin-top:2px}
+  .verdict{margin-top:14px;font-family:var(--mono);font-size:13px;font-weight:700;letter-spacing:.6px}
+  .verdict.met{color:var(--ok)} .verdict.miss{color:var(--bad)}
+  .lanes{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+  .codepair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+  .bytes{display:flex;flex-wrap:wrap;gap:3px}
+  .byte{font-family:var(--mono);font-size:10.5px;padding:4px 5px;border-radius:4px;
+    background:#0b0e14;border:1px solid var(--line);color:var(--muted);min-width:30px;text-align:center}
+  .byte.hi{background:rgba(var(--accent-rgb),.32);border-color:var(--accent-2);color:#fff}
+  .byte.f0{background:rgba(63,185,80,.2);border-color:rgba(63,185,80,.55);color:#bce8c4}
+  .byte.f1{background:rgba(108,182,255,.2);border-color:rgba(108,182,255,.55);color:#bcd8f4}
+  .byte.f2{background:rgba(210,153,34,.2);border-color:rgba(210,153,34,.55);color:#f0dda6}
+  .seqstrip{display:flex;flex-wrap:wrap;gap:4px}
+  .sq{font-family:var(--mono);font-size:11px;font-weight:650;padding:6px 0;border-radius:6px;
+    border:1px solid var(--line);background:#0b0e14;color:var(--dim);width:46px;text-align:center;transition:.16s}
+  .sq.ok{background:rgba(63,185,80,.2);border-color:rgba(63,185,80,.6);color:#bce8c4}
+  .sq.lost{background:rgba(248,81,73,.16);border-color:rgba(248,81,73,.6);color:#f4b6b1;text-decoration:line-through}
+  .sq.held{background:rgba(210,153,34,.16);border-color:rgba(210,153,34,.6);color:#f0dda6}
+  .sq.snap{background:rgba(var(--accent-rgb),.34);border-color:var(--accent-2);color:#fff}
+  .fields{display:grid;gap:4px}
+  .fld{display:grid;grid-template-columns:54px 132px minmax(0,1fr);gap:8px;align-items:center;
+    font-family:var(--mono);font-size:11.5px;background:var(--panel2);border:1px solid var(--line);
+    border-radius:7px;padding:5px 9px;color:var(--muted)}
+  .fld.on{border-color:var(--accent-2);background:rgba(var(--accent-rgb),.16);color:var(--ink)}
+  .fld.bad{border-color:var(--bad);background:rgba(248,81,73,.12);color:#f4b6b1}
+  .fld .ft{color:var(--accent-2);font-weight:700}
+  .fld .fn{font-size:10.5px;color:var(--dim)}
+  .fld.on .fn{color:var(--muted)}
+  .toggles{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:9px}
+  .tg{display:flex;gap:10px;align-items:flex-start;background:var(--panel2);border:1px solid var(--line);
+    border-radius:9px;padding:9px 11px;cursor:pointer;transition:.15s}
+  .tg:hover{border-color:var(--line-2)}
+  .tg.on{border-color:var(--accent-2);background:rgba(var(--accent-rgb),.14)}
+  .tg input{margin-top:2px;width:15px;height:15px;accent-color:var(--accent);flex-shrink:0;cursor:pointer}
+  .tg .tt{font-size:12px;font-weight:650;color:var(--ink)}
+  .tg .td{font-size:11px;color:var(--muted);margin-top:2px}
+  /* ── mobile guard (identical on every page): single column under 720px,
+        no horizontal overflow. Must stay last in the sheet. ───────────── */
+  @media (max-width:720px){
+    .grid2,.grid3,.grid2.narrow-right,.split,.split-r,.codepair,
+    .nextgrid,.dash,.toggles,.lanes,.weeknav,.weeks,.roles,.stack{
+      grid-template-columns:minmax(0,1fr)}
+    [class*="grid"]>*,.stack>*,.wrap>*,.panel,.panel.tight,.nextcard,.wk,.row>*{min-width:0}
+    pre,pre.code,.svgwrap,svg,canvas,table,select,input,textarea,.mono{max-width:100%}
+    pre,pre.code,.svgwrap,.tablewrap{overflow-x:auto}
+    code,.mono{overflow-wrap:anywhere}
+    .ctl,.ctl>*,.controls>*,.row,.legend>*{min-width:0}
+    .ctl{flex-wrap:wrap} .ctl select,.ctl input[type=range]{flex:1 1 100%;width:100%}
+    p,.lead,.sub,.promise{max-width:none}
+  }
+</style>
+</head>
+<body>
+
+<nav class="top"><a href="index.html">Low-Latency Trading Arena</a><span class="crumbs"><a href="week10.html">← Week 10</a> · <b>Week 11 · Network Protocols &amp; Market Data</b> · <a href="week12.html">Week 12 →</a></span></nav>
+
+
+<!-- ══════════════ HERO ══════════════ -->
+<section id="hero">
+  <div class="wk">WEEK 11 · 15-WEEK TRACK  ·  SESSION 7 · 9-SESSION TRACK</div>
+  <h1>Network Protocols &amp; Market Data</h1>
+  <p class="promise">Last week you built the pipeline inside your process and treated &ldquo;a tick
+  arrived&rdquo; as given. Something put those bytes on your socket first, and that something made three
+  decisions you now have to understand: <strong>which transport carries the feed, what encoding the
+  fields are in, and how you find out that you missed a message</strong>. Get the third one wrong and
+  your book is silently, profitably wrong — for someone else.</p>
+  <ul class="you">
+    <li>Choose between TCP, UDP unicast and <em class="hi">UDP multicast</em> for a feed and for order entry, and defend both choices with the loss and fan-out numbers.</li>
+    <li>Read an ITCH-style binary message, a FIX <code>tag=value</code> message and a JSON message of the same order, and state the bytes and the nanoseconds for each.</li>
+    <li>Detect a sequence gap and run the snapshot-plus-replay recovery without ever trading a stale book.</li>
+    <li>Write a single-pass, zero-allocation FIX parser, and say what <code>be64toh</code> is for.</li>
+  </ul>
+  <div class="row" style="margin-top:22px">
+    <span class="pill acc">Lab: <code>include/fix_parser.hpp</code> — tags 11 / 55 / 54 / 38 / 44</span>
+    <span class="pill">Target: tens of ns per message, not hundreds</span>
+    <span class="pill warn">Your feed is a stream of bytes, not a stream of messages</span>
+  </div>
+</section>
+
+<!-- ══════════════ WHAT ══════════════ -->
+<section id="what">
+  <div class="kicker">Part 1</div>
+  <h2><span class="secnum">1</span>What is it? Three delivery models, three failure modes</h2>
+  <p class="lead">A market-data feed and an order session want opposite things. The feed wants the newest
+  bytes at the lowest latency to the largest number of subscribers, and it can survive losing one.
+  The order session must never lose a message and only ever talks to one counterparty. That is the
+  whole reason real venues ship <strong>market data over UDP multicast and order entry over TCP</strong>.
+  Pick a model and turn up the loss.</p>
+
+  <div class="split" style="margin-top:18px">
+    <div class="panel">
+      <h3>Delivery model</h3>
+      <div class="sw" role="group" aria-label="Choose a transport delivery model" style="margin-bottom:14px">
+        <button id="dmTcp" type="button" aria-pressed="false">TCP</button>
+        <button id="dmUdp" type="button" aria-pressed="false">UDP unicast</button>
+        <button id="dmMcast" type="button" aria-pressed="true">UDP multicast</button>
+        <button id="dmWs" type="button" aria-pressed="false">WebSocket / TCP</button>
+      </div>
+      <div class="ctl"><label for="dmLoss">Path packet loss <b id="dmLossV">0.00 %</b></label>
+        <input type="range" id="dmLoss" min="0" max="300" value="0" aria-label="Packet loss in hundredths of a percent"/></div>
+      <div class="ctl"><label for="dmSubs">Subscribers on the feed <b id="dmSubsV">1</b></label>
+        <input type="range" id="dmSubs" min="1" max="400" value="60" aria-label="Number of feed subscribers"/></div>
+      <div class="svgwrap"><svg id="dmSvg" viewBox="0 0 540 200" role="img" aria-label="Diagram of the venue sending to subscribers under the selected delivery model"></svg></div>
+      <div class="steps" id="dmSteps" style="margin-top:13px" aria-live="polite"></div>
+    </div>
+    <div class="stack">
+      <div class="panel tight"><h3>What this model gives you</h3>
+        <div class="stats">
+          <div class="stat"><div class="sl">Delivery</div><div class="sv" id="dmDeliv">—</div></div>
+          <div class="stat"><div class="sl">Ordering</div><div class="sv" id="dmOrder">—</div></div>
+          <div class="stat"><div class="sl">Fan-out</div><div class="sv" id="dmFan">—</div></div>
+          <div class="stat"><div class="sl">Retransmit</div><div class="sv" id="dmRetx">—</div></div>
+        </div>
+      </div>
+      <div class="panel tight"><h3>Under this loss rate</h3>
+        <div class="stats">
+          <div class="stat"><div class="sl">p50 one-way</div><div class="sv acc" id="dmP50">—</div></div>
+          <div class="stat"><div class="sl">p99.9 one-way</div><div class="sv" id="dmP999">—</div></div>
+          <div class="stat"><div class="sl">Venue egress</div><div class="sv" id="dmEgr">—</div></div>
+          <div class="stat"><div class="sl">Gaps you must handle</div><div class="sv" id="dmGaps">—</div></div>
+        </div>
+      </div>
+      <div class="note" id="dmNote"></div>
+    </div>
+  </div>
+  <div class="grid3" style="margin-top:20px">
+    <div class="panel"><h4>Head-of-line blocking</h4>
+      <p class="sub">TCP guarantees in-order delivery, which means a single lost segment
+      <em class="hi">stalls every byte behind it</em> until the retransmission arrives — one RTT later.
+      On a firehose feed that is a hole in your book plus a burst of stale updates when the dam breaks.
+      The guarantee you wanted for orders is the pathology you cannot afford for data.</p></div>
+    <div class="panel"><h4>A / B feeds</h4>
+      <p class="sub">Venues publish two identical multicast streams over physically separate paths.
+      You subscribe to both, key on the sequence number, and take whichever copy arrives first —
+      arbitration. Uncorrelated loss on the two paths means a gap needs both to drop the same packet,
+      which turns a 0.1&#8239;% loss rate into roughly 0.0001&#8239;%.</p></div>
+    <div class="panel"><h4>Snapshot channels</h4>
+      <p class="sub">Because multicast has no retransmit, every venue also publishes a periodic full
+      snapshot — often on a separate group, often over TCP on request. That is your recovery path when
+      arbitration fails, and the reason a feed handler is always two state machines: apply increments,
+      or rebuild from a snapshot.</p></div>
+  </div>
+</section>
+
+<!-- ══════════════ HOW ══════════════ -->
+<section id="how">
+  <div class="kicker">Part 2</div>
+  <h2><span class="secnum">2</span>How does it work? Bytes, fields, checksums, gaps</h2>
+  <p class="lead">One order — buy 100 AAPL at 185.50 — in three encodings. Same information, wildly
+  different cost to put on a wire and take off it. Race them.</p>
+
+  <div class="split-r" style="margin-top:18px">
+    <div class="panel">
+      <h3>Same message, three encodings</h3>
+      <div class="row" style="margin-bottom:12px">
+        <button class="btn primary" id="pcRun" type="button" aria-label="Run the parse-cost race">Run the race</button>
+        <button class="btn" id="pcReset" type="button" aria-label="Reset the race">Reset</button>
+        <div class="sw" role="group" aria-label="Choose what to measure">
+          <button id="pcNs" type="button" aria-pressed="true">decode ns</button>
+          <button id="pcBytes" type="button" aria-pressed="false">bytes on the wire</button>
+        </div>
+      </div>
+      <div class="bars" id="pcBars"></div>
+      <p class="sub" style="margin-top:12px" id="pcCap"></p>
+      <div class="tablewrap" style="margin-top:12px"><table class="t" id="pcTable">
+        <thead><tr><th>Encoding</th><th>Bytes</th><th>Decode</th><th>Allocations</th><th>What decode means</th></tr></thead>
+        <tbody></tbody></table></div>
+    </div>
+    <div class="stack">
+      <div class="panel tight"><h3>Selected encoding</h3>
+        <h4 id="pcName">—</h4>
+        <pre class="code" id="pcWire" style="margin-top:8px">—</pre>
+      </div>
+      <div class="panel tight"><h3>Per 1 M messages</h3>
+        <div class="stats">
+          <div class="stat"><div class="sl">Wire volume</div><div class="sv acc" id="pcVol">—</div></div>
+          <div class="stat"><div class="sl">CPU time</div><div class="sv" id="pcCpu">—</div></div>
+          <div class="stat"><div class="sl">vs ITCH binary</div><div class="sv warn" id="pcRel">—</div></div>
+          <div class="stat"><div class="sl">10 GbE ceiling</div><div class="sv" id="pcRate">—</div></div>
+        </div>
+      </div>
+      <div class="note" id="pcNote"></div>
+    </div>
+  </div>
+  <p class="sub" style="margin-top:10px">Click a bar to inspect that encoding. The decode numbers are for
+  extracting all five fields into a struct on one ~3&#8239;GHz core: a pointer cast plus two byte-swaps
+  for binary, a single forward scan with hand-rolled digit maths for FIX, and a general DOM build for
+  JSON. <em class="hi">Nothing here is a library benchmark</em> — it is the shape of the work each
+  encoding forces on you.</p>
+
+  <h3 style="margin-top:32px">a · Step through a FIX message</h3>
+  <p>FIX is <code>tag=value</code> pairs, each terminated by the SOH byte <code>0x01</code>. It is
+  self-describing and human-readable, and both of those properties cost you nanoseconds: you must scan
+  for <code>=</code>, scan for SOH, and convert ASCII digits to numbers on every single field. Edit the
+  message and step it.</p>
+
+  <div class="split" style="margin-top:14px">
+    <div class="panel">
+      <h3>FIX 4.4 NewOrderSingle · <code>|</code> shown for SOH (0x01)</h3>
+      <div class="ctl"><label for="fxIn">Raw message</label>
+        <textarea id="fxIn" rows="3" spellcheck="false" aria-label="Raw FIX message, pipe characters standing in for the SOH byte">8=FIX.4.4|9=102|35=D|49=ARENA01|56=VENUE|34=78|52=20260904-14:32:01.113|11=ORD-991|55=AAPL|54=1|38=100|40=2|44=185.50|10=107|</textarea></div>
+      <div class="row" style="margin-bottom:12px">
+        <button class="btn" id="fxPrev" type="button" aria-label="Previous field">← Back</button>
+        <button class="btn primary" id="fxNext" type="button" aria-label="Next field">Step field →</button>
+        <button class="btn" id="fxAll" type="button" aria-label="Parse all fields at once">Parse all</button>
+        <button class="btn" id="fxCorrupt" type="button" aria-label="Corrupt one byte to break the checksum">Corrupt a byte</button>
+      </div>
+      <div class="fields" id="fxFields" aria-live="polite"></div>
+    </div>
+    <div class="stack">
+      <div class="panel tight"><h3>Decoded <code>NewOrder</code></h3>
+        <pre class="code" id="fxStruct">—</pre>
+      </div>
+      <div class="panel tight"><h3>Validation</h3>
+        <div class="stats">
+          <div class="stat"><div class="sl">Fields seen</div><div class="sv" id="fxCount">—</div></div>
+          <div class="stat"><div class="sl">Bytes scanned</div><div class="sv" id="fxScan">—</div></div>
+          <div class="stat"><div class="sl">Checksum (tag 10)</div><div class="sv" id="fxSum">—</div></div>
+          <div class="stat"><div class="sl">Required tags</div><div class="sv" id="fxReq">—</div></div>
+        </div>
+        <div class="verdict" id="fxVerdict">—</div>
+      </div>
+      <div class="note" id="fxNote"></div>
+    </div>
+  </div>
+  <div class="codepair" style="margin-top:14px">
+    <div>
+      <pre class="code"><span class="c">// include/fix_parser.hpp — one forward pass, no allocation</span>
+<span class="k">while</span> (p &lt; end) {
+  <span class="k">int</span> tag = <span class="n">0</span>;                        <span class="c">// digits up to '='</span>
+  <span class="k">while</span> (p &lt; end &amp;&amp; *p != <span class="s">'='</span>) {
+    <span class="k">if</span> (*p &lt; <span class="s">'0'</span> || *p &gt; <span class="s">'9'</span>) <span class="k">return</span> <span class="k">false</span>;
+    tag = tag * <span class="n">10</span> + (*p++ - <span class="s">'0'</span>);
+  }
+  <span class="k">if</span> (p &gt;= end) <span class="k">return</span> <span class="k">false</span>;      <span class="c">// no '='</span>
+  ++p;                               <span class="c">// consume '='</span>
+  <span class="k">const</span> <span class="k">char</span>* v = p;                 <span class="c">// value slice</span>
+  <span class="k">while</span> (p &lt; end &amp;&amp; *p != SOH) ++p;
+  <span class="k">const</span> <span class="k">int</span> vlen = <span class="k">static_cast</span>&lt;<span class="k">int</span>&gt;(p - v);
+  <span class="k">if</span> (p &lt; end) ++p;                  <span class="c">// consume SOH</span>
+  <span class="c">// switch (tag) { case 11: … case 44: … }</span>
+}</pre>
+    </div>
+    <div>
+      <p class="sub">Two details carry the whole exercise. First, <code>clordid</code> in the starter's
+      <code>NewOrder</code> struct is a <em class="hi">pointer plus a length</em> into the caller's
+      buffer — a view, not a copy. That is why the struct hands you a <code>clordid_len</code>, and it
+      is the difference between tens of nanoseconds and hundreds.</p>
+      <p class="sub">Second, <code>std::strtod</code> for tag 44 is safe here because it stops at the
+      first non-numeric byte, which is the SOH — and it does not allocate. Replacing it with a
+      hand-rolled fixed-point parse is the stretch goal, and it is worth roughly a third of your ns/op.</p>
+      <p class="sub">The grader parses the same message 2,000,000 times and prints
+      <code>METRIC|fix_parse_ns_per_op</code>. A tight single-pass parser lands in the tens of
+      nanoseconds. <em class="hi">If you see hundreds, something is allocating or copying</em> — usually
+      a <code>std::string</code> you did not mean to construct.</p>
+    </div>
+  </div>
+
+  <h3 style="margin-top:32px">b · Endianness and fixed-width integers</h3>
+  <p>Binary protocols put the fields at known byte offsets, which only works if everyone agrees on
+  <em>which</em> bytes. Network byte order is big-endian; every x86-64 and every ARM64 you will run on is
+  little-endian. So a binary feed decode is a cast <strong>plus a byte swap per multi-byte field</strong>
+  — one <code>bswap</code> instruction, about a cycle, and completely non-optional.</p>
+
+  <div class="split" style="margin-top:14px">
+    <div class="panel">
+      <h3>One field, two byte orders</h3>
+      <div class="grid2">
+        <div class="ctl"><label for="enVal">Value <b id="enHex">—</b></label>
+          <input type="text" id="enVal" value="1855000" spellcheck="false" aria-label="Integer value to encode"/></div>
+        <div class="ctl"><label for="enW">Width</label>
+          <select id="enW" aria-label="Integer width in bytes">
+            <option value="2">uint16_t · 2 bytes</option>
+            <option value="4" selected="selected">uint32_t · 4 bytes</option>
+            <option value="8">uint64_t · 8 bytes</option>
+          </select></div>
+      </div>
+      <h4 style="margin-top:8px">Big-endian — as it appears on the wire</h4>
+      <div class="bytes" id="enBE" style="margin:6px 0 14px"></div>
+      <h4>Little-endian — as your CPU wants it</h4>
+      <div class="bytes" id="enLE" style="margin:6px 0 14px"></div>
+      <div class="ctl"><label class="row" style="justify-content:flex-start;gap:10px">
+        <span>Read it without swapping?</span></label>
+        <div class="sw" role="group" aria-label="Whether to byte-swap on read">
+          <button id="enSwap" type="button" aria-pressed="true">be32toh(x)</button>
+          <button id="enRaw" type="button" aria-pressed="false">no swap</button>
+        </div></div>
+      <div class="verdict" id="enVerdict">—</div>
+      <p class="sub" id="enWhy" style="margin-top:8px"></p>
+    </div>
+    <div class="stack">
+      <div class="panel tight"><h3>The ITCH-style message this field lives in</h3>
+        <div class="bytes" id="enMsg"></div>
+        <p class="sub" style="margin-top:10px">18 bytes, <code>#pragma pack(push, 1)</code> so the
+        compiler inserts no padding, and every field at a fixed offset. Green is
+        <code>order_id</code>, blue is <code>qty</code>, amber is <code>price</code>.</p>
+      </div>
+      <div class="panel tight">
+        <pre class="code">#pragma pack(push, 1)
+<span class="k">struct</span> AddOrder {          <span class="c">// ITCH-style, 18 bytes</span>
+  std::uint8_t  msg_type;   <span class="c">// 'A'          off 0</span>
+  std::uint64_t order_id;   <span class="c">// big-endian   off 1</span>
+  std::uint8_t  side;       <span class="c">// 'B' / 'S'    off 9</span>
+  std::uint32_t qty;        <span class="c">//              off 10</span>
+  std::uint32_t price;      <span class="c">// scaled ×1e4  off 14</span>
+};
+#pragma pack(pop)
+<span class="k">static_assert</span>(<span class="k">sizeof</span>(AddOrder) == <span class="n">18</span>);</pre>
+      </div>
+      <div class="note"><b>Prices are scaled integers, never floats.</b> 185.50 goes on the wire as
+      <code>1855000</code> with an implied divisor of 10<sup>4</sup>. You get exact arithmetic, exact
+      equality, a 4-byte field instead of 8, and no rounding surprise when you compare your price to the
+      venue's. Every real feed does this, and so should your internal book.</div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:32px">c · Sequence numbers, gap detection and recovery</h3>
+  <p>Multicast has no retransmit, so the sequence number is the <em>only</em> thing that tells you a
+  message existed. The feed handler keeps one integer — the next expected sequence — and every arriving
+  message either matches it, is a duplicate, or proves a gap. Step the stream.</p>
+
+  <div class="split-r" style="margin-top:14px">
+    <div class="panel">
+      <h3>Incoming stream · seq 1001 onward</h3>
+      <div class="seqstrip" id="gpStrip" role="img" aria-label="Sequence numbers received, lost, or held"></div>
+      <div class="row" style="margin-top:14px">
+        <button class="btn primary" id="gpStep" type="button" aria-label="Deliver the next packet">Next packet →</button>
+        <button class="btn" id="gpAuto" type="button" aria-label="Play the whole stream">Play</button>
+        <button class="btn" id="gpReset" type="button" aria-label="Restart the stream">Restart</button>
+        <span class="pill" id="gpState">LIVE</span>
+      </div>
+      <div class="steps" id="gpLog" style="margin-top:14px" aria-live="polite"></div>
+    </div>
+    <div class="stack">
+      <div class="panel tight"><h3>Feed handler state</h3>
+        <div class="stats">
+          <div class="stat"><div class="sl">Next expected</div><div class="sv acc" id="gpNext">1001</div></div>
+          <div class="stat"><div class="sl">Applied</div><div class="sv ok" id="gpApp">0</div></div>
+          <div class="stat"><div class="sl">Held in buffer</div><div class="sv warn" id="gpHeld">0</div></div>
+          <div class="stat"><div class="sl">Book is</div><div class="sv" id="gpBook">TRADEABLE</div></div>
+        </div>
+      </div>
+      <div class="panel tight"><h3>Recovery</h3>
+        <p class="sub" id="gpWhat">—</p>
+        <pre class="code" id="gpCode">—</pre>
+      </div>
+      <div class="note" id="gpNote"></div>
+    </div>
+  </div>
+  <p class="sub" style="margin-top:10px">The discipline that matters: <em class="hi">a gap makes the book
+  untradeable until recovery completes</em>. Not degraded, not probably-fine — untradeable. A feed
+  handler that keeps applying increments across a hole produces a book that diverges silently from the
+  venue's and looks perfectly healthy in every log you have.</p>
+</section>
+
+<!-- ══════════════ WHY ══════════════ -->
+<section id="why">
+  <div class="kicker">Part 3</div>
+  <h2><span class="secnum">3</span>Why it matters: the arena's wire, and whose clock you trust</h2>
+  <p class="lead">The arena speaks <strong>JSON over WebSocket</strong> — a discriminated union keyed on
+  a <code>type</code> field, defined in <code>shared/messages.py</code>. It is convenient, it is what
+  the Python bots speak, and it is the opposite of everything a real venue does. Knowing exactly what
+  it costs you is the point of this section, because next session you will cut that cost.</p>
+
+  <div class="split" style="margin-top:18px">
+    <div class="panel">
+      <h3>The arena feed you actually receive</h3>
+      <div class="tabs" role="tablist" aria-label="Arena message types">
+        <button class="tab" role="tab" id="awBook" aria-selected="true" type="button">book_snapshot</button>
+        <button class="tab" role="tab" id="awPlace" aria-selected="false" type="button">place_order</button>
+        <button class="tab" role="tab" id="awAck" aria-selected="false" type="button">order_ack</button>
+      </div>
+      <pre class="code" id="awWire">—</pre>
+      <div class="stats" style="margin-top:13px">
+        <div class="stat"><div class="sl">JSON bytes</div><div class="sv" id="awJson">—</div></div>
+        <div class="stat"><div class="sl">Equivalent binary</div><div class="sv acc" id="awBin">—</div></div>
+        <div class="stat"><div class="sl">Overhead</div><div class="sv warn" id="awOv">—</div></div>
+        <div class="stat"><div class="sl">Fields you trade on</div><div class="sv" id="awUse">—</div></div>
+      </div>
+      <p class="sub" style="margin-top:11px" id="awDesc"></p>
+    </div>
+    <div class="stack">
+      <div class="panel tight"><h3>What a full DOM parse buys you</h3>
+        <div class="toggles" id="awTog"></div>
+        <div class="stats" style="margin-top:12px">
+          <div class="stat"><div class="sl">Decode cost</div><div class="sv" id="awNs">—</div></div>
+          <div class="stat"><div class="sl">Heap allocations</div><div class="sv" id="awAlloc">—</div></div>
+          <div class="stat"><div class="sl">Bytes copied</div><div class="sv" id="awCopy">—</div></div>
+          <div class="stat"><div class="sl">Fields you needed</div><div class="sv acc" id="awNeed">—</div></div>
+        </div>
+      </div>
+      <div class="note" id="awNote"></div>
+      <div class="panel tight"><h3>The framing you inherit</h3>
+        <p class="sub">WebSocket rides one TCP connection and adds its own frame header (2–14 bytes,
+        plus a 4-byte mask from the client). So you get message boundaries for free — but underneath sits
+        TCP, which means <em class="hi">ordering, retransmission and head-of-line blocking</em>. The
+        arena's feed cannot lose a message, and it also cannot skip one that is late.</p>
+      </div>
+    </div>
+  </div>
+  <div class="note" style="margin-top:14px"><b>What to take from this.</b> The arena's wire is not a flaw
+  to be complained about; it is the realistic case. Most of the feeds you will meet outside a colocated
+  cage are JSON or protobuf over TCP, and the skill that pays is knowing which fields you actually trade
+  on and refusing to pay for the rest. Next session you replace the DOM with a targeted extract and
+  measure the win on a replay tape.</div>
+
+  <h3 style="margin-top:32px">Timestamps and whose clock you trust</h3>
+  <p>Every message you receive carries a venue timestamp, and you will stamp your own on arrival. The
+  difference is what you call latency — which means <strong>your latency measurement is only as good as
+  the agreement between two clocks</strong>. Drag the skew and watch the measurement lie.</p>
+
+  <div class="split-r" style="margin-top:14px">
+    <div class="panel">
+      <h3>Venue clock vs receiver clock</h3>
+      <div class="ctl"><label for="ckSkew">Receiver clock offset <b id="ckSkewV">0 µs</b></label>
+        <input type="range" id="ckSkew" min="-400" max="400" value="0" aria-label="Receiver clock offset in microseconds"/></div>
+      <div class="ctl"><label for="ckJit">Sync jitter (one sigma) <b id="ckJitV">1 µs</b></label>
+        <input type="range" id="ckJit" min="0" max="200" value="1" aria-label="Clock synchronisation jitter in microseconds"/></div>
+      <div class="ctl"><label for="ckTrue">True one-way network latency <b id="ckTrueV">45 µs</b></label>
+        <input type="range" id="ckTrue" min="1" max="300" value="45" aria-label="True one-way latency in microseconds"/></div>
+      <div class="svgwrap"><svg id="ckSvg" viewBox="0 0 540 190" role="img" aria-label="Two clock timelines showing how offset distorts a measured one-way latency"></svg></div>
+      <div class="sw" role="group" aria-label="Choose a clock synchronisation method" style="margin-top:12px">
+        <button id="ckNtp" type="button" aria-pressed="false">NTP over WAN</button>
+        <button id="ckNtpL" type="button" aria-pressed="true">NTP on the LAN</button>
+        <button id="ckPtp" type="button" aria-pressed="false">PTP (hardware)</button>
+      </div>
+    </div>
+    <div class="stack">
+      <div class="panel tight"><h3>What your log will say</h3>
+        <div class="big" id="ckMeas">—</div>
+        <div class="bigsub">measured one-way latency</div>
+        <div class="stats" style="margin-top:11px">
+          <div class="stat"><div class="sl">True latency</div><div class="sv acc" id="ckT">—</div></div>
+          <div class="stat"><div class="sl">Error</div><div class="sv" id="ckErr">—</div></div>
+          <div class="stat"><div class="sl">Relative error</div><div class="sv" id="ckRel">—</div></div>
+          <div class="stat"><div class="sl">Sync accuracy</div><div class="sv" id="ckAcc">—</div></div>
+        </div>
+        <div class="verdict" id="ckVerdict">—</div>
+      </div>
+      <div class="note" id="ckNote"></div>
+      <div class="panel tight"><h3>The one measurement that never lies</h3>
+        <p class="sub">A <em class="hi">round trip measured on a single clock</em>. Stamp
+        <code>steady_clock</code> when you send, stamp it again when the ack returns, and no
+        cross-machine synchronisation is involved at all. That is why the course grades tick-to-trade
+        from your own process — and why the offline replay harness is deterministic. Cross-machine
+        one-way numbers are for capacity planning, not for grading.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ PITFALLS ══════════════ -->
+<section id="pitfalls">
+  <div class="kicker">Part 4</div>
+  <h2><span class="secnum">4</span>Five ways this goes wrong</h2>
+  <p class="lead">Four of these five are silent. Open them.</p>
+
+  <details class="pit"><summary>One <code>recv()</code> is treated as one message</summary>
+    <div class="body">
+      <p>The single most common networking bug there is. TCP is a byte stream: it does not preserve the
+      boundaries the sender wrote. A <code>recv()</code> can hand you half a message, or two and a half,
+      or one message split across four calls — and on a quiet localhost test it will hand you exactly one
+      message every time, so your code passes.</p>
+      <p>Then you deploy, the rate climbs, Nagle coalesces two writes into one segment, and your parser
+      reads a tag out of the middle of the next message and returns nonsense that looks like data.</p>
+      <p class="fix">Fix: accumulate into a reusable buffer, frame from it, dispatch complete messages
+      only, and compact the partial tail forward. FIX gives you tag 9 (body length); binary feeds give
+      you a length prefix. Test it by deliberately feeding your parser one byte at a time.</p>
+    </div></details>
+
+  <details class="pit"><summary>The gap is detected, and the increments keep being applied</summary>
+    <div class="body">
+      <p>You wrote the gap detector — <code>if (seq != expected_) ++gaps_;</code> — and then carried on
+      applying the message anyway. Now your book has a hole: some price level was added and never
+      removed, or a size was decremented from a value you never saw. Nothing crashes. The book stays
+      plausible, and your quotes are priced against a level the venue deleted forty seconds ago.</p>
+      <p>This is the failure that costs real money, because you are not wrong about the market — you are
+      wrong about the book, in a direction that makes your stale quote look attractive to exactly the
+      counterparty who can see the truth.</p>
+      <p class="fix">Fix: a gap is a state transition, not a counter. Move to
+      <code>RECOVERING</code>, stop quoting the affected symbol, buffer the arriving increments, request
+      a snapshot, replay the buffer from the snapshot's sequence, and only then return to
+      <code>LIVE</code>. Log every transition with both sequence numbers.</p>
+    </div></details>
+
+  <details class="pit"><summary>The binary struct is cast without a bounds check</summary>
+    <div class="body">
+      <p><code>auto* m = reinterpret_cast&lt;const AddOrder*&gt;(p);</code> is 18 bytes of read from a
+      buffer that you have not confirmed holds 18 bytes. If a partial frame arrived, or a malformed
+      length prefix claims 18 when 4 are present, you have just read past your buffer — an information
+      leak on a good day and a segfault on a better one.</p>
+      <p>The related trap is trusting the length prefix itself. A field that says <code>0xFFFFFFFF</code>
+      is a 4-gigabyte <code>memcpy</code> if you believe it.</p>
+      <p class="fix">Fix: <code>if (n &lt; sizeof(AddOrder)) return;</code> before the cast, and clamp
+      every length against both the frame remaining and a hard protocol maximum. Also
+      <code>static_assert</code> your <code>sizeof</code> — a forgotten
+      <code>#pragma pack</code> silently pads the struct to 24 bytes and shifts every offset.</p>
+    </div></details>
+
+  <details class="pit"><summary>The byte swap is forgotten, and the price is astronomical</summary>
+    <div class="body">
+      <p>Reading a big-endian <code>uint32_t</code> as little-endian does not produce a subtly wrong
+      number; it produces a wildly wrong one. <code>1855000</code> (0x001C_FD58) read without swapping is
+      <code>1483833344</code>. As a price scaled by 10<sup>4</sup> that is $148,383.33, which your risk
+      check will hopefully reject.</p>
+      <p>The dangerous case is a small field where the swap happens to be harmless — a single-byte
+      <code>side</code> that needs no swap, or a quantity of 256 that swaps to 65,536 and still looks
+      like a plausible order. Then you ship, and the first four-digit quantity breaks you.</p>
+      <p class="fix">Fix: swap at exactly one place — the decode function — never at the call site.
+      <code>be64toh</code> / <code>be32toh</code> on Linux, <code>OSSwapBigToHostInt32</code> on macOS,
+      or <code>std::byteswap</code> in C++23. Then unit-test the decoder against a hard-coded byte array
+      with known field values.</p>
+    </div></details>
+
+  <details class="pit"><summary>Latency is measured across two unsynchronised clocks</summary>
+    <div class="body">
+      <p>You subtract the venue's timestamp from your own arrival timestamp and report the difference as
+      one-way latency. With NTP over a WAN the two clocks may disagree by a millisecond, so your
+      &ldquo;45 µs&rdquo; measurement has a ±1000 µs systematic error. The number is not noisy; it is
+      meaningless.</p>
+      <p>The tell is a negative latency — a message that arrived before it was sent. If you have ever
+      seen one in a log and clamped it to zero, you were clamping the evidence.</p>
+      <p class="fix">Fix: for anything you optimise against, measure a <em>round trip</em> on one clock
+      with <code>steady_clock</code>. For cross-machine numbers, know your sync accuracy and quote the
+      error bar with the measurement: PTP with hardware timestamping gets you into the tens of
+      nanoseconds, LAN NTP to a few hundred microseconds, WAN NTP to a few milliseconds.</p>
+    </div></details>
+</section>
+
+<!-- ══════════════ CHECK ══════════════ -->
+<section id="check">
+  <div class="kicker">Part 5</div>
+  <h2><span class="secnum">5</span>Check yourself</h2>
+  <p class="lead">Three questions, instant feedback, nothing recorded.</p>
+
+  <div class="mcq" data-a="1" data-exp="<b>Because in-order delivery means one lost segment stalls every byte behind it.</b> TCP will not hand you byte N+1 until byte N has been retransmitted and acknowledged, which costs a full round trip — during which the feed is frozen and then arrives as a burst of stale updates. UDP multicast lets the loss be a visible hole you detect from the sequence number and recover from deliberately, while the newest data keeps flowing. Note that the reasons people usually give are wrong: TCP's per-packet overhead is small, its throughput is fine, and the checksum is not the issue. The single-send fan-out is a real second reason — one send reaching 400 subscribers instead of 400 sends — but head-of-line blocking is the latency argument.">
+    <p class="q"><span>Q1</span>Why is TCP a poor transport for a high-rate market-data feed, even though it never loses a message?</p>
+    <div class="opts">
+      <button class="opt" type="button">Its 20-byte header is too much overhead at millions of messages per second</button>
+      <button class="opt" type="button">Its in-order guarantee means one lost segment blocks everything behind it for a full round trip</button>
+      <button class="opt" type="button">TCP cannot carry binary payloads, only text</button>
+      <button class="opt" type="button">Its checksum is too weak to trust for financial data</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+
+  <div class="mcq" data-a="3" data-exp="<b>Stop quoting the symbol, buffer the arrivals, take a snapshot, replay from it, then resume.</b> A gap means you have lost a state transition, and there is no way to infer it — the book is now unreconstructable from increments alone. Counting the gap and continuing (the most common submission) leaves you with a silently divergent book that looks healthy. Ignoring the packet is the same thing. And you cannot request a retransmission from a multicast group at all: there is no back channel, which is exactly why every venue also publishes a snapshot feed. The state machine is LIVE → RECOVERING → LIVE, and the transition out requires a snapshot whose sequence number you can splice your buffer onto.">
+    <p class="q"><span>Q2</span>Your feed handler expects sequence 1042 and receives 1045. What must happen next?</p>
+    <div class="opts">
+      <button class="opt" type="button">Increment a gap counter and apply 1045 — three messages is well within tolerance</button>
+      <button class="opt" type="button">Drop 1045 and keep waiting for 1042; multicast usually reorders</button>
+      <button class="opt" type="button">Send a retransmission request to the multicast group and block until 1042–1044 arrive</button>
+      <button class="opt" type="button">Mark the book untradeable, buffer arrivals, pull a snapshot, replay from its sequence, then resume</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+
+  <div class="mcq" data-a="0" data-exp="<b>Its fields sit at fixed offsets, so decode is a bounds check, a cast and a byte swap — there is no scanning and no ASCII-to-number conversion.</b> That is the whole difference. FIX makes you walk every byte looking for '=' and SOH, then convert decimal digits to integers field by field; JSON makes you do that plus build a tree of heap nodes and copy strings you will never read. Binary is not faster because it is smaller — although it is smaller. It is faster because the layout is known at compile time, so the work at run time is addressing rather than parsing. The cost you pay is human-readability and schema rigidity: change a field width and every consumer breaks at once.">
+    <p class="q"><span>Q3</span>Why does an ITCH-style binary message decode roughly an order of magnitude faster than the same order in FIX?</p>
+    <div class="opts">
+      <button class="opt" type="button">Fields are at compile-time-known offsets, so decode is a cast and a byte swap rather than a scan and a digit conversion</button>
+      <button class="opt" type="button">Binary messages are compressed, so fewer bytes reach the CPU</button>
+      <button class="opt" type="button">Binary feeds run over UDP and UDP has a smaller header than TCP</button>
+      <button class="opt" type="button">Because binary avoids the byte-swap that FIX requires on every field</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+</section>
+
+<!-- ══════════════ NEXT ══════════════ -->
+<section id="next">
+  <div class="kicker">Part 6</div>
+  <h2><span class="secnum">6</span>Do the work</h2>
+  <div class="grid2" style="margin-top:14px">
+    <div class="panel"><h4>In the lab (~45–60 min)</h4><ul class="plain">
+      <li>Finish <code>parse_new_order</code> in <code>include/fix_parser.hpp</code> until
+      <code>make fix</code> prints <code>RESULT|fix_parse|pass</code>. Record your
+      <code>fix_parse_ns_per_op</code>.</li>
+      <li>Keep <code>clordid</code> a view — pointer plus length into the caller's buffer. No
+      <code>std::string</code>, no <code>std::map</code>, no allocation anywhere in the function.</li>
+      <li>Make malformed input return <code>false</code>: a tag with no <code>=</code>, a non-digit in
+      tag 38. Trace why the scan loop already does this.</li>
+      <li>Run the TCP-versus-UDP demo on localhost. Send two messages in one <code>write()</code> over
+      TCP and confirm your framing survives; drop a datagram over UDP and confirm your gap detector fires.</li>
+    </ul></div>
+    <div class="panel"><h4>After the session</h4><ul class="plain">
+      <li>Stretch: replace <code>strtod</code> for tag 44 with a hand-rolled fixed-point parse (integer
+      part, <code>.</code>, fraction). Re-measure ns/op.</li>
+      <li>Stretch: branch-light tag dispatch. Most tags are two digits — read the tag as you scan rather
+      than building a general integer.</li>
+      <li>Write down, for every <code>shared/messages.py</code> type your bot touches
+      (<code>book_snapshot</code>, <code>place_order</code>, <code>order_ack</code>), every field you
+      send and receive. That table is your input to the next session.</li>
+      <li>Turn in a FIX parser <em>or</em> a fixed-width binary parser that frames a byte stream and
+      extracts fields, with the ns/op number. Due at the start of the next session.</li>
+    </ul></div>
+  </div>
+  <div class="nextgrid" style="margin-top:18px">
+    <a class="nextcard" href="https://github.com/sdonadio/hft-cpp-starter-columbia"><div class="nl">Get the code</div>
+      <div class="nt">15-week track starter</div>
+      <div class="nd">Header stubs, the autograder and the C++ arena client, one topic per session.</div></a>
+    <a class="nextcard" href="https://github.com/sdonadio/hft-cpp-starter-uchicago"><div class="nl">Get the code</div>
+      <div class="nt">9-session track starter</div>
+      <div class="nd">The same stubs and the same grader, packaged for the condensed nine-session schedule.</div></a>
+    <a class="nextcard" href="week10.html"><div class="nl">Back</div>
+      <div class="nt">← Week 10 · Concurrency II — Lock-Free Pipelines</div>
+      <div class="nd">The ring that sits between the socket thread and the strategy thread.</div></a>
+    <a class="nextcard" href="week12.html"><div class="nl">Next</div>
+      <div class="nt">Week 12 · Async I/O &amp; Serialization →</div>
+      <div class="nd">You know the formats. Now make the codec and the socket loop fast.</div></a>
+  </div>
+</section>
+
+
+<footer>Low-Latency Trading Arena · an interactive companion for a course on low-latency trading systems in C++ · <a href="https://github.com/sdonadio/low-latency-trading-arena">Source</a></footer>
+
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════
+   Week 11 — Network Protocols & Market Data
+   ════════════════════════════════════════════════════════════════ */
+var $ = function (id) { return document.getElementById(id); };
+/* SVG namespace taken from the document so no absolute URL appears in this file */
+var SVGNS = $("dmSvg").namespaceURI;
+function mk(tag, attrs, txt) {
+  var e = document.createElementNS(SVGNS, tag), k;
+  for (k in attrs) if (Object.prototype.hasOwnProperty.call(attrs, k)) e.setAttribute(k, attrs[k]);
+  if (txt !== undefined) e.textContent = txt;
+  return e;
+}
+function clear(n) { while (n.firstChild) n.removeChild(n.firstChild); }
+function f1(x) { return (Math.round(x * 10) / 10).toFixed(1); }
+function f2(x) { return (Math.round(x * 100) / 100).toFixed(2); }
+
+/* ─────────────────────────────────────────────────────────────────
+   1 · Delivery-model widget
+   ───────────────────────────────────────────────────────────────── */
+var DM = {
+  dmTcp: { name: "TCP", deliv: "reliable", order: "in order", fan: "one send each",
+    retx: "automatic", p50: 52, jitPer: 0, hol: true, mcast: false,
+    desc: "Order entry. One connection to the matching engine, every byte guaranteed and in sequence." },
+  dmUdp: { name: "UDP unicast", deliv: "best effort", order: "not guaranteed", fan: "one send each",
+    retx: "none — your job", p50: 44, jitPer: 0, hol: false, mcast: false,
+    desc: "Rare on its own for feeds. Occasionally used for a per-client recovery channel." },
+  dmMcast: { name: "UDP multicast", deliv: "best effort", order: "not guaranteed", fan: "one send, N receive",
+    retx: "none — snapshot channel", p50: 44, jitPer: 0, hol: false, mcast: true,
+    desc: "How every serious venue ships market data. The switch fabric replicates the packet." },
+  dmWs: { name: "WebSocket / TCP", deliv: "reliable", order: "in order", fan: "one send each",
+    retx: "automatic", p50: 61, jitPer: 0, hol: true, mcast: false,
+    desc: "The arena's feed. TCP semantics plus a 2–14 byte frame header per message." }
+};
+var dmSel = "dmMcast";
+function dmRender() {
+  var d = DM[dmSel];
+  var loss = parseInt($("dmLoss").value, 10) / 100;
+  var subs = parseInt($("dmSubs").value, 10);
+  $("dmLossV").textContent = f2(loss) + " %";
+  $("dmSubsV").textContent = subs;
+  Object.keys(DM).forEach(function (k) { $(k).setAttribute("aria-pressed", k === dmSel ? "true" : "false"); });
+
+  /* latency under loss: TCP pays a full RTT of head-of-line blocking on the affected
+     and following messages; UDP pays nothing but loses the packet. */
+  var rtt = 2 * d.p50;
+  var p50 = d.p50;
+  var p999 = d.hol ? (loss > 0.02 ? d.p50 + rtt : d.p50 + 14) : d.p50 + 9;
+  var gapsPerMillion = d.hol ? 0 : Math.round(loss / 100 * 1000000);
+  var msgBytes = 46;
+  var egress = d.mcast ? msgBytes : msgBytes * subs;
+
+  var svg = $("dmSvg"); clear(svg);
+  svg.appendChild(mk("rect", { x: 12, y: 74, width: 92, height: 44, rx: 8, fill: "rgba(124,58,237,.26)", stroke: "#c4b5fd", "stroke-width": "1.3" }));
+  svg.appendChild(mk("text", { x: 58, y: 92, fill: "#fff", "font-size": "11", "font-weight": "700", "font-family": "monospace", "text-anchor": "middle" }, "venue"));
+  svg.appendChild(mk("text", { x: 58, y: 107, fill: "#c4b5fd", "font-size": "9", "font-family": "monospace", "text-anchor": "middle" }, "matching engine"));
+  var nShown = Math.min(5, subs);
+  var ys = [], i;
+  for (i = 0; i < nShown; i++) ys.push(14 + i * (128 / Math.max(1, nShown - 1 || 1)));
+  if (nShown === 1) ys = [88];
+  if (d.mcast) {
+    svg.appendChild(mk("line", { x1: 104, y1: 96, x2: 246, y2: 96, stroke: "#7c3aed", "stroke-width": "3" }));
+    svg.appendChild(mk("rect", { x: 246, y: 76, width: 74, height: 40, rx: 7, fill: "rgba(108,182,255,.18)", stroke: "#6cb6ff", "stroke-width": "1.2" }));
+    svg.appendChild(mk("text", { x: 283, y: 94, fill: "#fff", "font-size": "10", "font-family": "monospace", "text-anchor": "middle" }, "switch"));
+    svg.appendChild(mk("text", { x: 283, y: 108, fill: "#6cb6ff", "font-size": "8.5", "font-family": "monospace", "text-anchor": "middle" }, "replicates"));
+    svg.appendChild(mk("text", { x: 175, y: 88, fill: "#c4b5fd", "font-size": "9.5", "font-family": "monospace", "text-anchor": "middle" }, "1 packet"));
+    ys.forEach(function (y) {
+      svg.appendChild(mk("line", { x1: 320, y1: 96, x2: 420, y2: y + 16, stroke: "#3a3f4d", "stroke-width": "1.2" }));
+    });
+  } else {
+    ys.forEach(function (y) {
+      svg.appendChild(mk("line", { x1: 104, y1: 96, x2: 420, y2: y + 16, stroke: "#3a3f4d", "stroke-width": "1.2" }));
+    });
+    svg.appendChild(mk("text", { x: 250, y: 30, fill: "#d29922", "font-size": "9.5", "font-family": "monospace", "text-anchor": "middle" }, subs + " independent copies"));
+  }
+  ys.forEach(function (y, k) {
+    var lost = !d.hol && loss > 0 && k === 1 && loss >= 0.05;
+    svg.appendChild(mk("rect", { x: 420, y: y, width: 106, height: 32, rx: 6,
+      fill: lost ? "rgba(248,81,73,.16)" : "rgba(30,34,43,.9)", stroke: lost ? "#f85149" : "#333a47", "stroke-width": "1.1" }));
+    svg.appendChild(mk("text", { x: 473, y: y + 20, fill: lost ? "#f4b6b1" : "#9aa0a6", "font-size": "9.5", "font-family": "monospace", "text-anchor": "middle" },
+      lost ? "gap detected" : "subscriber " + (k + 1)));
+  });
+  if (subs > nShown) svg.appendChild(mk("text", { x: 473, y: 194, fill: "#5f6673", "font-size": "9", "font-family": "monospace", "text-anchor": "middle" }, "+ " + (subs - nShown) + " more"));
+
+  $("dmDeliv").textContent = d.deliv;
+  $("dmOrder").textContent = d.order;
+  $("dmFan").textContent = d.fan;
+  $("dmRetx").textContent = d.retx;
+  $("dmP50").textContent = p50 + " µs";
+  $("dmP999").textContent = Math.round(p999) + " µs";
+  $("dmP999").className = "sv " + (p999 > p50 * 2 ? "bad" : "");
+  $("dmEgr").textContent = (egress / 1000 > 1 ? f1(egress / 1000) + " kB" : egress + " B") + " / msg";
+  $("dmGaps").textContent = d.hol ? "none — TCP hides them" : gapsPerMillion.toLocaleString("en-US") + " / M";
+  $("dmGaps").className = "sv " + (gapsPerMillion > 0 ? "warn" : "ok");
+
+  var log = $("dmSteps"); clear(log);
+  var lines;
+  if (d.hol) {
+    lines = loss === 0
+      ? ["send seq=1042  -> ack, delivered in order", "send seq=1043  -> ack, delivered in order", "// no gaps possible; the stream is a stream"]
+      : ["seq=1042 delivered", "seq=1043 SEGMENT LOST on the path",
+         "seq=1044..1051 arrive — but the kernel HOLDS them", "retransmit of 1043 after " + Math.round(rtt) + " µs (1 RTT)",
+         "1043..1051 delivered together — a burst of stale updates"];
+  } else {
+    lines = loss === 0
+      ? ["seq=1042 applied", "seq=1043 applied", "// sequence contiguous; book is live"]
+      : ["seq=1042 applied", "seq=1043 DROPPED — nothing tells you except the next packet",
+         "seq=1044 arrives: expected 1043 -> GAP", "state = RECOVERING; stop quoting; buffer 1044+",
+         "snapshot @1051 -> replay buffer -> state = LIVE"];
+  }
+  lines.forEach(function (t, k) {
+    var e = document.createElement("div");
+    e.className = /LOST|DROPPED|GAP/.test(t) ? "bad" : (k === lines.length - 1 ? "ok" : "past");
+    e.textContent = t;
+    log.appendChild(e);
+  });
+
+  var note = $("dmNote");
+  if (d.mcast) {
+    note.innerHTML = "<b>Multicast is the fan-out argument.</b> At " + subs + " subscribers the venue " +
+      "sends " + msgBytes + " bytes once and the switch fabric does the replication — versus " +
+      f1(msgBytes * subs / 1000) + " kB of egress per message for unicast. That is why a venue with " +
+      "thousands of subscribers can publish millions of messages a second at all, and it is also why " +
+      "<em class='hi'>every subscriber gets the packet at the same instant</em>: fairness is a property " +
+      "of the transport, not a policy.";
+  } else if (d.hol) {
+    note.innerHTML = "<b>" + d.name + ": reliable, and therefore blocking.</b> " + d.desc +
+      (loss > 0 ? " At " + f2(loss) + " % loss your p99.9 is " + Math.round(p999) + " µs — one RTT of " +
+        "head-of-line blocking, during which the feed is frozen and then arrives as a burst. You cannot " +
+        "skip the stale updates: TCP will not give you 1044 until it has given you 1043."
+        : " With no loss it is genuinely fast and much simpler than the alternative. The problem is that " +
+        "loss is not optional on a real path, and the cost of loss here is a full round trip.");
+  } else {
+    note.innerHTML = "<b>UDP unicast: the awkward middle.</b> " + d.desc + " You take on gap handling " +
+      "without gaining the fan-out that justifies it, so it is rarely the primary feed. Its real use is " +
+      "a per-client channel where you want the no-retransmit semantics but there is only one receiver.";
+  }
+}
+Object.keys(DM).forEach(function (k) { $(k).addEventListener("click", function () { dmSel = k; dmRender(); }); });
+$("dmLoss").addEventListener("input", dmRender);
+$("dmSubs").addEventListener("input", dmRender);
+dmRender();
+
+/* ─────────────────────────────────────────────────────────────────
+   2 · Parse-cost race: same order, three encodings
+   ───────────────────────────────────────────────────────────────── */
+var PC = [
+  { key: "itch", name: "ITCH-style binary", bytes: 18, ns: 4, alloc: 0, col: "#7c3aed",
+    work: "bounds check + cast + 2 byte swaps",
+    wire: "41 00 00 00 00 00 00 03 DF  42\n00 00 00 64  00 1C 4E 18\n\n'A' order_id=991  'B'  qty=100  price=1855000\n1  +8            +1   +4        +4        = 18 bytes",
+    note: "<b>The endgame.</b> Every field is at an offset the compiler knows, so run time does " +
+      "addressing rather than parsing: check the length, cast the pointer, swap two integers. There is " +
+      "no scan, no digit conversion and nothing on the heap. The price you pay is rigidity — widen a " +
+      "field and every consumer breaks the same afternoon." },
+  { key: "fix", name: "FIX 4.4 tag=value", bytes: 125, ns: 46, alloc: 0, col: "#d29922",
+    work: "one forward scan + hand-rolled atoi / strtod",
+    wire: "8=FIX.4.4|9=102|35=D|49=ARENA01|56=VENUE|\n34=78|52=20260904-14:32:01.113|11=ORD-991|\n55=AAPL|54=1|38=100|40=2|44=185.50|10=107|\n\n125 bytes, 14 fields, SOH-delimited (| = 0x01)",
+    note: "<b>Text made fast.</b> 46 ns is what a good single-pass, zero-allocation parser costs: you " +
+      "visit each of 125 bytes once, and you convert ASCII digits to numbers five times. That is an " +
+      "order of magnitude above binary and an order of magnitude below a naive splitter — which is " +
+      "exactly the range your lab metric should land in." },
+  { key: "json", name: "JSON + DOM parse", bytes: 214, ns: 620, alloc: 22, col: "#f85149",
+    work: "tokenise everything + build a tree + copy strings",
+    wire: '{"type":"place_order","team_id":"ARENA01",\n "symbol":"AAPL","side":"buy","qty":100,\n "order_type":"limit","price":185.50,\n "client_order_id":"ORD-991"}\n\n214 bytes; a general parser reads all 8 keys',
+    note: "<b>The arena's wire, parsed the convenient way.</b> A DOM parser is correct, pleasant and " +
+      "does far more work than you asked for: it tokenises every key including the six you ignore, " +
+      "allocates a node per value, and copies every string into an owned <code>std::string</code>. " +
+      "Twenty-two allocations per message is where your p99.9 goes — each one can hit a slow path." },
+  { key: "jsonx", name: "JSON, targeted extract", bytes: 214, ns: 78, alloc: 0, col: "#3fb950",
+    work: "scan for 3 keys + parse in place, no tree",
+    wire: '// same 214 bytes on the wire — different work off it\nstd::string_view f = frame;\ndouble px = find_num(f, "\\"price\\":");\n// touch only the fields you trade on',
+    note: "<b>Where next session goes.</b> Same bytes on the wire, one eighth of the CPU: scan for the " +
+      "two or three keys you actually use, read the number in place with a <code>string_view</code>, " +
+      "allocate nothing. You cannot change the arena's encoding, but you can refuse to pay for the " +
+      "fields you do not read — and that is a realistic, generalisable win." }
+];
+var pcMetric = "ns", pcSel = 0;
+function pcRender(animate) {
+  var maxNs = 620, maxB = 214;
+  var bars = $("pcBars"); clear(bars);
+  PC.forEach(function (p, i) {
+    var row = document.createElement("div");
+    row.className = "bar" + (i === pcSel ? " win" : "");
+    var btn = document.createElement("button");
+    btn.className = "bl"; btn.type = "button";
+    btn.style.cssText = "text-align:left;background:none;border:none;cursor:pointer;font-family:inherit;padding:0";
+    btn.textContent = p.name;
+    btn.setAttribute("aria-label", "Inspect " + p.name);
+    if (i === pcSel) btn.style.color = "var(--ink)";
+    btn.addEventListener("click", function () { pcSel = i; pcRender(false); });
+    var t = document.createElement("div"); t.className = "bt";
+    var fill = document.createElement("i");
+    fill.style.background = p.col;
+    var frac = pcMetric === "ns" ? p.ns / maxNs : p.bytes / maxB;
+    fill.style.width = animate ? "0%" : (frac * 100) + "%";
+    t.appendChild(fill);
+    var v = document.createElement("div"); v.className = "bv";
+    v.textContent = pcMetric === "ns" ? p.ns + " ns" : p.bytes + " B";
+    row.appendChild(btn); row.appendChild(t); row.appendChild(v);
+    bars.appendChild(row);
+    if (animate) window.setTimeout(function () { fill.style.width = (frac * 100) + "%"; }, 40 + i * 90);
+  });
+  $("pcCap").textContent = pcMetric === "ns"
+    ? "Decode cost per message, all five order fields into a struct, one ~3 GHz core. Lower is better."
+    : "Bytes on the wire for one order message, payload only — no TCP/IP or WebSocket framing.";
+  $("pcNs").setAttribute("aria-pressed", pcMetric === "ns" ? "true" : "false");
+  $("pcBytes").setAttribute("aria-pressed", pcMetric === "bytes" ? "true" : "false");
+
+  var tb = $("pcTable").querySelector("tbody"); clear(tb);
+  PC.forEach(function (p, i) {
+    var tr = document.createElement("tr");
+    [p.name, p.bytes + " B", p.ns + " ns", p.alloc === 0 ? "none" : p.alloc, p.work].forEach(function (c, k) {
+      var td = document.createElement("td");
+      if (k === 0) td.className = "n";
+      td.textContent = c;
+      if (i === pcSel) td.style.color = "var(--ink)";
+      tr.appendChild(td);
+    });
+    tb.appendChild(tr);
+  });
+
+  var s = PC[pcSel];
+  $("pcName").textContent = s.name;
+  $("pcWire").textContent = s.wire;
+  $("pcVol").textContent = s.bytes + " MB";
+  $("pcCpu").textContent = s.ns + " ms";
+  $("pcRel").textContent = f1(s.ns / PC[0].ns) + "× slower";
+  if (pcSel === 0) $("pcRel").textContent = "baseline";
+  $("pcRate").textContent = Math.round(1250000000 / s.bytes / 1000) + " k msg/s";
+  $("pcNote").innerHTML = s.note;
+}
+$("pcRun").addEventListener("click", function () { pcRender(true); });
+$("pcReset").addEventListener("click", function () { pcSel = 0; pcMetric = "ns"; pcRender(true); });
+$("pcNs").addEventListener("click", function () { pcMetric = "ns"; pcRender(true); });
+$("pcBytes").addEventListener("click", function () { pcMetric = "bytes"; pcRender(true); });
+pcRender(false);
+
+/* ─────────────────────────────────────────────────────────────────
+   3 · FIX parser stepper
+   ───────────────────────────────────────────────────────────────── */
+var FIX_TAGS = {
+  8: "BeginString", 9: "BodyLength", 34: "MsgSeqNum", 35: "MsgType", 40: "OrdType",
+  44: "Price", 49: "SenderCompID", 52: "SendingTime", 54: "Side", 56: "TargetCompID",
+  10: "CheckSum", 11: "ClOrdID", 38: "OrderQty", 55: "Symbol"
+};
+var FIX_REQ = [11, 55, 54, 38, 44];
+var fxStep = -1;
+function fxParse(raw) {
+  var out = { fields: [], bad: null, scanned: raw.length };
+  var i = 0;
+  while (i < raw.length) {
+    var tag = 0, sawDigit = false;
+    while (i < raw.length && raw.charAt(i) !== "=") {
+      var c = raw.charCodeAt(i);
+      if (c < 48 || c > 57) { out.bad = "non-digit in tag at byte " + i; return out; }
+      tag = tag * 10 + (c - 48); sawDigit = true; i++;
+    }
+    if (i >= raw.length) { out.bad = "no '=' before end of buffer"; return out; }
+    if (!sawDigit) { out.bad = "empty tag at byte " + i; return out; }
+    i++;
+    var start = i;
+    while (i < raw.length && raw.charAt(i) !== "|") i++;
+    var val = raw.substring(start, i);
+    if (i < raw.length) i++;
+    out.fields.push({ tag: tag, name: FIX_TAGS[tag] || "(unknown)", val: val });
+  }
+  return out;
+}
+function fxChecksum(raw) {
+  /* mod-256 of every byte up to and including the SOH before tag 10 */
+  var idx = raw.indexOf("10=");
+  if (idx < 1) return null;
+  var sum = 0, i;
+  for (i = 0; i < idx; i++) sum += raw.charCodeAt(i) === 124 ? 1 : raw.charCodeAt(i);
+  var body = raw.substring(idx + 3);
+  var end = body.indexOf("|");
+  var stated = end >= 0 ? body.substring(0, end) : body;
+  var pad = "00" + (sum % 256);
+  return { computed: pad.substring(pad.length - 3), stated: stated };
+}
+function fxRender() {
+  var raw = $("fxIn").value.replace(/\s+$/, "");
+  var p = fxParse(raw);
+  var shown = fxStep < 0 ? p.fields.length : Math.min(fxStep + 1, p.fields.length);
+  var box = $("fxFields"); clear(box);
+  p.fields.forEach(function (f, i) {
+    var d = document.createElement("div");
+    d.className = "fld" + (i === fxStep ? " on" : "") + (i >= shown ? "" : "");
+    if (i >= shown) { d.style.opacity = "0.32"; }
+    var t = document.createElement("div"); t.className = "ft"; t.textContent = f.tag + "=";
+    var n = document.createElement("div"); n.className = "fn"; n.textContent = f.name;
+    var v = document.createElement("div"); v.textContent = f.val;
+    if (FIX_REQ.indexOf(f.tag) >= 0 && i < shown) v.style.color = "var(--accent-2)";
+    d.appendChild(t); d.appendChild(n); d.appendChild(v);
+    box.appendChild(d);
+  });
+  if (p.bad) {
+    var e = document.createElement("div"); e.className = "fld bad";
+    var a = document.createElement("div"); a.className = "ft"; a.textContent = "!";
+    var b = document.createElement("div"); b.className = "fn"; b.textContent = "malformed";
+    var c = document.createElement("div"); c.textContent = p.bad + " — return false";
+    e.appendChild(a); e.appendChild(b); e.appendChild(c);
+    box.appendChild(e);
+  }
+  var got = {}, i;
+  for (i = 0; i < shown; i++) got[p.fields[i].tag] = p.fields[i].val;
+  var have = FIX_REQ.filter(function (t) { return got[t] !== undefined; });
+  $("fxStruct").textContent =
+    "NewOrder out;\n" +
+    "  clordid     = " + (got[11] !== undefined ? '"' + got[11] + '"  (view, len ' + got[11].length + ")" : "—") + "\n" +
+    "  symbol[16]  = " + (got[55] !== undefined ? '"' + got[55] + '"' : "—") + "\n" +
+    "  side        = " + (got[54] !== undefined ? "'" + got[54] + "'  // " + (got[54] === "1" ? "buy" : got[54] === "2" ? "sell" : "?") : "—") + "\n" +
+    "  qty         = " + (got[38] !== undefined ? got[38] : "—") + "\n" +
+    "  price       = " + (got[44] !== undefined ? got[44] : "—");
+  $("fxCount").textContent = shown + " / " + p.fields.length;
+  $("fxScan").textContent = raw.length + " B";
+  var cs = fxChecksum(raw);
+  var csOk = cs && cs.computed === cs.stated;
+  $("fxSum").textContent = cs ? (csOk ? cs.stated + " ✓" : cs.stated + " ≠ " + cs.computed) : "absent";
+  $("fxSum").className = "sv " + (cs ? (csOk ? "ok" : "bad") : "warn");
+  $("fxReq").textContent = have.length + " / 5";
+  $("fxReq").className = "sv " + (have.length === 5 ? "ok" : "warn");
+  var v = $("fxVerdict");
+  if (p.bad) { v.textContent = "MALFORMED — parse_new_order returns false"; v.className = "verdict miss"; }
+  else if (cs && !csOk) { v.textContent = "CHECKSUM MISMATCH — reject the message"; v.className = "verdict miss"; }
+  else if (have.length === 5) { v.textContent = "ACCEPTED — all five required tags present"; v.className = "verdict met"; }
+  else { v.textContent = "INCOMPLETE — " + (5 - have.length) + " required tag(s) missing"; v.className = "verdict miss"; }
+  var note = $("fxNote");
+  if (p.bad) {
+    note.innerHTML = "<b>Malformed input must return <code>false</code>, not crash.</b> " + p.bad +
+      ". The scan loop in the starter already handles this: a non-digit before <code>=</code>, or " +
+      "running off the end without finding one, both bail out. Trace why — that reasoning is part of " +
+      "the grade.";
+  } else if (cs && !csOk) {
+    note.innerHTML = "<b>Tag 10 is a mod-256 sum of every preceding byte.</b> It is a cheap integrity " +
+      "check, not a security measure — but a mismatch means the bytes are not what the sender wrote, so " +
+      "the only correct action is to reject the message and log it. Computed " + cs.computed +
+      ", message claims " + cs.stated + ".";
+  } else if (fxStep >= 0 && fxStep < p.fields.length) {
+    var f = p.fields[fxStep];
+    var extra = FIX_REQ.indexOf(f.tag) >= 0
+      ? " This is one of the five tags the lab requires."
+      : " Your <code>switch</code> hits <code>default</code> here and skips it — but you still paid to " +
+        "scan every one of its " + f.val.length + " value bytes. That is the structural cost of a " +
+        "self-describing text protocol.";
+    note.innerHTML = "<b>Field " + (fxStep + 1) + ": tag " + f.tag + " (" + f.name + ").</b>" + extra;
+  } else {
+    note.innerHTML = "<b>14 fields, " + raw.length + " bytes, one forward pass.</b> You never look back " +
+      "and you never copy: <code>v</code> and <code>vlen</code> describe each value as a slice of the " +
+      "caller's buffer. Step the fields to see which five you keep and how many you pay to skip.";
+  }
+}
+$("fxNext").addEventListener("click", function () {
+  var n = fxParse($("fxIn").value.replace(/\s+$/, "")).fields.length;
+  fxStep = Math.min(fxStep + 1, n - 1); fxRender();
+});
+$("fxPrev").addEventListener("click", function () { fxStep = Math.max(fxStep - 1, -1); fxRender(); });
+$("fxAll").addEventListener("click", function () { fxStep = -1; fxRender(); });
+$("fxCorrupt").addEventListener("click", function () {
+  var t = $("fxIn").value;
+  $("fxIn").value = t.indexOf("55=AAPL") >= 0 ? t.replace("55=AAPL", "55=AAPM") : t.replace("55=AAPM", "55=AAPL");
+  fxRender();
+});
+$("fxIn").addEventListener("input", function () { fxStep = -1; fxRender(); });
+fxRender();
+
+/* ─────────────────────────────────────────────────────────────────
+   4 · Endianness widget
+   ───────────────────────────────────────────────────────────────── */
+var enSwapOn = true;
+function enBytes(v, w) {
+  var out = [], i;
+  for (i = w - 1; i >= 0; i--) out.push(Math.floor(v / Math.pow(256, i)) % 256);
+  return out;                                          /* big-endian order */
+}
+function hex2(b) { var s = "0" + b.toString(16).toUpperCase(); return s.substring(s.length - 2); }
+function enRender() {
+  var w = parseInt($("enW").value, 10);
+  var raw = $("enVal").value.replace(/[^0-9]/g, "");
+  var max = Math.pow(256, w) - 1;
+  var v = raw === "" ? 0 : Math.min(parseInt(raw, 10), max);
+  var be = enBytes(v, w), le = be.slice().reverse();
+  $("enHex").textContent = "0x" + be.map(hex2).join("");
+  function fill(node, arr, cls) {
+    clear(node);
+    arr.forEach(function (b, i) {
+      var d = document.createElement("div");
+      d.className = "byte" + (cls ? " " + cls : "");
+      d.textContent = hex2(b);
+      node.appendChild(d);
+      if (i < arr.length - 1) { var g = document.createElement("div"); g.style.width = "2px"; node.appendChild(g); }
+    });
+  }
+  fill($("enBE"), be, "hi");
+  fill($("enLE"), le, "");
+  /* what you get if you do not swap: reinterpret the big-endian bytes as little-endian */
+  var wrong = 0, i;
+  for (i = 0; i < w; i++) wrong += be[i] * Math.pow(256, i);
+  $("enSwap").setAttribute("aria-pressed", enSwapOn ? "true" : "false");
+  $("enRaw").setAttribute("aria-pressed", enSwapOn ? "false" : "true");
+  var vd = $("enVerdict");
+  if (enSwapOn) {
+    vd.textContent = "reads " + v.toLocaleString("en-US") + "  — correct";
+    vd.className = "verdict met";
+    $("enWhy").innerHTML = "One <code>bswap</code> instruction, about a cycle. <code>be" + (w * 8) +
+      "toh</code> compiles to exactly that on every compiler you will use — there is no reason to " +
+      "hand-roll shifts, and no reason to skip it.";
+  } else {
+    vd.textContent = "reads " + wrong.toLocaleString("en-US") + "  — wrong by " + f1(wrong / Math.max(1, v)) + "×";
+    vd.className = "verdict miss";
+    var asPrice = wrong / 10000;
+    $("enWhy").innerHTML = "As a price scaled by 10<sup>4</sup> that is $" +
+      asPrice.toLocaleString("en-US", { maximumFractionDigits: 2 }) + " instead of $" +
+      (v / 10000).toLocaleString("en-US", { maximumFractionDigits: 2 }) + ". Note that the error is not " +
+      "subtle — which is the good news. The bad news is the field where it <em>is</em> subtle: a " +
+      "single-byte <code>side</code> needs no swap at all, so a decoder that forgets the swap can look " +
+      "correct on small quantities and break on the first four-digit one.";
+  }
+  /* the containing 18-byte AddOrder frame */
+  var msg = $("enMsg"); clear(msg);
+  var frame = [0x41].concat(enBytes(991, 8), [0x42], enBytes(100, 4), enBytes(1855000, 4));
+  var cls = ["", "f0", "f0", "f0", "f0", "f0", "f0", "f0", "f0", "", "f1", "f1", "f1", "f1", "f2", "f2", "f2", "f2"];
+  frame.forEach(function (b, i) {
+    var d = document.createElement("div");
+    d.className = "byte" + (cls[i] ? " " + cls[i] : "");
+    d.textContent = hex2(b);
+    d.title = i === 0 ? "msg_type 'A'" : i === 9 ? "side 'B'" : cls[i] === "f0" ? "order_id byte " + i : cls[i] === "f1" ? "qty byte " + (i - 10) : "price byte " + (i - 14);
+    msg.appendChild(d);
+  });
+}
+$("enVal").addEventListener("input", enRender);
+$("enW").addEventListener("change", enRender);
+$("enSwap").addEventListener("click", function () { enSwapOn = true; enRender(); });
+$("enRaw").addEventListener("click", function () { enSwapOn = false; enRender(); });
+enRender();
+
+/* ─────────────────────────────────────────────────────────────────
+   5 · Sequence gap detection + snapshot/replay recovery
+   ───────────────────────────────────────────────────────────────── */
+var GP_ARRIVE = [1001, 1002, 1003, 1006, 1007, 1008, "SNAP@1008", 1009, 1010];
+var GP_LOST = [1004, 1005];
+var gp = { i: 0, next: 1001, applied: 0, held: [], state: "LIVE", log: [], seen: [], timer: null };
+function gpRender() {
+  var strip = $("gpStrip"); clear(strip);
+  var all = [1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009, 1010];
+  all.forEach(function (s) {
+    var d = document.createElement("div");
+    var cls = "sq";
+    if (gp.seen.indexOf(s) >= 0) cls += " ok";
+    else if (gp.i > GP_ARRIVE.indexOf(1006) && GP_LOST.indexOf(s) >= 0) cls += " lost";
+    else if (gp.held.indexOf(s) >= 0) cls += " held";
+    d.className = cls;
+    d.textContent = s;
+    strip.appendChild(d);
+  });
+  if (gp.i > GP_ARRIVE.indexOf("SNAP@1008")) {
+    var sn = document.createElement("div");
+    sn.className = "sq snap"; sn.style.width = "88px"; sn.textContent = "SNAP 1008";
+    strip.appendChild(sn);
+  }
+  $("gpNext").textContent = gp.next;
+  $("gpApp").textContent = gp.applied;
+  $("gpHeld").textContent = gp.held.length;
+  $("gpBook").textContent = gp.state === "LIVE" ? "TRADEABLE" : "DO NOT TRADE";
+  $("gpBook").className = "sv " + (gp.state === "LIVE" ? "ok" : "bad");
+  var st = $("gpState");
+  st.textContent = gp.state;
+  st.className = "pill " + (gp.state === "LIVE" ? "ok" : "bad");
+  $("gpStep").disabled = gp.i >= GP_ARRIVE.length;
+  var log = $("gpLog"); clear(log);
+  gp.log.slice(-6).forEach(function (l, k, a) {
+    var e = document.createElement("div");
+    e.className = /GAP|LOST|DO NOT/.test(l) ? "bad" : /LIVE|applied/.test(l) && k === a.length - 1 ? "ok" : (k === a.length - 1 ? "on" : "past");
+    e.textContent = l;
+    log.appendChild(e);
+  });
+  var what = $("gpWhat"), code = $("gpCode"), note = $("gpNote");
+  if (gp.state === "LIVE" && gp.i === 0) {
+    what.innerHTML = "Nothing to recover yet. In the steady state the handler does one comparison per " +
+      "message and applies the increment.";
+    code.textContent =
+      "if (seq == next_) {          // the fast path\n" +
+      "  apply(msg); ++next_;\n" +
+      "} else if (seq <  next_) {   // duplicate (A/B feed)\n" +
+      "  /* drop silently */\n" +
+      "} else {                     // seq > next_  -> GAP\n" +
+      "  state_ = RECOVERING;\n" +
+      "  buffer_.push(msg);\n" +
+      "  request_snapshot();\n" +
+      "}";
+    note.innerHTML = "<b>One integer of state.</b> <code>next_</code> is the entire gap detector. The " +
+      "duplicate branch matters as much as the gap branch: with an A/B feed you receive every message " +
+      "twice by design, and the second copy must be dropped, not applied.";
+  } else if (gp.state === "RECOVERING") {
+    what.innerHTML = "A gap opened at " + gp.next + ". The handler is buffering arrivals and waiting " +
+      "for a snapshot whose sequence it can splice onto. <em class='hi'>The book is not tradeable " +
+      "during this window</em> — pull your quotes for the symbol.";
+    code.textContent =
+      "// RECOVERING\n" +
+      "state_    = RECOVERING;   // stop quoting\n" +
+      "next_     = " + gp.next + ";\n" +
+      "buffered  = " + gp.held.length + " message(s)\n" +
+      "// waiting for: snapshot(seq >= " + gp.next + ")\n" +
+      "// then: apply(snapshot); replay buffered > snap.seq";
+    note.innerHTML = "<b>Buffer, do not discard.</b> The messages arriving during recovery are the " +
+      "increments you will need immediately after the snapshot lands. Discard them and you open a " +
+      "second gap the moment you go live again — a failure mode that produces a recovery loop under " +
+      "sustained loss.";
+  } else if (gp.applied > 0 && gp.i >= GP_ARRIVE.length) {
+    what.innerHTML = "Recovered. The snapshot at 1008 replaced the whole book, the buffered increments " +
+      "above 1008 were replayed in order, and <code>next_</code> is contiguous again.";
+    code.textContent =
+      "// recovery complete\n" +
+      "apply(snapshot@1008);        // full book replaces state\n" +
+      "for (m : buffered)\n" +
+      "  if (m.seq > 1008) apply(m); // replay the tail\n" +
+      "next_  = " + gp.next + ";\n" +
+      "state_ = LIVE;               // resume quoting";
+    note.innerHTML = "<b>Note what was never recovered: 1004 and 1005.</b> Their <em>content</em> is " +
+      "gone forever — multicast has no retransmit. What the snapshot restores is the <em>state</em> " +
+      "those messages would have produced. That is the whole reason a venue publishes snapshots: not to " +
+      "resend messages, but to make missing them survivable.";
+  } else {
+    what.innerHTML = "Live. Sequence is contiguous and every increment is applied on arrival.";
+    code.textContent = "state_ = LIVE\nnext_  = " + gp.next + "\napplied = " + gp.applied + " message(s)\nheld   = 0";
+    note.innerHTML = "<b>Keep stepping.</b> Two packets are about to be lost on the path, and nothing " +
+      "will tell you except the sequence number on the packet that follows them.";
+  }
+}
+function gpStep() {
+  if (gp.i >= GP_ARRIVE.length) return;
+  var m = GP_ARRIVE[gp.i++];
+  if (m === "SNAP@1008") {
+    gp.log.push("snapshot(seq=1008) received -> full book replaces state");
+    gp.seen = gp.seen.concat([1006, 1007, 1008]).filter(function (v, k, a) { return a.indexOf(v) === k; });
+    gp.applied += gp.held.length;
+    gp.held = [];
+    gp.next = 1009;
+    gp.state = "LIVE";
+    gp.log.push("replayed buffered increments; state = LIVE");
+  } else if (gp.state === "LIVE" && m === gp.next) {
+    gp.seen.push(m); gp.applied++; gp.next = m + 1;
+    gp.log.push("seq=" + m + " == next_ -> apply(msg); next_ = " + gp.next);
+  } else if (gp.state === "LIVE" && m > gp.next) {
+    gp.log.push("seq=" + m + " but next_ = " + gp.next + " -> GAP of " + (m - gp.next) + " message(s)");
+    gp.state = "RECOVERING";
+    gp.held.push(m);
+    gp.log.push("state = RECOVERING; DO NOT TRADE; buffer " + m + "; request_snapshot()");
+  } else if (gp.state === "RECOVERING") {
+    gp.held.push(m);
+    gp.log.push("seq=" + m + " buffered (" + gp.held.length + " held) — still recovering");
+  } else {
+    gp.log.push("seq=" + m + " < next_ -> duplicate, dropped");
+  }
+  gpRender();
+}
+$("gpStep").addEventListener("click", gpStep);
+$("gpAuto").addEventListener("click", function () {
+  if (gp.timer) { window.clearInterval(gp.timer); gp.timer = null; $("gpAuto").textContent = "Play"; return; }
+  $("gpAuto").textContent = "Pause";
+  gp.timer = window.setInterval(function () {
+    if (gp.i >= GP_ARRIVE.length) { window.clearInterval(gp.timer); gp.timer = null; $("gpAuto").textContent = "Play"; return; }
+    gpStep();
+  }, 900);
+});
+$("gpReset").addEventListener("click", function () {
+  if (gp.timer) { window.clearInterval(gp.timer); gp.timer = null; $("gpAuto").textContent = "Play"; }
+  gp = { i: 0, next: 1001, applied: 0, held: [], state: "LIVE", log: ["// stream start, next_ = 1001"], seen: [], timer: null };
+  gpRender();
+});
+gp.log.push("// stream start, next_ = 1001");
+gpRender();
+
+/* ─────────────────────────────────────────────────────────────────
+   6 · The arena's JSON wire, and what a DOM parse costs
+   ───────────────────────────────────────────────────────────────── */
+var AW = {
+  awBook: { name: "book_snapshot", json: 214, bin: 34, use: "3 of 11",
+    wire: '{"type":"book_snapshot","symbol":"AAPL",\n "bids":[[185.48,300],[185.47,900]],\n "asks":[[185.52,200],[185.53,700]],\n "mid_price":185.50,"spread":0.04,\n "ref_price":185.503,"asset_type":"equity",\n "microprice":185.501,"obi":0.21}',
+    desc: "What your on_book hook is handed each tick. The schema in shared/messages.py carries eleven " +
+      "fields: the two book sides, mid_price, spread, the venue's own ref_price, asset_type, and the " +
+      "microprice and order-book-imbalance signal inputs. A momentum bot reads three of them." },
+  awPlace: { name: "place_order", json: 178, bin: 28, use: "all 7",
+    wire: '{"type":"place_order","team_id":"ARENA01",\n "symbol":"AAPL","side":"buy","qty":100,\n "order_type":"limit","price":185.50,\n "client_order_id":"ORD-991"}',
+    desc: "The one message you construct rather than consume. Seven fields, all of them needed, all of " +
+      "them known at compile time — which makes this the easiest thing in the whole client to " +
+      "hand-serialize and the first thing you should stop handing to a library." },
+  awAck: { name: "order_ack", json: 156, bin: 26, use: "4 of 8",
+    wire: '{"type":"order_ack","order_id":"V-88213",\n "client_order_id":"ORD-991","status":"filled",\n "symbol":"AAPL","filled_qty":100,\n "avg_price":185.50,"fee":0.0278}',
+    desc: "The venue's reply, and the second timestamp in your round-trip measurement. status and " +
+      "filled_qty drive your position update; the fee tells you what the maker/taker schedule charged you." }
+};
+var AW_TOG = [
+  { id: "awT0", tt: "Build the whole document", td: "tokenise all keys, including the ones you ignore", ns: 332, alloc: 14, copy: 96, on: true },
+  { id: "awT1", tt: "Copy keys and values into std::string", td: "owned strings instead of views", ns: 131, alloc: 8, copy: 118, on: true },
+  { id: "awT2", tt: "Validate UTF-8 and number syntax", td: "correctness you are not using", ns: 53, alloc: 0, copy: 0, on: true },
+  { id: "awT3", tt: "Throw on malformed input", td: "exception tables on the hot path", ns: 26, alloc: 0, copy: 0, on: true }
+];
+var awSel = "awBook";
+function awRender() {
+  var d = AW[awSel];
+  Object.keys(AW).forEach(function (k) { $(k).setAttribute("aria-selected", k === awSel ? "true" : "false"); });
+  $("awWire").textContent = d.wire;
+  $("awJson").textContent = d.json + " B";
+  $("awBin").textContent = d.bin + " B";
+  $("awOv").textContent = f1(d.json / d.bin) + "×";
+  $("awUse").textContent = d.use;
+  $("awDesc").textContent = d.desc;
+
+  var tog = $("awTog"); clear(tog);
+  var ns = 78, alloc = 0, copy = 0, n = 0;
+  AW_TOG.forEach(function (t) {
+    var lab = document.createElement("label");
+    lab.className = "tg" + (t.on ? " on" : "");
+    var cb = document.createElement("input");
+    cb.type = "checkbox"; cb.checked = t.on; cb.id = t.id;
+    cb.setAttribute("aria-label", t.tt);
+    cb.addEventListener("change", function () { t.on = cb.checked; awRender(); });
+    var box = document.createElement("div");
+    var a = document.createElement("div"); a.className = "tt"; a.textContent = t.tt;
+    var b = document.createElement("div"); b.className = "td"; b.textContent = t.td;
+    box.appendChild(a); box.appendChild(b);
+    lab.appendChild(cb); lab.appendChild(box);
+    tog.appendChild(lab);
+    if (t.on) { ns += t.ns; alloc += t.alloc; copy += t.copy; n++; }
+  });
+  var scale = d.json / 214;
+  $("awNs").textContent = Math.round(ns * scale) + " ns";
+  $("awNs").className = "sv " + (n >= 3 ? "bad" : n === 0 ? "ok" : "warn");
+  $("awAlloc").textContent = alloc === 0 ? "none" : alloc;
+  $("awCopy").textContent = Math.round(copy * scale) + " B";
+  $("awNeed").textContent = d.use;
+  var note = $("awNote");
+  if (n === 4) {
+    note.innerHTML = "<b>This is what <code>nlohmann::json::parse</code> does.</b> All four boxes, every " +
+      "message, whether you read one field or eleven. It is the correctness baseline the reference " +
+      "client ships with, and it is also " + f1(ns / 78) + "× the cost of the targeted extract you will write next session.";
+  } else if (n === 0) {
+    note.innerHTML = "<b>All four off — that is a targeted extract.</b> Scan the frame for the two or " +
+      "three keys you trade on, read each number in place, allocate nothing, own nothing. About " +
+      Math.round(ns * scale) + " ns, and it is next session's exercise. The catch is that you have also " +
+      "turned off the malformed-input handling, so you must bound-check by hand.";
+  } else {
+    note.innerHTML = "<b>" + n + " of 4 still on.</b> Notice which box costs the most: building the " +
+      "document at all. Copying strings is second. Those two are the ones a <code>string_view</code> " +
+      "and an on-demand parser remove — the validation and the exception paths are comparatively cheap.";
+  }
+}
+Object.keys(AW).forEach(function (k) { $(k).addEventListener("click", function () { awSel = k; awRender(); }); });
+awRender();
+
+/* ─────────────────────────────────────────────────────────────────
+   7 · Clock skew: PTP vs NTP
+   ───────────────────────────────────────────────────────────────── */
+var CK = {
+  ckNtp: { name: "NTP over WAN", acc: "1–10 ms", skew: 2500, jit: 400 },
+  ckNtpL: { name: "NTP on the LAN", acc: "50–500 µs", skew: 120, jit: 40 },
+  ckPtp: { name: "PTP with hardware timestamping", acc: "20–200 ns", skew: 0, jit: 1 }
+};
+var ckSel = "ckNtpL";
+function ckRender() {
+  var skew = parseInt($("ckSkew").value, 10);
+  var jit = parseInt($("ckJit").value, 10);
+  var tru = parseInt($("ckTrue").value, 10);
+  $("ckSkewV").textContent = skew + " µs";
+  $("ckJitV").textContent = jit + " µs";
+  $("ckTrueV").textContent = tru + " µs";
+  Object.keys(CK).forEach(function (k) { $(k).setAttribute("aria-pressed", k === ckSel ? "true" : "false"); });
+  var meas = tru + skew;
+  var err = meas - tru;
+  var rel = tru === 0 ? 0 : Math.abs(err) / tru * 100;
+  $("ckMeas").textContent = meas + " µs";
+  $("ckT").textContent = tru + " µs";
+  $("ckErr").textContent = (err >= 0 ? "+" : "") + err + " µs";
+  $("ckErr").className = "sv " + (Math.abs(err) > tru * 0.2 ? "bad" : Math.abs(err) > tru * 0.05 ? "warn" : "ok");
+  $("ckRel").textContent = Math.round(rel) + " %";
+  $("ckAcc").textContent = CK[ckSel].acc;
+  var vd = $("ckVerdict");
+  if (meas < 0) { vd.textContent = "NEGATIVE LATENCY — the measurement is impossible"; vd.className = "verdict miss"; }
+  else if (rel > 20) { vd.textContent = "UNUSABLE — error exceeds the quantity measured"; vd.className = "verdict miss"; }
+  else if (rel > 5) { vd.textContent = "QUOTE THE ERROR BAR — ±" + Math.max(jit, Math.abs(err)) + " µs"; vd.className = "verdict miss"; }
+  else { vd.textContent = "USABLE for capacity planning"; vd.className = "verdict met"; }
+
+  var svg = $("ckSvg"), W = 540, x0 = 60, x1 = 500;
+  clear(svg);
+  function tl(y, label, col) {
+    svg.appendChild(mk("line", { x1: x0, y1: y, x2: x1, y2: y, stroke: "#333a47", "stroke-width": "1.2" }));
+    svg.appendChild(mk("text", { x: 8, y: y + 4, fill: col, "font-size": "10", "font-weight": "700", "font-family": "monospace" }, label));
+  }
+  tl(54, "venue", "#c4b5fd");
+  tl(140, "receiver", "#6cb6ff");
+  var span = 400;                                        /* px for 400 µs of nominal range */
+  function px(us) { return x0 + Math.max(0, Math.min(1, (us + 200) / 700)) * span; }
+  var tSend = 0, tArriveTrue = tru, tArriveMeas = tru + skew;
+  svg.appendChild(mk("circle", { cx: px(tSend), cy: 54, r: 5, fill: "#c4b5fd" }));
+  svg.appendChild(mk("text", { x: px(tSend), y: 40, fill: "#c4b5fd", "font-size": "9", "font-family": "monospace", "text-anchor": "middle" }, "t_send"));
+  svg.appendChild(mk("circle", { cx: px(tArriveTrue), cy: 140, r: 5, fill: "#3fb950" }));
+  svg.appendChild(mk("text", { x: px(tArriveTrue), y: 166, fill: "#3fb950", "font-size": "9", "font-family": "monospace", "text-anchor": "middle" }, "true arrival"));
+  svg.appendChild(mk("path", { d: "M " + px(tSend) + " 60 L " + px(tArriveTrue) + " 134", stroke: "#3fb950", "stroke-width": "1.6", fill: "none" }));
+  if (skew !== 0) {
+    svg.appendChild(mk("circle", { cx: px(tArriveMeas), cy: 140, r: 5, fill: "#f85149" }));
+    svg.appendChild(mk("text", { x: px(tArriveMeas), y: 182, fill: "#f85149", "font-size": "9", "font-family": "monospace", "text-anchor": "middle" }, "stamped arrival"));
+    svg.appendChild(mk("line", { x1: px(tArriveTrue), y1: 140, x2: px(tArriveMeas), y2: 140, stroke: "#f85149", "stroke-width": "3" }));
+    svg.appendChild(mk("text", { x: (px(tArriveTrue) + px(tArriveMeas)) / 2, y: 126, fill: "#f85149", "font-size": "9.5", "font-weight": "700", "font-family": "monospace", "text-anchor": "middle" }, "clock offset " + skew + " µs"));
+  }
+  if (jit > 1) {
+    svg.appendChild(mk("rect", { x: px(tArriveMeas - jit), y: 133, width: Math.max(2, px(tArriveMeas + jit) - px(tArriveMeas - jit)), height: 14, rx: 3, fill: "rgba(210,153,34,.28)", stroke: "#d29922", "stroke-width": "1" }));
+    svg.appendChild(mk("text", { x: px(tArriveMeas), y: 20, fill: "#d29922", "font-size": "9.5", "font-family": "monospace", "text-anchor": "middle" }, "± " + jit + " µs sync jitter"));
+  }
+  svg.appendChild(mk("text", { x: x0, y: 176, fill: "#5f6673", "font-size": "9", "font-family": "monospace" }, "time →"));
+
+  var note = $("ckNote");
+  if (meas < 0) {
+    note.innerHTML = "<b>A negative one-way latency is the diagnostic.</b> The message appears to have " +
+      "arrived before it was sent, which is impossible — so the offset between the two clocks is larger " +
+      "than the latency you are trying to measure. If you have ever clamped a negative latency to zero " +
+      "in a log, you clamped the evidence and kept the bias.";
+  } else if (Math.abs(skew) > tru) {
+    note.innerHTML = "<b>The error is bigger than the signal.</b> You are reporting " + meas + " µs for a " +
+      tru + " µs path. Any optimisation you evaluate against this number is measuring the clocks, not " +
+      "your code — and the offset is <em>systematic</em>, so averaging more samples does not help at all.";
+  } else if (ckSel === "ckPtp") {
+    note.innerHTML = "<b>PTP with hardware timestamping is the real answer.</b> The NIC stamps the packet " +
+      "in silicon, so neither the kernel nor the scheduler contributes error, and a boundary-clock switch " +
+      "keeps the whole rack inside tens of nanoseconds. That is what makes cross-machine one-way " +
+      "measurement meaningful — and it is why regulators can require microsecond-accurate audit " +
+      "timestamps at all.";
+  } else {
+    note.innerHTML = "<b>" + CK[ckSel].name + ": accurate to " + CK[ckSel].acc + ".</b> Good enough to " +
+      "answer &ldquo;is this path 50 µs or 5 ms?&rdquo; and useless for &ldquo;did my change save " +
+      "2 µs?&rdquo;. Use it for capacity planning and topology decisions; use a single-clock round trip " +
+      "for anything you optimise.";
+  }
+}
+Object.keys(CK).forEach(function (k) {
+  $(k).addEventListener("click", function () {
+    ckSel = k;
+    $("ckSkew").value = CK[k].skew > 400 ? 400 : CK[k].skew;
+    $("ckJit").value = Math.min(200, CK[k].jit);
+    ckRender();
+  });
+});
+["ckSkew", "ckJit", "ckTrue"].forEach(function (id) { $(id).addEventListener("input", ckRender); });
+ckRender();
+
+/* ── MCQ engine (shared across week pages) ───────────────────── */
+Array.prototype.forEach.call(document.querySelectorAll(".mcq"), function (q) {
+  var answer = parseInt(q.getAttribute("data-a"), 10);
+  var opts = Array.prototype.slice.call(q.querySelectorAll(".opt"));
+  var fb = q.querySelector(".fb");
+  opts.forEach(function (o, i) {
+    o.addEventListener("click", function () {
+      if (q.dataset.done === "1") return;
+      q.dataset.done = "1";
+      var right = i === answer;
+      opts.forEach(function (b, j) {
+        b.disabled = true;
+        if (j === answer) b.classList.add("right");
+        else if (j === i) b.classList.add("wrong");
+        else b.classList.add("dim");
+      });
+      fb.innerHTML = (right ? "<b>Correct.</b> " : "<b>Not quite.</b> ") + q.getAttribute("data-exp");
+      fb.className = "fb show " + (right ? "good" : "poor");
+    });
+  });
+});
+</script>
+</body>
+</html>

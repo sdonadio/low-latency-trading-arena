@@ -1,0 +1,1375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" href="data:," />
+<title>Week 14 · Profiling, the Tail &amp; Production — Low-Latency Trading Arena</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    /* ── Low-Latency Trading Arena · shared palette (identical on every page) ── */
+    --accent:       #7c3aed;
+    --accent-2:     #c4b5fd;
+    --accent-3:     #ede9fe;
+    --accent-rgb:   124,58,237;
+    --accent-2-rgb: 196,181,253;
+    --bg:           #0f1115;
+    --panel:        #181b22;
+    --panel2:       #1e222b;
+    --panel-2:      #13161b;
+    --ink:          #e8e6e3;
+    --ink-dim:      #c6c3bf;
+    --ink-mute:     #6f757f;
+    --muted:        #9aa0a6;
+    --dim:          #5f6673;
+    --line:         #272c36;
+    --line-2:       #333a47;
+    --border:       #272c36;
+    --ok:           #3fb950;
+    --warn:         #d29922;
+    --bad:          #f85149;
+    --info:         #6cb6ff;
+    --sky:          #58a6ff;
+    --violet:       #a78bfa;
+    --teal:         #2dd4bf;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.62;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent-2);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  /* ── nav / footer ─────────────────────────────────────────── */
+  nav.top{position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+    padding:11px 22px;background:rgba(15,17,21,.94);border-bottom:1px solid var(--line)}
+  nav.top>a:first-child{font-weight:800;letter-spacing:-.2px;color:var(--ink);font-size:14.5px;
+    border-left:3px solid var(--accent);padding-left:10px}
+  nav.top .crumbs{font-size:12px;color:var(--muted)}
+  nav.top .crumbs b{color:var(--ink);font-weight:700}
+  footer{border-top:1px solid var(--line);background:var(--panel);
+    padding:26px 22px 34px;text-align:center;font-size:11.5px;color:var(--dim);letter-spacing:.3px}
+
+  /* ── sections & typography ────────────────────────────────── */
+  section{max-width:1180px;margin:0 auto;padding:36px 22px 42px;border-top:1px solid var(--line)}
+  section#hero{border-top:none}
+  .kicker{font-size:10.5px;font-weight:800;letter-spacing:1.9px;text-transform:uppercase;color:var(--accent-2)}
+  h1{font-size:clamp(26px,4.2vw,40px);font-weight:800;letter-spacing:-.9px;line-height:1.13;margin:10px 0 6px}
+  h2{font-size:21px;font-weight:700;letter-spacing:-.3px;margin:4px 0 4px}
+  h3{font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);margin-bottom:11px}
+  h4{font-size:13.5px;font-weight:700;margin-bottom:5px}
+  p{margin:9px 0;max-width:82ch}
+  .lead{color:var(--muted);font-size:15px;max-width:84ch}
+  .sub{color:var(--muted);font-size:12.5px}
+  strong{color:#fff;font-weight:650}
+  em.hi{color:var(--accent-2);font-style:normal;font-weight:600}
+  code,.mono{font-family:var(--mono);font-size:12.5px}
+  code{background:rgba(var(--accent-2-rgb),.13);color:#ddd6fe;padding:1px 5px;border-radius:4px}
+  ul.you{list-style:none;margin:16px 0 0;display:grid;gap:8px}
+  ul.you li{position:relative;padding-left:26px;font-size:13.5px;color:var(--ink);max-width:78ch}
+  ul.you li::before{content:"";position:absolute;left:4px;top:8px;width:8px;height:8px;border-radius:2px;
+    background:var(--accent);box-shadow:0 0 0 3px rgba(var(--accent-rgb),.22)}
+  ul.plain{list-style:none;display:grid;gap:7px;font-size:13px;color:var(--muted)}
+  ul.plain li{padding-left:16px;position:relative}
+  ul.plain li::before{content:"\2022";position:absolute;left:2px;color:var(--accent-2)}
+
+  /* ── panels & layout ──────────────────────────────────────── */
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .panel.tight{padding:13px 14px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;align-items:start}
+  .split{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:18px;align-items:start}
+  .split-r{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:18px;align-items:start}
+  .stack{display:grid;gap:14px}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+
+  /* ── controls ─────────────────────────────────────────────── */
+  .btn{font-family:inherit;font-size:12px;font-weight:650;cursor:pointer;color:var(--ink);
+    background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:7px 14px;transition:.15s}
+  .btn:hover:not(:disabled){border-color:var(--accent-2);color:#fff}
+  .btn:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .btn:disabled{opacity:.35;cursor:not-allowed}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.primary:hover:not(:disabled){filter:brightness(1.25)}
+  .btn.on{background:rgba(var(--accent-rgb),.28);border-color:var(--accent-2);color:#fff}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+  .tab{font-family:inherit;font-size:12px;font-weight:650;cursor:pointer;color:var(--muted);
+    background:transparent;border:1px solid var(--line);border-radius:20px;padding:6px 14px;transition:.15s}
+  .tab:hover{color:var(--ink)}
+  .tab[aria-selected="true"]{background:rgba(var(--accent-rgb),.3);border-color:var(--accent-2);color:#fff}
+  .tab:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .ctl{display:grid;gap:4px;margin-bottom:12px}
+  .ctl label{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);
+    display:flex;justify-content:space-between;gap:10px}
+  .ctl label b{font-family:var(--mono);color:var(--accent-2);font-size:12px;text-transform:none;letter-spacing:0}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:3px;
+    background:#2b313d;outline:none;cursor:pointer}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;
+    background:var(--accent-2);border:2px solid var(--bg);cursor:pointer}
+  input[type=range]::-moz-range-thumb{width:15px;height:15px;border-radius:50%;background:var(--accent-2);
+    border:2px solid var(--bg);cursor:pointer}
+  input[type=range]:focus-visible{box-shadow:0 0 0 3px rgba(var(--accent-2-rgb),.4)}
+  select,textarea,input[type=text]{font-family:var(--mono);font-size:12.5px;color:var(--ink);
+    background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:7px 9px;width:100%}
+  select:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px solid var(--accent-2);outline-offset:1px}
+  textarea{line-height:1.55;resize:vertical}
+
+  /* ── stats / pills / code ─────────────────────────────────── */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:1px;
+    background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .stat{background:var(--panel);padding:10px 12px}
+  .stat .sl{font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--dim)}
+  .stat .sv{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--ink);margin-top:3px}
+  .stat .sv.ok{color:var(--ok)} .stat .sv.bad{color:var(--bad)} .stat .sv.warn{color:var(--warn)}
+  .stat .sv.acc{color:var(--accent-2)}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;letter-spacing:.5px;
+    padding:3px 9px;border-radius:20px;border:1px solid var(--line);color:var(--muted)}
+  .pill.ok{color:var(--ok);border-color:rgba(63,185,80,.5);background:rgba(63,185,80,.1)}
+  .pill.bad{color:var(--bad);border-color:rgba(248,81,73,.5);background:rgba(248,81,73,.1)}
+  .pill.warn{color:var(--warn);border-color:rgba(210,153,34,.5);background:rgba(210,153,34,.1)}
+  .pill.acc{color:var(--accent-2);border-color:rgba(var(--accent-2-rgb),.5);background:rgba(var(--accent-rgb),.18)}
+  pre.code{font-family:var(--mono);font-size:11.8px;line-height:1.62;background:#0b0e14;color:#dbe3ea;
+    border:1px solid var(--line);border-radius:10px;padding:13px 14px;overflow-x:auto;white-space:pre}
+  pre.code .k{color:#6cb6ff} pre.code .s{color:#8ddb8c} pre.code .c{color:#6b7484;font-style:italic}
+  pre.code .n{color:#e0b070} pre.code .b{color:#ddd6fe;font-weight:700}
+  .note{border-left:3px solid var(--accent);background:rgba(var(--accent-rgb),.12);border-radius:0 8px 8px 0;
+    padding:10px 13px;font-size:12.5px;color:var(--muted)}
+  .note b{color:var(--ink)}
+  .log{font-family:var(--mono);font-size:11.5px;max-height:230px;overflow-y:auto;display:grid;gap:5px}
+  .log div{background:var(--panel2);border-left:3px solid var(--line);border-radius:0 6px 6px 0;padding:6px 9px;color:var(--muted)}
+  .log div.hl{border-left-color:var(--accent-2);color:var(--ink);background:rgba(var(--accent-rgb),.15)}
+  .log div.ok{border-left-color:var(--ok)} .log div.bad{border-left-color:var(--bad)}
+  svg{display:block;max-width:100%;height:auto}
+  .svgwrap{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px;overflow-x:auto}
+  table.t{width:100%;border-collapse:collapse;font-size:12px}
+  table.t th{font-size:9.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--dim);
+    text-align:left;padding:0 8px 7px;border-bottom:1px solid var(--line)}
+  table.t td{padding:7px 8px;border-bottom:1px solid rgba(39,44,54,.6);color:var(--muted);font-family:var(--mono);font-size:11.8px}
+  table.t td.n{color:var(--ink);font-weight:600}
+
+  /* ── pitfalls ─────────────────────────────────────────────── */
+  details.pit{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:10px;overflow:hidden}
+  details.pit>summary{cursor:pointer;padding:12px 15px;font-size:13.5px;font-weight:650;color:var(--ink);
+    list-style:none;display:flex;gap:11px;align-items:flex-start}
+  details.pit>summary::-webkit-details-marker{display:none}
+  details.pit>summary::before{content:"\25B8";color:var(--accent-2);font-size:12px;line-height:1.5;transition:.2s}
+  details.pit[open]>summary::before{transform:rotate(90deg)}
+  details.pit>summary:focus-visible{outline:2px solid var(--accent-2);outline-offset:-2px}
+  details.pit .body{padding:0 15px 15px 39px;font-size:13px;color:var(--muted);display:grid;gap:9px}
+  details.pit .body .fix{color:var(--ok);font-weight:600}
+
+  /* ── MCQ ──────────────────────────────────────────────────── */
+  .mcq{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 17px;margin-bottom:13px}
+  .mcq .q{font-size:13.8px;font-weight:650;color:var(--ink);margin:0 0 11px;max-width:84ch}
+  .mcq .q span{color:var(--accent-2);font-family:var(--mono);margin-right:7px}
+  .opts{display:grid;gap:7px}
+  .opt{text-align:left;font-family:inherit;font-size:13px;cursor:pointer;color:var(--muted);
+    background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:9px 12px;transition:.15s}
+  .opt:hover:not(:disabled){border-color:var(--accent-2);color:var(--ink)}
+  .opt:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .opt.right{border-color:var(--ok);background:rgba(63,185,80,.13);color:#bce8c4}
+  .opt.wrong{border-color:var(--bad);background:rgba(248,81,73,.12);color:#f4b6b1}
+  .opt.dim{opacity:.5}
+  .fb{margin-top:11px;font-size:12.5px;line-height:1.6;color:var(--muted);display:none;
+    border-left:3px solid var(--line);padding-left:11px}
+  .fb.show{display:block}
+  .fb.show.good{border-left-color:var(--ok)} .fb.show.poor{border-left-color:var(--bad)}
+  .fb b{color:var(--ink)}
+
+  /* ── next ─────────────────────────────────────────────────── */
+  .nextgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+  .nextcard{display:block;background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:15px 17px;transition:.18s;color:inherit}
+  .nextcard:hover{border-color:var(--accent-2);transform:translateY(-2px);text-decoration:none}
+  .nextcard .nl{font-size:10px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--accent-2)}
+  .nextcard .nt{font-size:14.5px;font-weight:700;color:var(--ink);margin-top:5px}
+  .nextcard .nd{font-size:12px;color:var(--muted);margin-top:5px}
+
+  @media (max-width:720px){
+    .grid2,.grid3,.split,.split-r{grid-template-columns:1fr}
+    section{padding:26px 15px 32px}
+    nav.top{padding:10px 15px;gap:8px}
+    nav.top .crumbs{font-size:11px}
+    p,.lead{max-width:none}
+  }
+
+  /* ── week-page shared ─────────────────────────────────────── */
+  #hero{padding:52px 22px 40px;
+    background:radial-gradient(ellipse 820px 340px at 22% -14%,rgba(var(--accent-rgb),.3),transparent 66%)}
+  #hero .wk{font-family:var(--mono);font-size:12px;letter-spacing:2px;color:var(--accent-2);font-weight:700}
+  #hero h1{max-width:24ch}
+  #hero .promise{font-size:16.5px;color:var(--ink);max-width:74ch;margin-top:10px;line-height:1.55}
+  .secnum{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;
+    background:rgba(var(--accent-rgb),.35);border:1px solid var(--accent-2);color:#fff;font-family:var(--mono);
+    font-size:11px;font-weight:700;margin-right:9px;vertical-align:2px}
+  .sw{display:inline-flex;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex-wrap:wrap}
+  .sw button{font-family:inherit;font-size:11.5px;font-weight:650;cursor:pointer;color:var(--muted);
+    background:var(--panel2);border:none;padding:7px 13px;transition:.15s}
+  .sw button[aria-pressed="true"]{background:rgba(var(--accent-rgb),.32);color:#fff}
+  .sw button:focus-visible{outline:2px solid var(--accent-2);outline-offset:-2px}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-top:10px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
+
+  /* ── week-4 specific ──────────────────────────────────────── */
+  .tablewrap{overflow-x:auto}
+  .codepair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+  .lanes{display:grid;gap:12px}
+  .toggles{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:16px;align-items:start}
+  .dash{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}
+  a.btn{display:inline-flex;align-items:center;text-decoration:none}
+  a.btn:hover{text-decoration:none}
+  .verdict{border:1px solid var(--accent-2);border-radius:12px;padding:14px 16px;
+    background:rgba(var(--accent-rgb),.14)}
+  .verdict .vt{font-size:15px;font-weight:750;color:#fff}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:5px 12px;font-size:12px;color:var(--muted)}
+  .kv b{font-family:var(--mono);font-size:11.5px;color:var(--ink-dim);font-weight:600;white-space:nowrap}
+
+
+  /* keep a long code line from stretching a grid column at any width */
+  .split>*,.split-r>*,.grid2>*,.grid3>*,.board>*,.toggles>*,.codepair>*,.stack>*{min-width:0}
+  pre.code{max-width:100%}
+  /* ── week-14 specific ───────────────────────────── */
+  .chk{display:grid;gap:8px}
+  .chkrow{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:11px;align-items:start;
+    background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:9px 12px}
+  .chkrow.on{border-color:var(--accent-2);background:rgba(var(--accent-rgb),.16)}
+  .chkrow label{font-size:13px;font-weight:650;color:var(--ink);cursor:pointer}
+  .chkrow .cd{font-size:11.5px;color:var(--muted);margin-top:3px}
+  .chkrow .cg{font-family:var(--mono);font-size:11px;color:var(--accent-2);text-align:right;white-space:pre}
+  input[type=checkbox]{width:15px;height:15px;accent-color:var(--accent);cursor:pointer;margin-top:3px}
+  input[type=checkbox]:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  #fgSvg g[role="button"]{cursor:pointer}
+  #fgSvg g[role="button"]:focus-visible{outline:2px solid var(--accent-2);outline-offset:1px}
+  #fgSvg g[role="button"]:hover rect{stroke:var(--accent-2)}
+
+  /* ── mobile guard (identical on every page): single column under 720px,
+        no horizontal overflow. Must stay last in the sheet. ───────────── */
+  @media (max-width:720px){
+    .grid2,.grid3,.grid2.narrow-right,.split,.split-r,.codepair,
+    .nextgrid,.dash,.toggles,.lanes,.weeknav,.weeks,.roles,.stack{
+      grid-template-columns:minmax(0,1fr)}
+    [class*="grid"]>*,.stack>*,.wrap>*,.panel,.panel.tight,.nextcard,.wk,.row>*{min-width:0}
+    pre,pre.code,.svgwrap,svg,canvas,table,select,input,textarea,.mono{max-width:100%}
+    pre,pre.code,.svgwrap,.tablewrap{overflow-x:auto}
+    code,.mono{overflow-wrap:anywhere}
+    .ctl,.ctl>*,.controls>*,.row,.legend>*{min-width:0}
+    .ctl{flex-wrap:wrap} .ctl select,.ctl input[type=range]{flex:1 1 100%;width:100%}
+    p,.lead,.sub,.promise{max-width:none}
+  }
+</style>
+
+</head>
+<body>
+
+<nav class="top"><a href="index.html">Low-Latency Trading Arena</a><span class="crumbs"><a href="week13.html">← Week 13</a> · <b>Week 14 · Profiling, the Tail &amp; Production</b> · <a href="week15.html">Week 15 →</a></span></nav>
+
+<!-- ══════════════ HERO ══════════════ -->
+<section id="hero">
+  <div class="wk">WEEK 14 · 15-WEEK TRACK  ·  SESSION 8 · 9-SESSION TRACK</div>
+  <h1>Profiling, the Tail &amp; Production</h1>
+  <p class="promise">You have the platform. Now prove it is fast — not fast <em class="hi">on average</em>.
+  A 40 µs mean hides the 5 ms tick that lost the race, and every tail spike has a physical cause with a
+  signature you can learn. This week you stop guessing: measure, attribute, fix, re-measure, and ship
+  something that survives contact with a live session.</p>
+  <ul class="you">
+    <li>Benchmark without lying to yourself: warm-up, repeats, <strong>min vs mean vs median</strong>, and what a laptop adds to every number you take on it.</li>
+    <li>Read a flame graph of a tick-to-trade path and tell <strong>self time</strong> from total time.</li>
+    <li>Explain why a 7-stage pipeline that is fast 99% of the time <em class="hi">per stage</em> is fast only 93% of the time end to end.</li>
+    <li>Name the tail source from the histogram it produces — fault, allocation, preemption, interrupt, thermal — and kill it.</li>
+    <li>Use <strong>markouts</strong> as a production metric: a fast fill can be a bad fill, and you can prove which.</li>
+  </ul>
+  <div class="row" style="margin-top:22px">
+    <span class="pill acc">Lab: <code>starters/hw14/tail.cpp</code> — profile it, find the pathology, collapse the tail</span>
+    <span class="pill">HW14: <code>tail_fixed.cpp</code> + a changelog with before/after p99.9</span>
+    <span class="pill warn">Ship: clean under ASan/UBSan/TSan, released <code>-O3 -march=native -flto</code></span>
+  </div>
+</section>
+
+<!-- ══════════════ WHAT ══════════════ -->
+<section id="what">
+  <div class="kicker">Part 1</div>
+  <h2><span class="secnum">1</span>What is it? Measurement, before anything else</h2>
+  <p class="lead">Latency distributions are not Gaussian. They are heavy-tailed and usually
+  <em class="hi">bimodal</em>: a tight fast body, and a sparse population of rare catastrophic stalls. The
+  mean sits in the valley between them, describing a tick that nobody ever experiences. Percentiles are
+  not a stylistic preference in this course — they are the only honest summary of a shape like that.</p>
+
+  <div class="grid2" style="margin-top:16px">
+    <div class="panel"><h4>The shape, drawn honestly</h4>
+      <pre class="code">        fast body            tail
+  count |####                .
+        |#######             .
+        |##########          .  ← p99.9
+        |#########           .     lives
+        |####            .   .     HERE
+        +--------------------------→ µs
+         mean = 40    p99.9 = 210   max = 5200</pre>
+      <p class="sub" style="margin-top:9px">Report p50, p99, p99.9 and the max, per window. A p99
+      computed over a whole session hides two minutes where it was the p50 — and the max is the number
+      your risk case has to survive.</p></div>
+    <div class="panel"><h4>Coordinated omission</h4>
+      <p class="sub">The subtlest way to under-report a tail. If you time <em class="hi">request to
+      request</em> — start the clock when the previous one finished — then a stall that delays ten
+      requests is recorded once, and the nine it pushed back are simply never sampled. Your histogram
+      loses exactly the events that hurt.</p>
+      <p class="sub" style="margin-top:8px">Measure on a <strong>fixed schedule</strong>: the tick was
+      supposed to be handled at <em class="hi">T</em>, so record <em class="hi">now − T</em>, including the
+      time you spent not being able to start. That is the number the market saw.</p>
+      <div class="note" style="margin-top:11px"><b>In the arena.</b> The exchange stamps you from the
+      <code>book_snapshot</code> it sent to the order you sent back — a fixed origin it controls, not one
+      you choose. You cannot omit your way to a good score.</div></div>
+  </div>
+
+  <h3 style="margin-top:30px">Interactive · benchmark hygiene</h3>
+  <p class="sub" style="margin-bottom:12px">The same function, timed five different ways. Pick a machine
+  and a protocol, then read what each statistic <em class="hi">reports</em> against what the function
+  actually costs. The true cost here is fixed at 41 ns — everything else is measurement error you chose.</p>
+
+  <div class="split">
+    <div class="stack">
+      <div class="svgwrap">
+        <svg id="bhSvg" viewBox="0 0 640 250" role="img" aria-label="A histogram of one benchmark's samples, with markers for the minimum, mean, median and 99th percentile"></svg>
+      </div>
+      <div class="stats" id="bhStats"></div>
+      <div class="legend">
+        <span><i style="background:var(--accent)"></i>samples</span>
+        <span><i style="background:#3fb950"></i>true cost · 41 ns</span>
+        <span><i style="background:#d29922"></i>what you would report</span>
+      </div>
+    </div>
+    <div class="stack">
+      <div class="panel tight">
+        <div class="ctl"><label for="bhEnv">Where you ran it</label>
+          <select id="bhEnv" aria-label="Which machine the benchmark ran on">
+            <option value="quiet">Quiet server · pinned, isolated core</option>
+            <option value="laptop" selected>Laptop · browser open, 12 other processes</option>
+            <option value="vm">Shared VM · a noisy neighbour you cannot see</option>
+            <option value="thermal">Laptop, 20 minutes in · thermally throttled</option>
+          </select></div>
+        <div class="ctl"><label for="bhWarm">Warm-up iterations (untimed) <b id="bhWarmv">0</b></label>
+          <input type="range" id="bhWarm" min="0" max="2000" step="100" value="0" aria-label="Number of untimed warm-up iterations" /></div>
+        <div class="ctl"><label for="bhRep">Timed samples <b id="bhRepv">2000</b></label>
+          <input type="range" id="bhRep" min="20" max="20000" step="20" value="2000" aria-label="Number of timed samples collected" /></div>
+        <div class="ctl"><label for="bhStat">Statistic you report</label>
+          <select id="bhStat" aria-label="Which summary statistic you report">
+            <option value="min">min — "the best the code can do"</option>
+            <option value="mean" selected>mean</option>
+            <option value="median">median (p50)</option>
+            <option value="p99">p99</option>
+            <option value="p999">p99.9</option>
+          </select></div>
+        <div class="row"><label style="font-size:12px;color:var(--muted)"><input type="checkbox" id="bhSink" style="vertical-align:-2px" /> Forget <code>do_not_optimize</code> — let the compiler delete the work</label></div>
+      </div>
+      <div class="verdict"><div class="vt" id="bhVerdict">—</div>
+        <p class="sub" id="bhWhy" style="margin-top:7px"></p></div>
+      <div class="panel tight"><h3>The harness that does not lie</h3><pre class="code">using clk = std::chrono::steady_clock;
+
+<span class="c">// stop the optimizer deleting the work you are timing</span>
+<span class="k">template</span> &lt;<span class="k">class</span> T&gt;
+<span class="k">inline</span> <span class="k">void</span> <span class="b">do_not_optimize</span>(T&amp; v) {
+  <span class="k">asm</span> <span class="k">volatile</span>(<span class="s">""</span> : <span class="s">"+r,m"</span>(v) : : <span class="s">"memory"</span>);
+}
+
+<span class="k">for</span> (std::size_t i = <span class="n">0</span>; i &lt; WARMUP; ++i)
+  sink += roll.push(px[i]);          <span class="c">// untimed</span>
+
+<span class="k">for</span> (std::size_t i = <span class="n">0</span>; i &lt; N; ++i) {
+  <span class="k">const</span> <span class="k">auto</span> t0 = clk::now();
+  sink += roll.push(px[WARMUP + i]);  <span class="c">// the hot path</span>
+  <span class="k">const</span> <span class="k">auto</span> t1 = clk::now();
+  do_not_optimize(sink);
+  lat_ns.push_back(
+    std::chrono::duration&lt;<span class="k">double</span>, std::nano&gt;(t1 - t0).count());
+}</pre></div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ HOW ══════════════ -->
+<section id="how">
+  <div class="kicker">Part 2</div>
+  <h2><span class="secnum">2</span>How it works — perf, the flame graph, and where the tail comes from</h2>
+  <p class="lead">Three verbs, in order, every time: <code>perf stat</code> for the totals,
+  <code>perf record</code> for the stacks, <code>perf report</code> or a flame graph to read them.
+  Intuition about hotspots is wrong more often than it is right, and it is wrong most confidently on
+  the tail.</p>
+
+  <div class="grid2" style="margin-top:16px">
+    <div class="panel tight"><h3>The three verbs, cold</h3><pre class="code"># 1. cheap summary counters — always start here
+perf stat -d ./build/hft_bot --replay tape.bin
+
+# 2. sample the call stacks at 4 kHz with DWARF unwinding
+perf record -F 4000 -g --call-graph dwarf \
+     ./build/hft_bot --replay tape.bin
+
+# 3. read where the cycles went
+perf report --stdio | head -40
+perf annotate on_book        # cycles per source line
+
+# and the picture: fold the stacks into a flame graph
+perf script | stackcollapse-perf.pl | flamegraph.pl > tail.svg</pre></div>
+    <div class="panel"><h4>Counters tell you <em class="hi">why</em> a frame is hot</h4>
+      <ul class="plain">
+        <li><code>cache-misses</code>, <code>LLC-load-misses</code> — a DRAM trip is 200+ cycles. Usually the real cost behind a "slow line".</li>
+        <li><code>branch-misses</code> — a flush is ~15–20 cycles. A hot unpredictable branch is a candidate to make branchless (week 13).</li>
+        <li><code>page-faults</code> — should be <b>zero</b> after startup on a hot path. Any nonzero count is a tail source you can name.</li>
+        <li><code>context-switches</code>, <code>cpu-migrations</code> — should also be zero. If they are not, you did not really get the core.</li>
+        <li>IPC — instructions per cycle. Low IPC with high cycles means stalling, not computing.</li>
+      </ul>
+      <div class="note" style="margin-top:11px"><b>Keep <code>-g</code> in the release build.</b> Debug
+      symbols cost nothing at run time and are the difference between a readable flame graph and a wall
+      of hex addresses. Optimize <em class="hi">and</em> keep symbols.</div></div>
+  </div>
+
+  <h3 style="margin-top:30px">Interactive · a flame graph of the tick-to-trade path</h3>
+  <p class="sub" style="margin-bottom:12px">Width is time. Click a frame — or tab to it and press
+  Enter — to see its <strong>total</strong> time (the frame plus everything it called) against its
+  <strong>self</strong> time (the frame alone). Wide plateaus are the targets; tall thin spikes are just
+  deep call stacks and cost nothing.</p>
+
+  <div class="split">
+    <div class="stack">
+      <div class="svgwrap">
+        <svg id="fgSvg" viewBox="0 0 640 250" role="img" aria-label="A flame graph of one tick through the trading bot, with clickable frames"></svg>
+      </div>
+      <div class="row" role="group" aria-label="Choose which build you profiled">
+        <div class="sw" id="fgBuild">
+          <button type="button" data-b="before" aria-pressed="true">Before the fix</button>
+          <button type="button" data-b="after" aria-pressed="false">After the fix</button>
+        </div>
+      </div>
+      <div class="stats" id="fgStats"></div>
+    </div>
+    <div class="stack">
+      <div class="panel"><h4 id="fgName">on_book</h4>
+        <span class="pill acc" id="fgPill">—</span>
+        <p class="sub" id="fgWhat" style="margin-top:11px"></p>
+        <div class="kv" id="fgKv" style="margin-top:12px"></div>
+      </div>
+      <div class="note" id="fgNote"></div>
+      <div class="panel tight"><h3>How to read it</h3><ul class="plain">
+        <li><b>Total</b> is why a frame is on the graph. <b>Self</b> is why it is <em class="hi">your</em> problem.</li>
+        <li>A frame with 60% total and 2% self is not slow — its children are. Go down.</li>
+        <li>Allocator frames under a function that "just averages numbers" are the smoking gun.</li>
+        <li>Sampling is statistical: a frame that appears in 3 samples out of 4000 is noise, not a finding.</li>
+      </ul></div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:30px">Interactive · why the tail is the product</h3>
+  <p class="sub" style="margin-bottom:12px">A tick-to-trade path is a chain, and a chain is only as
+  fast as its slowest link <em class="hi">on that tick</em>. If each of N stages is "fine" 99% of the time,
+  the odds that <strong>all</strong> of them are fine is 0.99<sup>N</sup> — which falls off a cliff faster
+  than anyone's intuition.</p>
+
+  <div class="split-r">
+    <div class="stack">
+      <div class="panel tight">
+        <div class="ctl"><label for="tcN">Stages in the path <b id="tcNv">7</b></label>
+          <input type="range" id="tcN" min="1" max="14" step="1" value="7" aria-label="Number of stages in the tick-to-trade path" /></div>
+        <div class="ctl"><label for="tcP">Each stage is fast <b id="tcPv">99%</b> of the time</label>
+          <input type="range" id="tcP" min="90" max="99.99" step="0.01" value="99" aria-label="Per-stage probability that the stage is fast" /></div>
+        <div class="ctl"><label for="tcSpike">Cost of one slow stage <b id="tcSpikev">140 µs</b></label>
+          <input type="range" id="tcSpike" min="10" max="2000" step="10" value="140" aria-label="Extra microseconds contributed by a stage when it is slow" /></div>
+      </div>
+      <div class="svgwrap">
+        <svg id="tcSvg" viewBox="0 0 620 200" role="img" aria-label="A chart of the probability that a whole path is fast as the number of stages grows"></svg>
+      </div>
+      <div class="stats" id="tcStats"></div>
+    </div>
+    <div class="stack">
+      <div class="verdict"><div class="vt" id="tcVerdict">—</div>
+        <p class="sub" id="tcWhy" style="margin-top:7px"></p></div>
+      <div class="panel"><h4>The seven stages, named</h4>
+        <div class="tablewrap"><table class="t">
+          <thead><tr><th>stage</th><th>owns it</th><th>typical</th></tr></thead>
+          <tbody>
+            <tr><td class="n">wire in / bypass</td><td>W13</td><td>1–3 µs</td></tr>
+            <tr><td class="n">parse / decode</td><td>W12</td><td>1–2 µs</td></tr>
+            <tr><td class="n">book update</td><td>W7</td><td>2–5 µs</td></tr>
+            <tr><td class="n">signal</td><td>W7–8</td><td>1–2 µs</td></tr>
+            <tr><td class="n">decide + risk check</td><td>W14</td><td>1–2 µs</td></tr>
+            <tr><td class="n">serialize</td><td>W6</td><td>1–2 µs</td></tr>
+            <tr><td class="n">wire out</td><td>W13 / colo</td><td>1–3 µs</td></tr>
+          </tbody></table></div>
+        <p class="sub" style="margin-top:10px">Seven stages, each owned by a different week of the
+        course. Any one of them can be the reason your p99.9 is a millisecond, which is why the
+        attribution matters more than the total.</p></div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:30px">Interactive · switch the tail sources on and off</h3>
+  <p class="sub" style="margin-bottom:12px">There is no garbage collector in C++, and it does not
+  matter: five other mechanisms produce the same shape. Tick a source and watch it appear in the
+  histogram — each one has its own signature, which is how you recognise it in a real session.</p>
+
+  <div class="toggles">
+    <div class="chk" id="tsList"></div>
+    <div class="stack">
+      <div class="svgwrap">
+        <svg id="tsSvg" viewBox="0 0 620 230" role="img" aria-label="A latency histogram on a logarithmic scale, changing as tail sources are switched on"></svg>
+      </div>
+      <div class="stats" id="tsStats"></div>
+      <div class="note" id="tsNote"></div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:30px">The homework, in two files</h3>
+  <p class="sub" style="margin-bottom:12px"><code>starters/hw14/tail.cpp</code> processes two million
+  synthetic ticks and prints the distribution. Its median is fine; its tail is not. The pathology is on
+  the hot path and there are two of them stacked — a heap allocation and an O(window) recompute.</p>
+
+  <div class="codepair">
+    <div class="panel tight"><h3>Before — the shipped starter</h3><pre class="code"><span class="c">// a fresh vector per tick: malloc + push_back growth</span>
+<span class="k">static</span> <span class="k">double</span> <span class="b">signal</span>(<span class="k">const</span> std::vector&lt;<span class="k">double</span>&gt;&amp; prices,
+                     std::size_t i, std::size_t window) {
+  std::size_t lo = i &gt;= window ? i - window : <span class="n">0</span>;
+  std::vector&lt;<span class="k">double</span>&gt; scratch;        <span class="c">// (a) allocates</span>
+  <span class="k">for</span> (std::size_t k = lo; k &lt;= i; ++k)
+    scratch.push_back(prices[k]);
+  <span class="k">double</span> s = <span class="n">0.0</span>;
+  <span class="k">for</span> (<span class="k">double</span> v : scratch) s += v;  <span class="c">// (b) O(window)</span>
+  <span class="k">return</span> s / scratch.size();
+}</pre>
+      <p class="sub" style="margin-top:9px">Measured here with <code>clang++ -O2 -std=c++17</code> on an
+      ordinary laptop: <b>p50 458 ns · p99 791 ns · p99.9 1333 ns · max 178 µs</b>. The median is
+      unremarkable and the max is 390× it.</p></div>
+    <div class="panel tight"><h3>After — one buffer, one add, one subtract</h3><pre class="code"><span class="c">// O(1) per tick, zero allocation on the hot path</span>
+<span class="k">struct</span> <span class="b">RollingMean</span> {
+  std::vector&lt;<span class="k">double</span>&gt; buf;   <span class="c">// reserved once, used as a ring</span>
+  std::size_t window, count = <span class="n">0</span>, head = <span class="n">0</span>;
+  <span class="k">double</span> sum = <span class="n">0.0</span>;
+
+  <span class="k">explicit</span> RollingMean(std::size_t w) : buf(w, <span class="n">0.0</span>), window(w) {}
+
+  <span class="k">double</span> <span class="b">push</span>(<span class="k">double</span> px) {
+    <span class="k">if</span> (count == window) sum -= buf[head];  <span class="c">// evict oldest</span>
+    <span class="k">else</span>                 ++count;
+    sum += px;                              <span class="c">// admit newest</span>
+    buf[head] = px;
+    head = (head + <span class="n">1</span> == window) ? <span class="n">0</span> : head + <span class="n">1</span>;
+    <span class="k">return</span> sum / <span class="k">static_cast</span>&lt;<span class="k">double</span>&gt;(count);
+  }
+};</pre>
+      <p class="sub" style="margin-top:9px">Same machine, same flags: <b>p50 41 ns · p99 42 ns ·
+      p99.9 42 ns</b>. The body got 11× faster and the tail <em class="hi">collapsed onto the median</em> —
+      which is the actual deliverable.</p></div>
+  </div>
+  <div class="note" style="margin-top:14px"><b>The trap in the fix.</b> The original window is inclusive
+  of <code>i</code> and grows from 1 to <code>window</code> at the start. If your warm-up does not ramp
+  <code>count</code> the same way, the <code>sink</code> changes — and a faster program that computes
+  something else is not a fix. Match the warm-up, then diff the sink.</div>
+</section>
+
+<!-- ══════════════ WHY ══════════════ -->
+<section id="why">
+  <div class="kicker">Part 3</div>
+  <h2><span class="secnum">3</span>Why it matters — the tail is the grade, and markouts are the truth</h2>
+  <p class="lead">Two production metrics decide whether a fast bot is a <em class="hi">good</em> bot. The
+  first is the tail, because the board sorts on it. The second is the <strong>markout</strong>: what the
+  mid did after your fill. A bot with a beautiful p99.9 and a negative markout is not winning — it is
+  being run over quickly.</p>
+
+  <h3 style="margin-top:24px">Interactive · the markout curve</h3>
+  <p class="sub" style="margin-bottom:12px">A markout marks each fill against the reference mid some
+  time later: <code>markout = sign(side) × (mid_later − mid_at_fill) × qty</code>. Positive means the
+  market came to you; negative means you were picked off. Choose a cohort of fills and watch the curve
+  develop across the horizons the arena computes.</p>
+
+  <div class="split">
+    <div class="stack">
+      <div class="svgwrap">
+        <svg id="moSvg" viewBox="0 0 640 250" role="img" aria-label="A markout curve showing profit or loss per share at 100 milliseconds, 1 second, 5 seconds and 10 seconds after the fill"></svg>
+      </div>
+      <div class="row" role="group" aria-label="Choose the cohort of fills">
+        <div class="sw" id="moCohort">
+          <button type="button" data-c="passive" aria-pressed="true">Passive fills · you were resting</button>
+          <button type="button" data-c="aggressive" aria-pressed="false">Aggressive fills · you crossed</button>
+          <button type="button" data-c="fade" aria-pressed="false">Fills during a quote fade</button>
+        </div>
+      </div>
+      <div class="stats" id="moStats"></div>
+    </div>
+    <div class="stack">
+      <div class="panel tight">
+        <div class="ctl"><label for="moTox">Share of informed flow hitting you <b id="moToxv">30%</b></label>
+          <input type="range" id="moTox" min="0" max="90" step="5" value="30" aria-label="Percentage of the flow you trade against that is informed" /></div>
+        <div class="ctl"><label for="moSpread">Half-spread you capture <b id="moSpreadv">1.5 ¢</b></label>
+          <input type="range" id="moSpread" min="0" max="60" step="1" value="15" aria-label="Half spread captured per share, in tenths of a cent" /></div>
+        <div class="ctl"><label for="moReq">Requote latency after a mid move <b id="moReqv">400 µs</b></label>
+          <input type="range" id="moReq" min="20" max="5000" step="20" value="400" aria-label="How long you take to requote after the mid moves, in microseconds" /></div>
+      </div>
+      <div class="verdict"><div class="vt" id="moVerdict">—</div>
+        <p class="sub" id="moWhy" style="margin-top:7px"></p></div>
+      <div class="panel tight"><h3>The metric, as the server computes it</h3><pre class="code"><span class="c">// per fill, at each horizon: +100 ms, +1 s, +5 s</span>
+<span class="k">double</span> <span class="b">markout</span>(<span class="k">int</span> side, <span class="k">double</span> fill_px,
+               <span class="k">double</span> mid_later, <span class="k">double</span> qty) {
+  <span class="k">const</span> <span class="k">double</span> s = (side == BUY) ? <span class="n">1.0</span> : -<span class="n">1.0</span>;
+  <span class="k">return</span> s * (mid_later - fill_px) * qty;
+}
+<span class="c">// negative and persistent on one symbol or one</span>
+<span class="c">// counterparty => toxic flow: widen, skew away, or pull.</span></pre></div>
+    </div>
+  </div>
+
+  <div class="grid2" style="margin-top:26px">
+    <div class="panel"><h4>Production practice — what "ready" means</h4>
+      <ul class="plain">
+        <li><b>Kill switch.</b> One flag, checked on the hot path, that stops all quoting and cancels
+        everything resting. It must work when the strategy thread is the thing that is broken.</li>
+        <li><b>Hard limits, checked before send.</b> Position, notional, order rate, max order size,
+        price sanity band. A limit you check after the send is a post-mortem, not a control.</li>
+        <li><b>Deterministic replay.</b> One tape in, one identical order sequence out. If a run is not
+        reproducible you cannot bisect a regression, and you cannot prove a fix.</li>
+        <li><b>Canary before fleet.</b> Ship the new binary to one instance on a small size, compare its
+        tail and its markout against the incumbent, then promote. "It built" is not a deployment plan.</li>
+        <li><b>Logging off the hot path.</b> The hot thread pushes a fixed-size binary record into a
+        lock-free SPSC ring; a reader thread formats and writes it. A synchronous <code>write</code> or
+        a string format on the hot path is a guaranteed tail event.</li>
+        <li><b>Counters, not printfs.</b> Atomic counters for fills, rejects, requotes, faults —
+        scraped from the reader thread, plotted live. A rising p99.9 is an early warning; nobody reads
+        a log fast enough to be one.</li>
+      </ul>
+      <div class="note" style="margin-top:11px"><b>Sanitizers are a different build.</b> ASan + UBSan in
+      one, TSan in another, both in CI, both on the replay — and never shipped: 2–20× slower. The graded
+      binary is <code>-O3 -march=native -flto -DNDEBUG -g</code>.</div></div>
+    <div class="panel"><h4>What week 14 is graded on</h4>
+      <div class="tablewrap"><table class="t">
+        <thead><tr><th>weight</th><th>deliverable</th></tr></thead>
+        <tbody>
+          <tr><td class="n">35 pts</td><td>A flame graph of your <code>on_book</code> path, plus a correct reading of the hotspots</td></tr>
+          <tr><td class="n">30 pts</td><td>A tail-reduction changelog with a p99.9 improvement proven by the harness</td></tr>
+          <tr><td class="n">20 pts</td><td>Clean ASan/UBSan and TSan runs over the replay</td></tr>
+          <tr><td class="n">15 pts</td><td>A release build with the graded flags, plus a short profiling report</td></tr>
+        </tbody></table></div>
+      <p class="sub" style="margin-top:12px">Note what is <em class="hi">not</em> there: a target number.
+      You are not graded on being faster than a threshold; you are graded on having found a cause,
+      fixed it, and proved the fix on the same tape. A one-line changelog entry that says "moved the
+      allocation out of <code>signal()</code>; p99.9 1333 ns → 42 ns" is worth more than a mystery
+      improvement of any size.</p>
+      <div class="note" style="margin-top:11px"><b>The instrument is public.</b>
+      <code>scripts/latency_replay.py</code> drives <code>./build/hft_bot --replay</code> over a
+      deterministic tape; <code>scripts/latency_report.py</code> prints p50/p99/p99.9, throughput and the
+      tail histogram. It is the same code that grades you, so there is no excuse for a surprise.</div></div>
+  </div>
+</section>
+
+<!-- ══════════════ PITFALLS ══════════════ -->
+<section id="pitfalls">
+  <div class="kicker">Part 4</div>
+  <h2><span class="secnum">4</span>Five ways this goes wrong</h2>
+  <p class="lead">Four of these produce a number that looks fine and is wrong. The fifth produces a
+  number that is right and useless.</p>
+
+  <details class="pit"><summary>Benchmarking code the compiler already deleted</summary>
+    <div class="body">
+      <p>You time a pure function, never use the result, and the optimizer — correctly — removes the
+      call. Now you are timing two <code>clock::now()</code> calls and reporting 0.4 ns as the cost of
+      your signal. It is the fastest wrong answer in this course, and it gets submitted every year.</p>
+      <p>The same failure with a subtler face: hoisting. A loop-invariant computation gets lifted out of
+      your timing loop, so you measure it once and divide by a thousand.</p>
+      <p class="fix">Fix: accumulate into a <code>sink</code> you print at the end, and put a
+      <code>do_not_optimize</code> barrier around it. Then sanity-check the magnitude — if a function
+      that touches 256 doubles claims 1 ns, it did not run.</p>
+    </div></details>
+
+  <details class="pit"><summary>Reporting the mean, or a percentile over the wrong window</summary>
+    <div class="body">
+      <p>A 40 µs mean over a bimodal distribution describes a tick that never happened. And a p99 over a
+      whole session hides a two-minute stretch where it was the p50 — the session-wide number is an
+      average of percentiles, which is not a percentile of anything.</p>
+      <p>The mirror error is reporting only the min because "that is what the code can do". The market
+      does not give you your best case; it gives you the case you got.</p>
+      <p class="fix">Fix: keep the raw samples. Report p50, p99, p99.9 and the max, per window, with the
+      sample count next to them. Plot the histogram — and if you only ever look at one number, look at
+      p99.9.</p>
+    </div></details>
+
+  <details class="pit"><summary>Timing request-to-request (coordinated omission)</summary>
+    <div class="body">
+      <p>Start the clock when the last tick finished, and a 5 ms stall is recorded exactly once — while
+      the ten ticks it delayed are never sampled at all, because you were not there to sample them.
+      Your histogram is a record of the moments the system was healthy.</p>
+      <p>This is why load generators that back off under stress systematically under-report tails, and
+      why a "p99.9 of 60 µs" from such a harness can coexist with visibly missed races.</p>
+      <p class="fix">Fix: measure against a fixed schedule or an externally stamped origin — for a tick
+      that arrived at <em class="hi">T</em>, record <code>now − T</code>. In the arena the exchange owns
+      that origin, which is the whole point of it owning the stamp.</p>
+    </div></details>
+
+  <details class="pit"><summary>Optimizing what the profiler did not point at</summary>
+    <div class="body">
+      <p>A frame with 60% <em class="hi">total</em> time and 2% <em class="hi">self</em> time is not slow;
+      its children are. Rewriting it buys nothing. Equally, a tall narrow tower in a flame graph is a
+      deep call stack, not a hot one — width is time, height is only depth.</p>
+      <p>And a sampling profiler is statistical: a symbol with 3 samples out of 4000 is noise. Chasing
+      it is how an afternoon disappears.</p>
+      <p class="fix">Fix: read self versus total before you touch anything, sample long enough that the
+      hot frames have hundreds of samples, and re-run <code>perf stat</code> after the change. If the
+      counters did not move, neither did your latency.</p>
+    </div></details>
+
+  <details class="pit"><summary>A perfect p99.9 with a negative markout</summary>
+    <div class="body">
+      <p>This is the one that is technically correct and commercially useless. You made the bot fast, so
+      it now gets filled instantly — and it gets filled instantly precisely when someone better informed
+      wants the other side. Fast fills are selected fills.</p>
+      <p>It shows up as a healthy fill rate, a healthy latency board position, and a markout at +1 s
+      that is consistently negative on one symbol or against one counterparty. The rebate hides it in the
+      raw P&amp;L, which is exactly why the arena computes markout separately.</p>
+      <p class="fix">Fix: measure markout per cohort — passive versus aggressive, per symbol, per
+      counterparty where you can see it. Where it is persistently negative, widen, skew away, or stop
+      quoting that name. Being fast is a licence to be selective, not a reason to trade more.</p>
+    </div></details>
+</section>
+
+<!-- ══════════════ CHECK ══════════════ -->
+<section id="check">
+  <div class="kicker">Part 5</div>
+  <h2><span class="secnum">5</span>Check yourself</h2>
+  <p class="lead">Three questions, instant feedback, nothing recorded.</p>
+
+  <div class="mcq" data-a="2" data-exp="<b>About 93%.</b> 0.99<sup>7</sup> = 0.932, so roughly one tick in fifteen has at least one slow stage — even though every individual stage would pass a 99% service level with room to spare. This is the arithmetic behind &ldquo;the tail is the product&rdquo;: per-stage percentiles do not add, they multiply, and a pipeline gets worse simply by being long. It is also why the fix is usually to remove a stage's variance rather than to shave its median.">
+    <p class="q"><span>Q1</span>Seven stages, and each is "fast" 99% of the time, independently. What fraction of ticks are fast end to end?</p>
+    <div class="opts">
+      <button class="opt" type="button">99% — the stages are each 99%, so the path is too</button>
+      <button class="opt" type="button">About 93%</button>
+      <button class="opt" type="button">About 99.9% — the fast stages compensate for the slow one</button>
+      <button class="opt" type="button">About 7% — one in every seven ticks is fast</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+
+  <div class="mcq" data-a="0" data-exp="<b>The allocator, called from the function that &ldquo;just averages numbers&rdquo;.</b> That is the signature of the HW14 starter: a fresh <code>std::vector</code> per tick. Most calls hit the allocator's fast path and cost tens of nanoseconds — which is why p50 stays at 458 ns — but a minority trigger an arena refill, a growth reallocation, or an <code>mmap</code>, and those are the p99.9 and the 178 µs max. A frame you did not write appearing under a frame you did is the single most reliable tell in a flame graph.">
+    <p class="q"><span>Q2</span>Your flame graph shows <code>signal()</code> at 55% total, 9% self, with <code>operator new</code>, <code>_int_malloc</code> and <code>free</code> beneath it. Where is your tail?</p>
+    <div class="opts">
+      <button class="opt" type="button">In the allocator — a per-tick heap allocation on the hot path</button>
+      <button class="opt" type="button">In <code>signal()</code> itself — 55% total is the biggest number on the graph</button>
+      <button class="opt" type="button">Nowhere yet — a flame graph shows totals, so it cannot show a tail</button>
+      <button class="opt" type="button">In the profiler's overhead, since <code>perf record -g</code> is expensive</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+
+  <div class="mcq" data-a="3" data-exp="<b>Widen or skew away on that symbol — you are being adversely selected.</b> A negative markout means the mid moved against you after your fill, consistently: your quote was stale relative to information that other people had. Quoting more would multiply the losing trade; quoting tighter makes you easier to pick off; and going faster only helps if the fix is a stale-quote-cancellation race you can actually win, which a 12 c/share average loss says you are not. The rebate hiding it in raw P&amp;L is exactly why markout is computed as its own metric.">
+    <p class="q"><span>Q3</span>Your bot's p99.9 is 38 µs, fill rate is high, raw P&amp;L is slightly positive from rebates — and the +1 s markout on one symbol averages −12 ¢ per share. What do you do?</p>
+    <div class="opts">
+      <button class="opt" type="button">Nothing — P&amp;L is positive, which is the metric that pays</button>
+      <button class="opt" type="button">Quote more size on that symbol to collect more rebate</button>
+      <button class="opt" type="button">Tighten the quote so you get to the front of the queue faster</button>
+      <button class="opt" type="button">Widen or skew away on that symbol, and check the other names for the same signature</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+</section>
+
+<!-- ══════════════ NEXT ══════════════ -->
+<section id="next">
+  <div class="kicker">Part 6</div>
+  <h2><span class="secnum">6</span>Do the work</h2>
+  <div class="grid2" style="margin-top:14px">
+    <div class="panel"><h4>In the lab (~45–60 min)</h4><ul class="plain">
+      <li>Build and run <code>starters/hw14/tail.cpp</code> at <code>-O2</code> — the point is to profile
+      the <em class="hi">algorithm</em>, not a missing optimizer. Run it several times and watch p50 hold
+      still while p99.9 and max jump around.</li>
+      <li>Form the hypothesis from the source before you profile: a per-tick allocation, and an
+      O(window) recompute.</li>
+      <li>Prove it with <code>perf record -g</code> → <code>perf report</code>, then fold the stacks into
+      a flame graph. No <code>perf</code>? <code>valgrind --tool=callgrind</code>, Instruments, or even
+      <code>ltrace -c</code> to count the <code>malloc</code> calls — the attribution is the deliverable,
+      not the tool.</li>
+      <li>Fix it in <code>tail_fixed.cpp</code>: one reserved ring, one running sum. Match the warm-up so
+      the <code>sink</code> is unchanged, then quote the before/after ratio.</li>
+      <li>Wire up the sanitizers on a debug build and fix anything they flag.</li>
+    </ul></div>
+    <div class="panel"><h4>Homework 14 &amp; the report</h4><ul class="plain">
+      <li><b>HW14:</b> <code>tail_fixed.cpp</code> with an identical <code>sink</code>, plus p50/p99/p99.9
+      before and after.</li>
+      <li><b>HW14:</b> a one-page changelog naming the <em class="hi">cause</em> — not "made it faster" but
+      "removed a per-tick heap allocation; the allocator's slow path was the p99.9".</li>
+      <li><b>In your bot:</b> a flame graph of the <code>on_book</code> path, the top tail cause found and
+      killed, and a measured p99.9 improvement from the harness on the same tape.</li>
+      <li><b>Ship:</b> the graded release build, clean under ASan/UBSan and TSan.</li>
+      <li><b>Due week 15:</b> the short profiling report — flame graph, the cause, the fix, the
+      before/after tail histogram.</li>
+    </ul></div>
+  </div>
+  <div class="nextgrid" style="margin-top:18px">
+    <div class="nextcard"><div class="nl">Code</div>
+      <div class="nt">Get the code</div>
+      <div class="nd">Both tracks share one starter tree. <code>starters/hw14/tail.cpp</code> is the
+      pathology; <code>scripts/latency_report.py</code> is the instrument that grades the fix.</div>
+      <div class="row" style="margin-top:11px">
+        <a class="btn" href="https://github.com/sdonadio/hft-cpp-starter-columbia">15-week track starter</a>
+        <a class="btn" href="https://github.com/sdonadio/hft-cpp-starter-uchicago">9-session track starter</a>
+      </div></div>
+    <a class="nextcard" href="week13.html"><div class="nl">Previous</div>
+      <div class="nt">← Week 13 · Low-Latency Design — SIMD &amp; Kernel Bypass</div>
+      <div class="nd">The levers. This week found out which one your tail was waiting on.</div></a>
+    <a class="nextcard" href="week15.html"><div class="nl">Next</div>
+      <div class="nt">Week 15 · Latency Arbitrage, Multi-Venue &amp; the Tournament →</div>
+      <div class="nd">A hardened, tail-optimized bot, two venues, a scarce message budget, and a composite scoreboard. Bring your fastest binary.</div></a>
+  </div>
+</section>
+
+<footer>Low-Latency Trading Arena · an interactive companion for a course on low-latency trading systems in C++ · <a href="https://github.com/sdonadio/low-latency-trading-arena">Source</a></footer>
+
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════
+   Week 14 — Profiling, the Tail & Production
+   ════════════════════════════════════════════════════════════════ */
+var $ = function (id) { return document.getElementById(id); };
+/* SVG namespace taken from the document so no absolute URL appears in this file */
+var SVGNS = $("bhSvg").namespaceURI;
+function mk(tag, attrs) {
+  var e = document.createElementNS(SVGNS, tag);
+  for (var k in attrs) { if (attrs.hasOwnProperty(k)) e.setAttribute(k, attrs[k]); }
+  return e;
+}
+function txt(x, y, s, size, fill, anchor, weight) {
+  var t = mk("text", { x: x, y: y, "font-size": size || 10, "font-family": "monospace", fill: fill || "#9aa0a6" });
+  if (anchor) t.setAttribute("text-anchor", anchor);
+  if (weight) t.setAttribute("font-weight", weight);
+  t.textContent = s;
+  return t;
+}
+function clear(n) { while (n.firstChild) n.removeChild(n.firstChild); }
+function stats(host, rows) {
+  clear(host);
+  rows.forEach(function (r) {
+    var d = document.createElement("div"); d.className = "stat";
+    var a = document.createElement("div"); a.className = "sl"; a.textContent = r[0];
+    var b = document.createElement("div"); b.className = "sv" + (r[2] ? " " + r[2] : ""); b.textContent = r[1];
+    d.appendChild(a); d.appendChild(b); host.appendChild(d);
+  });
+}
+function swWire(host, fn) {
+  var btns = Array.prototype.slice.call(host.querySelectorAll("button"));
+  btns.forEach(function (b) {
+    b.addEventListener("click", function () {
+      btns.forEach(function (o) { o.setAttribute("aria-pressed", o === b ? "true" : "false"); });
+      fn(b);
+    });
+  });
+}
+function lcg(seed) { var s = seed >>> 0; return function () { s = (1664525 * s + 1013904223) >>> 0; return s / 4294967296; }; }
+function pctOf(sorted, p) {
+  if (!sorted.length) return 0;
+  return sorted[Math.min(sorted.length - 1, Math.floor(p * (sorted.length - 1)))];
+}
+function fmtNs(v) {
+  if (v >= 1000000) return (v / 1000000).toFixed(2) + " ms";
+  if (v >= 1000) return (v / 1000).toFixed(1) + " µs";
+  return v.toFixed(0) + " ns";
+}
+
+/* ════ 1. Benchmark hygiene ═══════════════════════════════════ */
+var TRUE_NS = 41;
+var BH_ENV = {
+  quiet:   { j: 1.5, sp: 0.0004, mag: 300,   drift: 0,  lbl: "quiet server" },
+  laptop:  { j: 6.0, sp: 0.020,  mag: 4000,  drift: 0,  lbl: "laptop" },
+  vm:      { j: 12.0, sp: 0.050, mag: 12000, drift: 3,  lbl: "shared VM" },
+  thermal: { j: 8.0, sp: 0.030,  mag: 6000,  drift: 18, lbl: "throttled laptop" }
+};
+var BH = { env: "laptop", warm: 0, rep: 2000, stat: "mean", sink: false };
+function bhSamples() {
+  var E = BH_ENV[BH.env], r = lcg(20260904), out = [], i;
+  if (BH.sink) { for (i = 0; i < BH.rep; i++) out.push(0.35 + r() * 0.2); return out; }
+  var cold = Math.max(0, Math.min(BH.rep, Math.round(280 - BH.warm * 0.16)));
+  for (i = 0; i < BH.rep; i++) {
+    var v = TRUE_NS + E.drift + (r() - 0.5) * E.j * 2;
+    if (i < cold) v += 150 * (1 - i / Math.max(1, cold));   /* cold caches, first-touch faults */
+    if (r() < E.sp) v += E.mag * (0.3 + r());
+    out.push(Math.max(1, v));
+  }
+  return out;
+}
+function bhDraw() {
+  var s = bhSamples().slice().sort(function (a, b) { return a - b; });
+  var svg = $("bhSvg"); clear(svg);
+  var mean = s.reduce(function (a, b) { return a + b; }, 0) / s.length;
+  var rep = { min: s[0], mean: mean, median: pctOf(s, 0.5), p99: pctOf(s, 0.99), p999: pctOf(s, 0.999) }[BH.stat];
+  /* log-scale histogram, 1 ns .. 30 µs */
+  var X0 = 40, W = 570, Y0 = 24, H = 150, LO = Math.log(1), HI = Math.log(30000), BINS = 48;
+  var bins = new Array(BINS), i;
+  for (i = 0; i < BINS; i++) bins[i] = 0;
+  s.forEach(function (v) {
+    var f = (Math.log(Math.max(1, v)) - LO) / (HI - LO);
+    var b = Math.max(0, Math.min(BINS - 1, Math.floor(f * BINS)));
+    bins[b]++;
+  });
+  var maxB = Math.max.apply(null, bins) || 1;
+  var sx = function (v) { return X0 + ((Math.log(Math.max(1, v)) - LO) / (HI - LO)) * W; };
+  svg.appendChild(txt(X0, 16, s.length + " samples on a " + BH_ENV[BH.env].lbl +
+    " · log scale · reporting the " + BH.stat, 11, "#c4b5fd", null, 700));
+  for (i = 0; i < BINS; i++) {
+    if (!bins[i]) continue;
+    var h = Math.max(1.5, (bins[i] / maxB) * H);
+    svg.appendChild(mk("rect", { x: X0 + (i / BINS) * W, y: Y0 + H - h,
+      width: W / BINS - 1.2, height: h, fill: "#7c3aed" }));
+  }
+  svg.appendChild(mk("line", { x1: X0, y1: Y0 + H, x2: X0 + W, y2: Y0 + H, stroke: "#333a47" }));
+  [10, 100, 1000, 10000].forEach(function (v) {
+    svg.appendChild(txt(sx(v), Y0 + H + 14, fmtNs(v), 9, "#6f757f", "middle"));
+  });
+  if (!BH.sink) {
+    svg.appendChild(mk("line", { x1: sx(TRUE_NS), y1: Y0 - 4, x2: sx(TRUE_NS), y2: Y0 + H, stroke: "#3fb950", "stroke-width": 1.6 }));
+    svg.appendChild(txt(sx(TRUE_NS) + 5, Y0 + 8, "true 41 ns", 9.5, "#3fb950"));
+  }
+  svg.appendChild(mk("line", { x1: sx(rep), y1: Y0 - 4, x2: sx(rep), y2: Y0 + H, stroke: "#d29922", "stroke-width": 1.6, "stroke-dasharray": "4 3" }));
+  svg.appendChild(txt(sx(rep) + 5, Y0 + 24, "reported " + fmtNs(rep), 9.5, "#d29922"));
+  svg.appendChild(txt(X0 + W / 2, Y0 + H + 32, "per-call latency →", 10, "#9aa0a6", "middle"));
+
+  var err = BH.sink ? -100 : ((rep - TRUE_NS) / TRUE_NS) * 100;
+  var credible = BH.stat === "p999" ? BH.rep >= 1000 : (BH.stat === "p99" ? BH.rep >= 100 : true);
+  stats($("bhStats"), [
+    ["reported", fmtNs(rep), "acc"],
+    ["true cost", BH.sink ? "n/a" : "41 ns"],
+    ["error", (err >= 0 ? "+" : "") + err.toFixed(0) + "%", Math.abs(err) < 15 ? "ok" : (Math.abs(err) > 60 ? "bad" : "warn")],
+    ["max sample", fmtNs(s[s.length - 1])],
+    ["statistic credible?", credible ? "yes" : "no — too few samples", credible ? "ok" : "bad"]
+  ]);
+  var V, why;
+  if (BH.sink) {
+    V = "You timed two calls to clock::now()";
+    why = "With nothing consuming the result, the optimizer removed the work — correctly. The 0.4 ns " +
+      "you are reporting is the timer overhead. Accumulate into a sink, print it, and put a barrier around it.";
+  } else if (BH.stat === "min") {
+    V = "min: the code's cost, and nothing about the machine";
+    why = "The minimum is the best estimate of what the instructions cost when nothing interferes — useful " +
+      "for comparing two implementations, useless as a service level. The market gives you the sample you got, not the best one.";
+  } else if (BH.stat === "mean") {
+    V = Math.abs(err) > 40 ? "mean: dragged into the valley by the spikes" : "mean: close, on a quiet machine";
+    why = "The mean of a bimodal distribution describes a call that never happens. On a " + BH_ENV[BH.env].lbl +
+      " it is off by " + err.toFixed(0) + "% — and the direction of that error changes with the machine, which is why it is not comparable between people.";
+  } else if (BH.stat === "median") {
+    V = "median: an honest body, a blind tail";
+    why = "p50 is robust: the spikes cannot move it, which is exactly the problem. It is the right number " +
+      "for &ldquo;did my change make the common case faster&rdquo; and the wrong number for &ldquo;will I miss a race&rdquo;.";
+  } else {
+    V = credible ? "tail percentile: the number that decides races" : "tail percentile: not enough samples to mean anything";
+    why = credible
+      ? "This is the number the arena's Latency Board sorts on. Notice how strongly it depends on the machine — " +
+        "the platform work in week 13 exists to make this number belong to your code rather than to your laptop."
+      : "A p99.9 needs on the order of a thousand samples before it is a statistic rather than an anecdote. " +
+        "At " + BH.rep + " samples you are reporting one or two draws from the tail.";
+  }
+  if (!BH.sink && BH.warm === 0 && BH.rep > 200) {
+    why += " Note also that with no warm-up the first few hundred samples carry cold caches and " +
+      "first-touch page faults — a startup cost you are attributing to steady-state work.";
+  }
+  $("bhVerdict").textContent = V;
+  $("bhWhy").innerHTML = why;
+}
+$("bhEnv").addEventListener("change", function () { BH.env = this.value; bhDraw(); });
+$("bhStat").addEventListener("change", function () { BH.stat = this.value; bhDraw(); });
+$("bhWarm").addEventListener("input", function () { BH.warm = +this.value; $("bhWarmv").textContent = this.value; bhDraw(); });
+$("bhRep").addEventListener("input", function () { BH.rep = +this.value; $("bhRepv").textContent = this.value; bhDraw(); });
+$("bhSink").addEventListener("change", function () { BH.sink = this.checked; bhDraw(); });
+bhDraw();
+
+/* ════ 2. Flame graph ═════════════════════════════════════════ */
+var FG_TREES = {
+  before: { n: "main", t: 100, w: "The process. Everything below it is one replayed tape.", c: [
+    { n: "run_replay", t: 100, w: "The harness loop: read the next book_snapshot from the tape, call on_book, record the elapsed time.", c: [
+      { n: "on_book", t: 96, w: "Your hot path. Everything the arena grades happens inside this frame — decode, update, decide, serialize, send.", c: [
+        { n: "decode_snapshot", t: 26, w: "Parse the venue's snapshot into your book structs. Week 12's subject: the parse itself is fine here; the string interning under it is not.", c: [
+          { n: "parse_json", t: 14, w: "Character-level scanning. Self-time heavy by nature, and the honest cost of speaking JSON over a WebSocket instead of a binary codec.", c: [] },
+          { n: "intern_symbol", t: 6, w: "Looks the symbol up and allocates a std::string when it misses. A cache that allocates is not a cache.", c: [
+            { n: "operator new", t: 4, w: "The allocator, reached from a symbol lookup. Small, frequent, and occasionally very slow.", c: [] }] }] },
+        { n: "update_book", t: 12, w: "Applying the deltas to your levels. Contiguous, predictable, all self time — this is what a healthy frame looks like.", c: [] },
+        { n: "signal", t: 44, w: "The rolling mean. 44% total but only 9% self: the frame is not slow, the allocator underneath it is. This is the finding.", c: [
+          { n: "operator new", t: 18, w: "A fresh std::vector every tick. Most calls take the allocator's fast path; a minority refill an arena or grow, and those are your p99.9.", c: [
+            { n: "_int_malloc", t: 12, w: "glibc's slow path: free-list walk, arena lock, occasionally mmap. Microseconds, on a path with a microsecond budget.", c: [] }] },
+          { n: "free", t: 8, w: "The matching deallocation, every tick, forever. Free is not free.", c: [] },
+          { n: "accumulate_window", t: 9, w: "Summing 256 doubles from scratch. A constant-factor drag rather than a tail source — worth fixing second.", c: [] }] },
+        { n: "risk_check", t: 3, w: "Position, notional and price-band checks before send. Cheap, and non-negotiable: a limit checked after the send is a post-mortem.", c: [] },
+        { n: "serialize_order", t: 11, w: "Building the outbound message. Week 6's compile-time codec is what makes this small.", c: [
+          { n: "format_price", t: 7, w: "Number-to-text formatting. Sneakily expensive, and a classic candidate for a pre-rendered template.", c: [] }] }] }] }] },
+  after: { n: "main", t: 100, w: "The same tape, after the fix. The shape is what you want: wide frames you wrote, nothing you did not.", c: [
+    { n: "run_replay", t: 100, w: "Unchanged harness, unchanged tape — which is the only reason the comparison means anything.", c: [
+      { n: "on_book", t: 95, w: "Same responsibilities, 3.1× less time. No allocator frames anywhere beneath it.", c: [
+        { n: "decode_snapshot", t: 34, w: "Now the largest block, because everything cheaper than it went away. The symbol table is pre-populated at startup and never allocates.", c: [
+          { n: "parse_json", t: 26, w: "The next target, and a real one: it is self time in code you own.", c: [] }] },
+        { n: "update_book", t: 16, w: "Unchanged in absolute terms; larger as a share. Nothing regressed.", c: [] },
+        { n: "signal", t: 13, w: "RollingMean::push — one add, one subtract, one store. All self time, no children, no allocator.", c: [] },
+        { n: "risk_check", t: 5, w: "Unchanged. Still non-negotiable.", c: [] },
+        { n: "serialize_order", t: 21, w: "Now visibly worth attention, which is the point of re-profiling after every fix: the ranking changes.", c: [
+          { n: "format_price", t: 13, w: "Pre-render the fixed part of the message and patch the price in place — week 12's trick, still unclaimed here.", c: [] }] }] }] }] }
+};
+var FG = { build: "before", sel: null };
+function fgSelf(node) {
+  var kids = node.c.reduce(function (a, k) { return a + k.t; }, 0);
+  return Math.max(0, node.t - kids);
+}
+function fgDraw() {
+  var root = FG_TREES[FG.build], svg = $("fgSvg");
+  clear(svg);
+  var X0 = 10, W = 620, RH = 24, GAP = 3, Y0 = 12, depth = 0;
+  var laid = [];
+  (function walk(node, x, w, d) {
+    laid.push({ node: node, x: x, w: w, d: d });
+    depth = Math.max(depth, d);
+    var cx = x;
+    node.c.forEach(function (k) {
+      var kw = (k.t / node.t) * w;
+      walk(k, cx, kw, d + 1);
+      cx += kw;
+    });
+  })(root, X0, W, 0);
+  svg.setAttribute("viewBox", "0 0 640 " + (Y0 + (depth + 1) * (RH + GAP) + 34));
+  if (!FG.sel) FG.sel = root;
+  laid.forEach(function (L) {
+    var y = Y0 + L.d * (RH + GAP), sel = L.node === FG.sel;
+    var g = mk("g", { role: "button", tabindex: "0",
+      "aria-label": L.node.n + ", " + L.node.t + " percent total, " + fgSelf(L.node) + " percent self" });
+    g.appendChild(mk("rect", { x: L.x, y: y, width: Math.max(1.5, L.w - 1.5), height: RH, rx: 3,
+      fill: sel ? "#7c3aed" : "rgba(124,58,237," + (0.26 + 0.5 * (fgSelf(L.node) / 30)).toFixed(2) + ")",
+      stroke: sel ? "#c4b5fd" : "#272c36" }));
+    if (L.w > 46) {
+      var lbl = L.node.n;
+      if (L.w < lbl.length * 6.2) lbl = lbl.slice(0, Math.max(2, Math.floor(L.w / 6.2))) + "…";
+      g.appendChild(txt(L.x + 5, y + 16, lbl, 9.5, "#e8e6e3"));
+    }
+    g.addEventListener("click", function () { FG.sel = L.node; fgDraw(); });
+    g.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); FG.sel = L.node; fgDraw(); }
+    });
+    svg.appendChild(g);
+  });
+  svg.appendChild(txt(X0, Y0 + (depth + 1) * (RH + GAP) + 20,
+    "width = share of samples · depth = call stack · shade = self time", 9.5, "#6f757f"));
+  var widest = laid.slice().sort(function (a, b) { return fgSelf(b.node) - fgSelf(a.node); })[0].node;
+  var sel = FG.sel, self = fgSelf(sel);
+  stats($("fgStats"), [
+    ["frames", String(laid.length)],
+    ["selected total", sel.t + "%", "acc"],
+    ["selected self", self + "%", self > 12 ? "warn" : "ok"],
+    ["widest self frame", widest.n],
+    ["build", FG.build === "before" ? "before the fix" : "after the fix", FG.build === "after" ? "ok" : "warn"]
+  ]);
+  $("fgName").textContent = sel.n;
+  $("fgPill").textContent = self > sel.t * 0.5 ? "self-time heavy — your code" : "children dominate — go deeper";
+  $("fgWhat").textContent = sel.w;
+  var kv = $("fgKv"); clear(kv);
+  [["total", sel.t + "% of samples"], ["self", self + "% of samples"],
+   ["children", (sel.t - self) + "%"], ["callees", sel.c.length ? sel.c.map(function (k) { return k.n; }).join(", ") : "none (leaf)"]
+  ].forEach(function (r) {
+    var b = document.createElement("b"); b.textContent = r[0];
+    var v = document.createElement("span"); v.textContent = r[1];
+    kv.appendChild(b); kv.appendChild(v);
+  });
+  $("fgNote").innerHTML = self > sel.t * 0.5
+    ? "<b>Self-time heavy.</b> " + sel.t + "% total against " + self + "% self means the cost is in this " +
+      "frame's own instructions. This is where an optimization by you changes the number."
+    : "<b>Children dominate.</b> " + sel.t + "% total but only " + self + "% self — rewriting <code>" +
+      sel.n + "</code> would change almost nothing. Click down into the frame beneath it.";
+}
+swWire($("fgBuild"), function (b) { FG.build = b.getAttribute("data-b"); FG.sel = null; fgDraw(); });
+fgDraw();
+
+/* ════ 3. Tail compounding across stages ══════════════════════ */
+var TC = { n: 7, p: 99, spike: 140 };
+function binomCdf(k, n, q) {   /* P(X <= k) for X ~ Bin(n, q) */
+  var s = 0, c = 1, i;
+  for (i = 0; i <= k && i <= n; i++) {
+    if (i > 0) c = c * (n - i + 1) / i;
+    s += c * Math.pow(q, i) * Math.pow(1 - q, n - i);
+  }
+  return Math.min(1, s);
+}
+function tcQuant(n, q, want) {  /* slow-stage count at the `want` quantile */
+  var k;
+  for (k = 0; k <= n; k++) if (binomCdf(k, n, q) >= want) return k;
+  return n;
+}
+function tcDraw() {
+  var q = 1 - TC.p / 100, base = TC.n * 1.2;
+  var allFast = Math.pow(TC.p / 100, TC.n);
+  var p50 = base + tcQuant(TC.n, q, 0.50) * TC.spike;
+  var p99 = base + tcQuant(TC.n, q, 0.99) * TC.spike;
+  var p999 = base + tcQuant(TC.n, q, 0.999) * TC.spike;
+  var svg = $("tcSvg"); clear(svg);
+  var X0 = 40, W = 540, Y0 = 20, H = 130;
+  var sx = function (n) { return X0 + ((n - 1) / 13) * W; };
+  var sy = function (v) { return Y0 + H - v * H; };
+  svg.appendChild(mk("line", { x1: X0, y1: Y0 + H, x2: X0 + W, y2: Y0 + H, stroke: "#333a47" }));
+  svg.appendChild(mk("line", { x1: X0, y1: Y0, x2: X0, y2: Y0 + H, stroke: "#333a47" }));
+  [0, 0.5, 1].forEach(function (v) {
+    svg.appendChild(txt(X0 - 6, sy(v) + 3, (v * 100).toFixed(0) + "%", 9, "#6f757f", "end"));
+    svg.appendChild(mk("line", { x1: X0, y1: sy(v), x2: X0 + W, y2: sy(v), stroke: "#272c36", "stroke-dasharray": "2 4" }));
+  });
+  var n;
+  for (n = 1; n <= 14; n++) {
+    var v = Math.pow(TC.p / 100, n), h = Math.max(1, v * H);
+    svg.appendChild(mk("rect", { x: sx(n) - 14, y: sy(v), width: 28, height: h, rx: 2,
+      fill: n === TC.n ? "#7c3aed" : "rgba(124,58,237,.34)",
+      stroke: n === TC.n ? "#c4b5fd" : "none" }));
+    if (n % 2 === 1) svg.appendChild(txt(sx(n), Y0 + H + 14, String(n), 9, "#6f757f", "middle"));
+  }
+  svg.appendChild(txt(X0 + W / 2, Y0 + H + 32, "stages in the path → · bar height = P(every stage fast)", 10, "#9aa0a6", "middle"));
+  svg.appendChild(txt(X0 + W, Y0 + 10, "each stage " + TC.p + "% fast", 10, "#c4b5fd", "end", 700));
+  stats($("tcStats"), [
+    ["P(all fast)", (allFast * 100).toFixed(1) + "%", allFast > 0.95 ? "ok" : (allFast < 0.8 ? "bad" : "warn")],
+    ["slow ticks", "1 in " + Math.max(1, Math.round(1 / Math.max(1e-9, 1 - allFast)))],
+    ["p50", p50.toFixed(1) + " µs", "acc"],
+    ["p99", p99.toFixed(0) + " µs", p99 > p50 * 3 ? "bad" : "warn"],
+    ["p99.9", p999.toFixed(0) + " µs", p999 > p50 * 3 ? "bad" : "warn"]
+  ]);
+  $("tcVerdict").textContent = allFast > 0.99 ? "The path holds together"
+    : (allFast > 0.9 ? "One tick in " + Math.round(1 / (1 - allFast)) + " has a slow stage"
+      : "The pipeline is slow more often than it is fast at any single stage");
+  $("tcWhy").innerHTML = "With " + TC.n + " stages each fast " + TC.p + "% of the time, every stage is " +
+    "individually respectable and the path is fast only <b>" + (allFast * 100).toFixed(1) + "%</b> of the " +
+    "time. p50 is " + p50.toFixed(1) + " µs because the median tick has no slow stage at all; p99.9 is " +
+    p999.toFixed(0) + " µs because it has " + tcQuant(TC.n, 1 - TC.p / 100, 0.999) + ". " +
+    "Shaving a stage's median moves p50. Removing a stage's <em class=\"hi\">variance</em> is what moves p99.9 — " +
+    "and one fewer stage is better than either.";
+}
+$("tcN").addEventListener("input", function () { TC.n = +this.value; $("tcNv").textContent = this.value; tcDraw(); });
+$("tcP").addEventListener("input", function () { TC.p = +this.value; $("tcPv").textContent = this.value + "%"; tcDraw(); });
+$("tcSpike").addEventListener("input", function () { TC.spike = +this.value; $("tcSpikev").textContent = this.value + " µs"; tcDraw(); });
+tcDraw();
+
+/* ════ 4. Tail sources → histogram ════════════════════════════ */
+var TS_ITEMS = [
+  { id: "fault", l: "Page faults on the hot path",
+    d: "Memory you allocated but never touched. The first access traps into the kernel to map a page — microseconds, and it happens exactly once per page, which is why it hides until the working set grows.",
+    sig: "a handful of enormous, isolated samples with nothing between them and the body",
+    fix: "pre-fault every page at startup and mlockall() the hot arena",
+    p: 0.0009, mag: 900, g: "p99.9 +900 µs" },
+  { id: "alloc", l: "Allocator slow path",
+    d: "malloc's fast path is tens of nanoseconds. Its slow path walks a free list, takes a lock, refills an arena, or calls mmap — and you cannot tell in advance which call you are making.",
+    sig: "a second small mode a few tens of µs to the right of the body",
+    fix: "pools and arenas; no new or delete inside on_book",
+    p: 0.004, mag: 45, g: "p99 +45 µs" },
+  { id: "ctx", l: "Context switch / preemption",
+    d: "The scheduler parks your thread to run something else. On a shared core this is the single largest tail event available, and it is invisible in your own code.",
+    sig: "rare samples at a millisecond or more, correlated with other activity on the box",
+    fix: "pin the thread, isolcpus + nohz_full the core, never sleep on the hot path",
+    p: 0.0004, mag: 1200, g: "max +1.2 ms" },
+  { id: "irq", l: "Device interrupts on your core",
+    d: "An IRQ preempts you for a few tens of microseconds at whatever moment the device chooses — which, during a volatile burst, is the worst possible moment.",
+    sig: "a broad, frequent shoulder rather than a spike; it moves p99 more than max",
+    fix: "route IRQ affinity away from the hot core",
+    p: 0.010, mag: 30, g: "p99 +30 µs" },
+  { id: "tlb", l: "TLB thrash — no huge pages",
+    d: "A random walk over a large book means a page-table walk on many accesses. It is not a spike; it is a tax on every sample.",
+    sig: "the whole body shifts right and widens — no new mode appears",
+    fix: "2 MB huge pages, and pre-fault them",
+    p: 1.0, mag: 2.2, g: "p50 +2.2 µs" },
+  { id: "therm", l: "Thermal / frequency scaling",
+    d: "The core boosts, heats, and throttles. You do not get slower samples; you get a different machine twenty minutes in — which is why a benchmark that ran fine this morning does not reproduce.",
+    sig: "the body drifts right over time; a single run looks clean, two runs disagree",
+    fix: "fix the frequency, disable C-states, and re-run the baseline every session",
+    p: 1.0, mag: 3.1, g: "p50 +3.1 µs" },
+  { id: "log", l: "Synchronous logging on the hot path",
+    d: "One string format and one write() per interesting tick. It is an allocation and a syscall in the same breath, and it fires precisely when the market is busy and you most wanted to log.",
+    sig: "a mode that correlates with market activity, not with anything in your code",
+    fix: "push a fixed-size binary record into an SPSC ring; format on another thread",
+    p: 0.002, mag: 220, g: "p99.9 +220 µs" }
+];
+var TS = {};
+function tsSamples() {
+  var r = lcg(77771), N = 4000, out = [], base = 9.0, i;
+  TS_ITEMS.forEach(function (it) { if (TS[it.id] && it.p === 1.0) base += it.mag; });
+  for (i = 0; i < N; i++) {
+    var v = base * (0.92 + r() * 0.16);
+    TS_ITEMS.forEach(function (it) {
+      if (!TS[it.id] || it.p === 1.0) return;
+      if (r() < it.p) v += it.mag * (0.45 + r() * 1.1);
+    });
+    out.push(v);
+  }
+  return out;
+}
+function tsDraw() {
+  var s = tsSamples().sort(function (a, b) { return a - b; });
+  var svg = $("tsSvg"); clear(svg);
+  var X0 = 44, W = 545, Y0 = 22, H = 140, LO = Math.log(4), HI = Math.log(4000), BINS = 54;
+  var bins = new Array(BINS), i;
+  for (i = 0; i < BINS; i++) bins[i] = 0;
+  s.forEach(function (v) {
+    var f = (Math.log(Math.max(4, v)) - LO) / (HI - LO);
+    bins[Math.max(0, Math.min(BINS - 1, Math.floor(f * BINS)))]++;
+  });
+  var maxB = Math.max.apply(null, bins) || 1;
+  var sx = function (v) { return X0 + ((Math.log(Math.max(4, v)) - LO) / (HI - LO)) * W; };
+  var on = TS_ITEMS.filter(function (it) { return TS[it.id]; });
+  svg.appendChild(txt(X0, 14, "4000 ticks · log scale · " + (on.length ? on.length + " tail source" +
+    (on.length === 1 ? "" : "s") + " enabled" : "clean: nothing but the fast path"), 11, "#c4b5fd", null, 700));
+  for (i = 0; i < BINS; i++) {
+    if (!bins[i]) continue;
+    var h = Math.max(1.5, (bins[i] / maxB) * H);
+    svg.appendChild(mk("rect", { x: X0 + (i / BINS) * W, y: Y0 + H - h, width: W / BINS - 1.2, height: h,
+      fill: i / BINS > 0.42 ? "#f85149" : "#7c3aed" }));
+  }
+  svg.appendChild(mk("line", { x1: X0, y1: Y0 + H, x2: X0 + W, y2: Y0 + H, stroke: "#333a47" }));
+  [10, 100, 1000].forEach(function (v) {
+    svg.appendChild(txt(sx(v), Y0 + H + 14, v + " µs", 9, "#6f757f", "middle"));
+  });
+  [[0.5, "p50", "#c4b5fd"], [0.99, "p99", "#d29922"], [0.999, "p99.9", "#f85149"]].forEach(function (m, k) {
+    var v = pctOf(s, m[0]);
+    svg.appendChild(mk("line", { x1: sx(v), y1: Y0 - 4, x2: sx(v), y2: Y0 + H, stroke: m[2], "stroke-dasharray": "3 3" }));
+    svg.appendChild(txt(sx(v) + 4, Y0 + 10 + k * 12, m[1], 9, m[2]));
+  });
+  svg.appendChild(txt(X0 + W / 2, Y0 + H + 32, "tick-to-trade latency →", 10, "#9aa0a6", "middle"));
+  var p50 = pctOf(s, 0.5), p999 = pctOf(s, 0.999), mx = s[s.length - 1];
+  stats($("tsStats"), [
+    ["p50", p50.toFixed(1) + " µs", "acc"],
+    ["p99", pctOf(s, 0.99).toFixed(1) + " µs"],
+    ["p99.9", p999.toFixed(0) + " µs", p999 > 60 ? "bad" : "ok"],
+    ["max", mx.toFixed(0) + " µs", mx > 300 ? "bad" : "warn"],
+    ["tail / median", (p999 / p50).toFixed(1) + "×", p999 / p50 < 3 ? "ok" : "bad"]
+  ]);
+  TS_ITEMS.forEach(function (it) {
+    var row = $("row_" + it.id);
+    if (row) row.className = "chkrow" + (TS[it.id] ? " on" : "");
+  });
+  if (!on.length) {
+    $("tsNote").innerHTML = "<b>Nothing enabled.</b> A single tight mode, p99.9 within a factor of two of " +
+      "p50. This is what a hot path looks like when the platform is yours and the code allocates nothing — " +
+      "and it is achievable, which is the point.";
+  } else {
+    var worst = on.slice().sort(function (a, b) { return (b.mag * (b.p === 1 ? 1 : b.p * 40)) - (a.mag * (a.p === 1 ? 1 : a.p * 40)); })[0];
+    $("tsNote").innerHTML = "<b>" + worst.l + " dominates.</b> Signature: " + worst.sig +
+      ". Fix: " + worst.fix + ". Notice that the sources with a <em class=\"hi\">low</em> probability and a " +
+      "<em class=\"hi\">large</em> magnitude never touch p50 at all — they are only visible in p99.9 and the " +
+      "max, which is why an average is worse than no measurement.";
+  }
+}
+function tsBuild() {
+  var host = $("tsList");
+  TS_ITEMS.forEach(function (it) {
+    var row = document.createElement("div"); row.className = "chkrow"; row.id = "row_" + it.id;
+    var cb = document.createElement("input"); cb.type = "checkbox"; cb.id = "ts_" + it.id;
+    cb.setAttribute("aria-label", it.l);
+    var mid = document.createElement("div");
+    var lab = document.createElement("label"); lab.setAttribute("for", cb.id); lab.textContent = it.l;
+    var dd = document.createElement("div"); dd.className = "cd";
+    dd.textContent = it.d + " Signature: " + it.sig + ". Fix: " + it.fix + ".";
+    mid.appendChild(lab); mid.appendChild(dd);
+    var g = document.createElement("div"); g.className = "cg"; g.textContent = it.g;
+    row.appendChild(cb); row.appendChild(mid); row.appendChild(g);
+    host.appendChild(row);
+    TS[it.id] = false;
+    cb.addEventListener("change", function () { TS[it.id] = cb.checked; tsDraw(); });
+  });
+}
+tsBuild();
+tsDraw();
+
+/* ════ 5. Markout curve ═══════════════════════════════════════ */
+var MO = { cohort: "passive", tox: 30, spread: 15, req: 400 };
+var MO_H = [0.1, 1, 5, 10];
+function moCurve(cohort) {
+  var half = MO.spread / 10;                              /* cents per share */
+  var latF = 0.6 + 1.4 * (Math.log(MO.req / 20) / Math.log(250));
+  var alpha = (MO.tox / 100) * 2.6 * latF;                /* cents at 1 s */
+  return MO_H.map(function (h) {
+    var adverse = alpha * Math.sqrt(h);
+    if (cohort === "passive") return half - adverse;
+    if (cohort === "fade") return half - adverse * 1.9;
+    var edge = 2.2 * (1 - (MO.tox / 100) * 0.6);          /* your own signal */
+    return -half + edge * Math.sqrt(h) * 0.55;
+  });
+}
+function moDraw() {
+  var svg = $("moSvg"); clear(svg);
+  var X0 = 48, W = 540, Y0 = 24, H = 160;
+  var series = [["passive", "#7c3aed", "passive fills"], ["aggressive", "#58a6ff", "aggressive fills"], ["fade", "#f85149", "fills during a fade"]];
+  var all = [];
+  series.forEach(function (s) { all = all.concat(moCurve(s[0])); });
+  var lo = Math.min.apply(null, all.concat([-1])), hi = Math.max.apply(null, all.concat([1]));
+  var pad = (hi - lo) * 0.15; lo -= pad; hi += pad;
+  var sx = function (i) { return X0 + (i / (MO_H.length - 1)) * W; };
+  var sy = function (v) { return Y0 + H - ((v - lo) / (hi - lo)) * H; };
+  svg.appendChild(mk("line", { x1: X0, y1: sy(0), x2: X0 + W, y2: sy(0), stroke: "#6f757f", "stroke-dasharray": "4 3" }));
+  svg.appendChild(txt(X0 - 6, sy(0) + 3, "0", 9, "#6f757f", "end"));
+  svg.appendChild(txt(X0 - 6, sy(hi - pad / 2) + 3, (hi - pad / 2).toFixed(1) + "¢", 9, "#6f757f", "end"));
+  svg.appendChild(txt(X0 - 6, sy(lo + pad / 2) + 3, (lo + pad / 2).toFixed(1) + "¢", 9, "#6f757f", "end"));
+  MO_H.forEach(function (h, i) {
+    svg.appendChild(mk("line", { x1: sx(i), y1: Y0, x2: sx(i), y2: Y0 + H, stroke: "#272c36" }));
+    svg.appendChild(txt(sx(i), Y0 + H + 15, h < 1 ? "+" + (h * 1000) + " ms" : "+" + h + " s", 9.5, "#6f757f", "middle"));
+  });
+  series.forEach(function (s) {
+    var c = moCurve(s[0]), on = s[0] === MO.cohort, d = "", i;
+    for (i = 0; i < c.length; i++) d += (i ? "L" : "M") + sx(i).toFixed(1) + " " + sy(c[i]).toFixed(1) + " ";
+    svg.appendChild(mk("path", { d: d, fill: "none", stroke: s[1], "stroke-width": on ? 2.4 : 1.1,
+      opacity: on ? 1 : 0.45 }));
+    for (i = 0; i < c.length; i++) {
+      svg.appendChild(mk("circle", { cx: sx(i), cy: sy(c[i]), r: on ? 4 : 2.4, fill: s[1], opacity: on ? 1 : 0.45 }));
+    }
+    svg.appendChild(txt(X0 + W + 4, sy(c[c.length - 1]) + 3, on ? "◀" : "", 10, s[1]));
+  });
+  svg.appendChild(txt(X0 - 40, 15, "markout ¢/share", 10, "#9aa0a6"));
+  var lx = X0 + 68;
+  series.forEach(function (sr) {
+    svg.appendChild(mk("rect", { x: lx, y: 8, width: 10, height: 10, rx: 2, fill: sr[1],
+      opacity: sr[0] === MO.cohort ? 1 : 0.45 }));
+    svg.appendChild(txt(lx + 14, 17, sr[2], 9.5, sr[0] === MO.cohort ? "#e8e6e3" : "#6f757f"));
+    lx += 18 + sr[2].length * 5.6;
+  });
+  var c = moCurve(MO.cohort);
+  stats($("moStats"), [
+    ["+100 ms", c[0].toFixed(2) + " ¢", c[0] >= 0 ? "ok" : "bad"],
+    ["+1 s", c[1].toFixed(2) + " ¢", c[1] >= 0 ? "ok" : "bad"],
+    ["+5 s", c[2].toFixed(2) + " ¢", c[2] >= 0 ? "ok" : "bad"],
+    ["+10 s", c[3].toFixed(2) + " ¢", c[3] >= 0 ? "ok" : "bad"],
+    ["half-spread", (MO.spread / 10).toFixed(1) + " ¢", "acc"]
+  ]);
+  var V, why;
+  if (c[1] >= 0.4) { V = "Healthy: you are being paid for liquidity"; }
+  else if (c[1] >= 0) { V = "Marginal: the spread barely covers the adverse move"; }
+  else { V = "Adversely selected: these fills lose money after the fact"; }
+  if (MO.cohort === "passive") {
+    why = "You captured " + (MO.spread / 10).toFixed(1) + " ¢ of half-spread and gave back " +
+      (MO.spread / 10 - c[1]).toFixed(2) + " ¢ to the mid's drift over the next second. The curve gets worse " +
+      "with the horizon because informed flow keeps being right — that is what &ldquo;informed&rdquo; means. " +
+      "Raise the requote latency and watch it steepen: a stale quote is a free option you wrote for somebody else.";
+  } else if (MO.cohort === "aggressive") {
+    why = "You paid the half-spread up front, which is why the curve starts negative, and you are betting " +
+      "the move you crossed for is real. If the +1 s markout does not clear the spread you paid, your signal " +
+      "is not worth crossing on — the fastest possible execution of a bad decision is still a bad decision.";
+  } else {
+    why = "These are the fills you got while your quote was already wrong and you had not cancelled it yet. " +
+      "The markout is roughly twice as bad as an ordinary passive fill, and the number of them is a direct " +
+      "function of your cancel latency — which makes it the one adverse-selection term that weeks 13 and 14 " +
+      "genuinely fix.";
+  }
+  $("moVerdict").textContent = V;
+  $("moWhy").innerHTML = why;
+}
+swWire($("moCohort"), function (b) { MO.cohort = b.getAttribute("data-c"); moDraw(); });
+$("moTox").addEventListener("input", function () { MO.tox = +this.value; $("moToxv").textContent = this.value + "%"; moDraw(); });
+$("moSpread").addEventListener("input", function () { MO.spread = +this.value; $("moSpreadv").textContent = (this.value / 10).toFixed(1) + " ¢"; moDraw(); });
+$("moReq").addEventListener("input", function () { MO.req = +this.value; $("moReqv").textContent = this.value + " µs"; moDraw(); });
+moDraw();
+
+/* ── MCQ engine (shared across week pages) ───────────────────── */
+Array.prototype.forEach.call(document.querySelectorAll(".mcq"), function (q) {
+  var answer = parseInt(q.getAttribute("data-a"), 10);
+  var opts = Array.prototype.slice.call(q.querySelectorAll(".opt"));
+  var fb = q.querySelector(".fb");
+  opts.forEach(function (o, i) {
+    o.addEventListener("click", function () {
+      if (q.dataset.done === "1") return;
+      q.dataset.done = "1";
+      var right = i === answer;
+      opts.forEach(function (b, j) {
+        b.disabled = true;
+        if (j === answer) b.classList.add("right");
+        else if (j === i) b.classList.add("wrong");
+        else b.classList.add("dim");
+      });
+      fb.innerHTML = (right ? "<b>Correct.</b> " : "<b>Not quite.</b> ") + q.getAttribute("data-exp");
+      fb.className = "fb show " + (right ? "good" : "poor");
+    });
+  });
+});
+</script>
+</body>
+</html>
