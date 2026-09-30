@@ -666,7 +666,7 @@ void on_book(const std::string&amp; symbol,
     <div class="fb" role="status"></div>
   </div>
 
-  <div class="mcq" data-a="2" data-exp="<b>Above the mid, because the bid is the heavy side.</b> micro = (ask·bid_sz + bid·ask_sz)/(bid_sz+ask_sz) = (100.02·800 + 100.00·200)/1000 = 100.016, against a mid of 100.010, with obi = (800−200)/1000 = +0.60. Note the cross-weighting: the bid's size multiplies the ask's price, so a heavy bid pulls the reference up toward the offer. Intuitively there is a queue of buyers and only a little stock for sale, so the next print is more likely to be at the offer.">
+  <div class="mcq" data-a="1" data-exp="<b>Above the mid, because the bid is the heavy side.</b> micro = (ask·bid_sz + bid·ask_sz)/(bid_sz+ask_sz) = (100.02·800 + 100.00·200)/1000 = 100.016, against a mid of 100.010, with obi = (800−200)/1000 = +0.60. Note the cross-weighting: the bid's size multiplies the ask's price, so a heavy bid pulls the reference up toward the offer. Intuitively there is a queue of buyers and only a little stock for sale, so the next print is more likely to be at the offer.">
     <p class="q"><span>Q2</span>The book is 100.00 × 800 bid, 100.02 × 200 offered. Where is the microprice, and what is the OBI?</p>
     <div class="opts">
       <button class="opt" type="button">Below the mid, at 100.004, with <code>obi = −0.60</code></button>
@@ -677,7 +677,7 @@ void on_book(const std::string&amp; symbol,
     <div class="fb" role="status"></div>
   </div>
 
-  <div class="mcq" data-a="3" data-exp="<b>p99.9 = 2.1 ms.</b> Bot B is the loser and the mean is what hides it: its median is 40% better, so on a dashboard of averages it looks like the faster bot. But the ticks that decide races are the busiest ones, and one in a thousand of B's ticks takes 2.1 ms — during which the quote it was racing for has been taken, moved, or cancelled. That is what “won on the tail, not the mean” means, and it is why the board ranks p99.9.">
+  <div class="mcq" data-a="2" data-exp="<b>p99.9 = 2.1 ms.</b> Bot B is the loser and the mean is what hides it: its median is 40% better, so on a dashboard of averages it looks like the faster bot. But the ticks that decide races are the busiest ones, and one in a thousand of B's ticks takes 2.1 ms — during which the quote it was racing for has been taken, moved, or cancelled. That is what “won on the tail, not the mean” means, and it is why the board ranks p99.9.">
     <p class="q"><span>Q3</span>Bot A: p50 = 38&#8239;µs, p99 = 71&#8239;µs, p99.9 = 210&#8239;µs. Bot B: p50 = 22&#8239;µs, p99 = 95&#8239;µs, p99.9 = 2.1&#8239;ms. Which single number tells you B loses races A wins?</p>
     <div class="opts">
       <button class="opt" type="button">B's p50 of 22&#8239;µs — it is doing less work per tick</button>

@@ -687,7 +687,7 @@ __builtin_prefetch(&amp;tape[i + <span class="n">16</span>], <span class="n">0</
   <h2><span class="secnum">5</span>Check yourself</h2>
   <p class="lead">Three questions, instant feedback, nothing recorded.</p>
 
-  <div class="mcq" data-a="2" data-exp="<b>32 lines against 4.</b> AoS: the 64 orders are 32 B apart, so the scan walks 64 × 32 B = 2048 B of address space — 32 cache lines — and uses 8 of every 64 bytes, about 12% of what it fetched. SoA: the 64 prices are contiguous, 64 × 8 B = 512 B = 4 lines, every byte useful. Same data, same answer, an 8× difference in lines touched. This is why the arena's hot loops keep prices in their own array and the audit fields somewhere else entirely.">
+  <div class="mcq" data-a="1" data-exp="<b>32 lines against 4.</b> AoS: the 64 orders are 32 B apart, so the scan walks 64 × 32 B = 2048 B of address space — 32 cache lines — and uses 8 of every 64 bytes, about 12% of what it fetched. SoA: the 64 prices are contiguous, 64 × 8 B = 512 B = 4 lines, every byte useful. Same data, same answer, an 8× difference in lines touched. This is why the arena's hot loops keep prices in their own array and the audit fields somewhere else entirely.">
     <p class="q"><span>Q1</span>You scan the 8-byte price of 64 orders. In AoS the order struct is 32 bytes; in SoA the prices are contiguous. How many 64-byte cache lines does each scan touch?</p>
     <div class="opts">
       <button class="opt" type="button">8 lines and 8 lines — the data is the same size either way</button>
@@ -698,7 +698,7 @@ __builtin_prefetch(&amp;tape[i + <span class="n">16</span>], <span class="n">0</
     <div class="fb" role="status"></div>
   </div>
 
-  <div class="mcq" data-a="1" data-exp="<b>Almost nothing, because the vectorizer bails on the data-dependent branch.</b> SIMD applies one instruction to every lane, so a per-element <code>if</code> has to become a mask-and-blend before any width is available. Some compilers will do that if-conversion for a simple body; many will not, and <code>-fopt-info-vec</code> will tell you which happened. The fix is to remove the branch yourself — compute both sides and select with a mask — and only then does <code>-march=native</code> have something to widen. The mispredicts are a second, separate cost on top.">
+  <div class="mcq" data-a="0" data-exp="<b>Almost nothing, because the vectorizer bails on the data-dependent branch.</b> SIMD applies one instruction to every lane, so a per-element <code>if</code> has to become a mask-and-blend before any width is available. Some compilers will do that if-conversion for a simple body; many will not, and <code>-fopt-info-vec</code> will tell you which happened. The fix is to remove the branch yourself — compute both sides and select with a mask — and only then does <code>-march=native</code> have something to widen. The mispredicts are a second, separate cost on top.">
     <p class="q"><span>Q2</span>Your hot loop has an <code>if (px[i] &gt; ref)</code> inside it and is fully memory-resident. You add <code>-march=native</code>. What do you expect?</p>
     <div class="opts">
       <button class="opt" type="button">Little or no gain — the data-dependent branch blocks vectorization</button>
@@ -709,7 +709,7 @@ __builtin_prefetch(&amp;tape[i + <span class="n">16</span>], <span class="n">0</
     <div class="fb" role="status"></div>
   </div>
 
-  <div class="mcq" data-a="3" data-exp="<b>Neither — go fix the software tail first.</b> Colocation buys wire time: it shifts p50 and the tail down together by a fixed amount, tens of microseconds in the arena's tiers. A 1.8 ms p99.9 means something in your process occasionally does a thousand times its normal work — an allocation, a page fault, a preemption, an O(window) recompute. Spending the budget on colo while that is live buys a tens-of-µs improvement on a milliseconds-scale problem, and the Latency Board sorts on the tail, so it will barely move your rank. That is precisely the week-14 agenda.">
+  <div class="mcq" data-a="2" data-exp="<b>Neither — go fix the software tail first.</b> Colocation buys wire time: it shifts p50 and the tail down together by a fixed amount, tens of microseconds in the arena's tiers. A 1.8 ms p99.9 means something in your process occasionally does a thousand times its normal work — an allocation, a page fault, a preemption, an O(window) recompute. Spending the budget on colo while that is live buys a tens-of-µs improvement on a milliseconds-scale problem, and the Latency Board sorts on the tail, so it will barely move your rank. That is precisely the week-14 agenda.">
     <p class="q"><span>Q3</span>Your p99.9 is 1.8 ms. The colocated tier would cut roughly 180 µs of wire delay per order and costs real budget. Buy colo, or hand-vectorize the imbalance loop?</p>
     <div class="opts">
       <button class="opt" type="button">Buy colo — 180 µs is the single biggest number available</button>

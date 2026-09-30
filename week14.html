@@ -738,7 +738,7 @@ perf script | stackcollapse-perf.pl | flamegraph.pl > tail.svg</pre></div>
   <h2><span class="secnum">5</span>Check yourself</h2>
   <p class="lead">Three questions, instant feedback, nothing recorded.</p>
 
-  <div class="mcq" data-a="2" data-exp="<b>About 93%.</b> 0.99<sup>7</sup> = 0.932, so roughly one tick in fifteen has at least one slow stage — even though every individual stage would pass a 99% service level with room to spare. This is the arithmetic behind “the tail is the product”: per-stage percentiles do not add, they multiply, and a pipeline gets worse simply by being long. It is also why the fix is usually to remove a stage's variance rather than to shave its median.">
+  <div class="mcq" data-a="1" data-exp="<b>About 93%.</b> 0.99<sup>7</sup> = 0.932, so roughly one tick in fifteen has at least one slow stage — even though every individual stage would pass a 99% service level with room to spare. This is the arithmetic behind “the tail is the product”: per-stage percentiles do not add, they multiply, and a pipeline gets worse simply by being long. It is also why the fix is usually to remove a stage's variance rather than to shave its median.">
     <p class="q"><span>Q1</span>Seven stages, and each is "fast" 99% of the time, independently. What fraction of ticks are fast end to end?</p>
     <div class="opts">
       <button class="opt" type="button">99% — the stages are each 99%, so the path is too</button>
