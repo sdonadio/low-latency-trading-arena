@@ -266,12 +266,12 @@
 <section id="hero">
   <div class="wk">WEEK 5 · 15-WEEK TRACK  ·  SESSION 3 · 9-SESSION TRACK</div>
   <h1>Templates &amp; Generic Programming</h1>
-  <p class="promise">You wrote one pool by hand last week. Write it once instead, and let the compiler
+  <p class="promise">You wrote one pool by hand last week, and priced the virtual call. Write it once instead, and let the compiler
   stamp out a version for every type you need. A template is not a runtime abstraction that happens to
   be fast — it is <em class="hi">code generation</em>, finished before <code>main</code> starts, and the
   machine code it emits is the code you would have written by hand.</p>
   <ul class="you">
-    <li>State the actual cost of a virtual call — <strong>vtable load, indirect branch, and the inlining barrier</strong> — and say which of the three dominates.</li>
+    <li>Compare the cost of a virtual call (covered in <a href="week4.html#poly">week 4</a>) with template dispatch — and say which of <strong>vtable load, indirect branch, and the inlining barrier</strong> dominates.</li>
     <li>Write function and class templates, and predict <em class="hi">exactly which instantiations</em> your code generates and what they cost in bytes.</li>
     <li>Constrain a template with a C++20 <code>concept</code> instead of an <code>enable_if</code>, and read the error message it produces.</li>
     <li>Branch at compile time with <code>if constexpr</code> so the dead arm is never instantiated — and know when a plain <code>if</code> would not have compiled at all.</li>
@@ -293,6 +293,9 @@
   running</em>, from a pointer it has to load. A <strong>template</strong> decides
   <em class="hi">while the program is being compiled</em>, and then there is nothing left to decide.
   Both are polymorphism. Only one of them is free.</p>
+  <p class="sub">Virtual dispatch itself — inheritance, the vptr and vtable, virtual destructors, <code>final</code> —
+  was covered in <a href="week4.html#poly">week 4, Runtime polymorphism</a>
+  (<a href="week4.html#poly-cost">the cost simulator</a>). Here it is the baseline you are comparing against.</p>
 
   <div class="grid2" style="margin-top:16px">
     <div class="panel">
@@ -810,7 +813,7 @@ std::size_t hot_template(<span class="k">const</span> C&amp; c, Buf&amp; b, std:
         <a class="btn" href="https://github.com/sdonadio/hft-cpp-starter-uchicago">9-session track starter</a>
       </div></div>
     <a class="nextcard" href="week4.html"><div class="nl">Previous</div>
-      <div class="nt">← Week 4 · Custom Allocators &amp; Memory Pools</div>
+      <div class="nt">← Week 4 · Custom Allocators, Memory Pools &amp; Runtime Polymorphism</div>
       <div class="nd">You hand-wrote one pool. Now it is <code>Pool&lt;T,N&gt;</code>, once, for everything.</div></a>
     <a class="nextcard" href="week6.html"><div class="nl">Next</div>
       <div class="nt">Week 6 · Compile-Time &amp; Policy-Based Design →</div>

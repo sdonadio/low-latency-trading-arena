@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <link rel="icon" href="data:," />
-<title>Week 4 · Custom Allocators &amp; Memory Pools — Low-Latency Trading Arena</title>
+<title>Week 4 · Custom Allocators, Memory Pools &amp; Runtime Polymorphism — Low-Latency Trading Arena</title>
 <style>
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
   :root{
@@ -224,6 +224,7 @@
     background:rgba(var(--accent-rgb),.14)}
   .verdict .vt{font-size:15px;font-weight:750;color:#fff}
   .kv{display:grid;grid-template-columns:auto 1fr;gap:5px 12px;font-size:12px;color:var(--muted)}
+  .gpoly{grid-template-columns:repeat(2,minmax(0,1fr))}
   .kv b{font-family:var(--mono);font-size:11.5px;color:var(--ink-dim);font-weight:600;white-space:nowrap}
 
   /* ── mobile guard (identical on every page): single column under 720px,
@@ -235,7 +236,7 @@
   @media (max-width:720px){
     .grid2,.grid3,.grid2.narrow-right,.split,.split-r,.codepair,
     .nextgrid,.dash,.toggles,.lanes,.weeknav,.weeks,.roles,.stack,
-    .board,.dsrow,.loopgrid,.ttgrid{
+    .board,.dsrow,.loopgrid,.ttgrid,.gpoly{
       grid-template-columns:minmax(0,1fr)}
     [class*="grid"]>*,.stack>*,.wrap>*,.panel,.panel.tight,.nextcard,.wk,.row>*{min-width:0}
     .split>*,.split-r>*,.grid2>*,.grid3>*,.board>*,.toggles>*,.codepair>*,.stack>*{min-width:0}
@@ -251,21 +252,23 @@
 </head>
 <body>
 
-<nav class="top"><a href="index.html">Low-Latency Trading Arena</a><span class="crumbs"><a href="week3.html">← Week 3</a> · <b>Week 4 · Custom Allocators &amp; Memory Pools</b> · <a href="week5.html">Week 5 →</a></span></nav>
+<nav class="top"><a href="index.html">Low-Latency Trading Arena</a><span class="crumbs"><a href="week3.html">← Week 3</a> · <b>Week 4 · Custom Allocators, Memory Pools &amp; Runtime Polymorphism</b> · <a href="week5.html">Week 5 →</a></span></nav>
 
 <!-- ══════════════ HERO ══════════════ -->
 <section id="hero">
   <div class="wk">WEEK 4 · 15-WEEK TRACK  ·  SESSION 3 · 9-SESSION TRACK</div>
-  <h1>Custom Allocators &amp; Memory Pools</h1>
+  <h1>Custom Allocators, Memory Pools &amp; Runtime Polymorphism</h1>
   <p class="promise">Week 3 taught you to own a lifetime. This week you own the <em class="hi">memory
   itself</em>. <code>malloc</code> is a correct, thread-safe, general-purpose service and it is the single
   largest source of unbounded jitter in a tick-to-trade path — so you take it out and put a pointer
-  swap in its place.</p>
+  swap in its place. Then you put <em class="hi">polymorphic objects</em> in those pools and price the one
+  thing that makes them polymorphic: the virtual call.</p>
   <ul class="you">
     <li>Explain, with numbers, why the <strong>same</strong> <code>new</code> call is 22&#8239;ns on one tick and 18&#8239;µs on the next — and which of those two numbers your deadline actually sees.</li>
     <li>Build a fixed-size <code>Pool</code> with an intrusive free-list: <strong>O(1) allocate, O(1) free, zero fragmentation</strong>, and a documented answer for what happens when it runs dry.</li>
     <li>Choose correctly between a <em class="hi">pool</em>, an <em class="hi">arena</em>, <code>std::pmr</code> and plain <code>new</code> — including the cases where pooling is the wrong answer.</li>
     <li>Say why <code>alignas(64)</code> is a latency decision and not a cosmetic one.</li>
+    <li>Explain how <code>virtual</code> works — <strong>vptr, vtable, virtual destructor</strong> — put a polymorphic object in a pool without leaking, and say what a virtual call costs (<a href="#poly">Part 4</a>).</li>
   </ul>
   <div class="row" style="margin-top:22px">
     <span class="pill acc">Lab: <code>make pool</code> — four tests green, then <code>METRIC|pool_ns_per_op</code></span>
@@ -690,10 +693,261 @@
   </div>
 </section>
 
+<!-- ══════════════ RUNTIME POLYMORPHISM ══════════════ -->
+<section id="poly">
+  <div class="kicker">Part 4</div>
+  <h2><span class="secnum">4</span>Runtime polymorphism — what a virtual call costs</h2>
+  <p class="lead">Pools give you objects of <em class="hi">one</em> type. The moment those objects sit behind a
+  common interface — an <code>Order</code>, a <code>Quoter</code>, a <code>Strategy</code> — you are using
+  <strong>runtime polymorphism</strong>: one call site, several bodies, chosen by a hidden pointer in the object.
+  It is the right tool for an <em class="hi">open</em> set of types and a real cost for a closed one. This part
+  builds the mechanism, prices it, and shows how a virtual object lives inside a pool.</p>
+
+  <div class="grid2 gpoly" style="margin-top:16px">
+    <div class="panel" id="poly-inherit">
+      <h4>Inheritance, and why you hold a <code>Base&amp;</code></h4>
+      <p class="sub">Public inheritance is an is-a claim: a <code>Passive</code> can be used wherever a
+      <code>Quoter</code> is expected. <code>virtual</code> makes the call <em class="hi">late-bound</em> — the
+      object decides, not the static type of the reference. <code>override</code> is checked at compile time;
+      <code>final</code> forbids further overriding and lets the compiler prove the target.</p>
+      <pre class="code">
+<span class="k">struct</span> <span class="b">Quoter</span> {
+  <span class="k">virtual</span> ~Quoter() = <span class="k">default</span>;      <span class="c">// see the rule opposite</span>
+  <span class="k">virtual</span> std::int64_t price(std::int64_t mid) <span class="k">const</span> = <span class="n">0</span>;  <span class="c">// pure</span>
+  <span class="k">virtual void</span> on_fill(std::uint32_t) {}  <span class="c">// hook</span>
+  std::uint32_t id = <span class="n">0</span>;
+};
+<span class="k">struct</span> <span class="b">Passive</span> <span class="k">final</span> : Quoter {
+  std::int64_t price(std::int64_t mid) <span class="k">const override</span> { <span class="k">return</span> mid - <span class="n">1</span>; }
+};
+<span class="k">struct</span> <span class="b">Aggressive</span> : Quoter {
+  std::int64_t price(std::int64_t mid) <span class="k">const override</span> { <span class="k">return</span> mid + <span class="n">1</span>; }
+  <span class="k">void</span> on_fill(std::uint32_t q) <span class="k">override</span> { filled += q; }
+  std::uint32_t filled = <span class="n">0</span>;
+};
+std::int64_t quote(<span class="k">const</span> Quoter&amp; q, std::int64_t mid) {
+  <span class="k">return</span> q.price(mid);   <span class="c">// one call site, any Quoter</span>
+}</pre>
+      <div class="note" style="margin-top:11px"><b>Pass a reference, never a copy.</b>
+      <code>Quoter q = passive;</code> would not even compile here (abstract), and with a concrete base it
+      <em class="hi">slices</em>: only the <code>Quoter</code> part is copied and the call runs the base body.
+      Hold <code>Base&amp;</code> or <code>Base*</code>.</div>
+    </div>
+    <div class="panel" id="poly-dtor">
+      <h4>The virtual-destructor rule</h4>
+      <p class="sub">Any class you <em class="hi">delete or destroy through a base pointer</em> needs a virtual
+      destructor. Without one, only the base destructor runs: everything the derived part owned — a
+      <code>std::string</code> buffer, a file descriptor, a lock — is skipped. That is undefined behaviour, and it
+      usually looks like it works. Rule of thumb: a class with any virtual function gets a virtual destructor.</p>
+      <pre class="code">
+<span class="k">struct</span> <span class="b">Bad</span>  { ~Bad() {} <span class="k">virtual void</span> f() {} };   <span class="c">// dtor NOT virtual</span>
+<span class="k">struct</span> <span class="b">Sub</span> : Bad { std::string tag = std::string(<span class="n">64</span>, <span class="s">'x'</span>); };
+Bad* p = <span class="k">new</span> Sub;
+<span class="k">delete</span> p;          <span class="c">// UB: ~Bad only; Sub::tag never destroyed</span>
+                       <span class="c">// (clang warns: -Wdelete-non-abstract-non-virtual-dtor)</span>
+
+<span class="k">struct</span> <span class="b">Good</span> { <span class="k">virtual</span> ~Good() = <span class="k">default</span>; };   <span class="c">// the fix</span></pre>
+      <p class="sub" style="margin-top:11px">An <em class="hi">abstract interface</em> is pure virtuals plus a virtual
+      destructor and nothing else — no state, no helpers. The same rule applies when you never call
+      <code>delete</code>: a pool that calls <code>p-&gt;~Base()</code> needs the destructor virtual too
+      (third widget below).</p>
+    </div>
+  </div>
+
+  <!-- ── widget A: vtable explorer ── -->
+  <h3 style="margin-top:32px" id="poly-vtable">Interactive · the vptr and the vtable</h3>
+  <p class="sub" style="margin-bottom:12px">Every polymorphic object carries one hidden pointer, the
+  <em class="hi">vptr</em>, to a per-<em>class</em> table of function addresses that lives in read-only memory.
+  Pick a derived class and a method, then step through the call: <code>Base*</code> → object → vptr → vtable slot →
+  function. Layout shown is the Itanium ABI (GCC and Clang on x86-64, 8-byte pointers); the two destructor slots are
+  the complete-object and deleting variants.</p>
+  <div class="split">
+    <div class="stack">
+      <div class="svgwrap">
+        <svg id="vtSvg" viewBox="0 0 660 262" role="img" aria-label="A Base pointer leading to an object whose first field is the vptr, which points at a slot of the class vtable, which holds the address of the function that runs"></svg>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="sl">sizeof with vptr</div><div class="sv acc" id="vtSz">—</div></div>
+        <div class="stat"><div class="sl">sizeof without</div><div class="sv" id="vtSz0">—</div></div>
+        <div class="stat"><div class="sl">Vtable slot</div><div class="sv" id="vtSlot">—</div></div>
+        <div class="stat"><div class="sl">Dependent loads</div><div class="sv warn">2</div></div>
+        <div class="stat"><div class="sl">Devirtualizable</div><div class="sv" id="vtDv">—</div></div>
+      </div>
+      <div class="note" id="vtMsg"></div>
+    </div>
+    <div class="stack">
+      <div class="panel">
+        <h3>Choose the call</h3>
+        <div class="ctl"><label for="vtCls">Dynamic type of the object</label>
+          <select id="vtCls" aria-label="Derived class of the object">
+            <option value="Passive">Passive final : Quoter</option>
+            <option value="Aggressive" selected>Aggressive : Quoter</option>
+            <option value="Skew">SkewQuoter : Quoter (adds a 64-bit field)</option>
+          </select></div>
+        <div class="ctl"><label for="vtM">Method called through <code>Quoter*</code></label>
+          <select id="vtM" aria-label="Virtual method being called">
+            <option value="2">p-&gt;price(mid)</option>
+            <option value="3">p-&gt;on_fill(qty)</option>
+            <option value="1">delete p   (deleting destructor)</option>
+          </select></div>
+        <div class="row">
+          <button class="btn primary" type="button" id="vtStep">Step ▸</button>
+          <button class="btn" type="button" id="vtPlay">Play</button>
+          <button class="btn" type="button" id="vtReset">Reset</button>
+        </div>
+        <div class="log" id="vtLog" style="margin-top:12px"></div>
+      </div>
+      <pre class="code">
+<span class="c">// p-&gt;price(mid) compiles to roughly:</span>
+mov  rax, [rdi]        <span class="c">; 1. vptr out of the object</span>
+mov  rax, [rax + <span class="n">16</span>]   <span class="c">; 2. slot [2] out of the vtable</span>
+call rax               <span class="c">; 3. indirect call: target unknown</span></pre>
+    </div>
+  </div>
+
+  <!-- ── widget B: dispatch cost ── -->
+  <h3 style="margin-top:34px" id="poly-cost">Interactive · what one virtual call costs on the hot path</h3>
+  <p class="sub" style="margin-bottom:12px">The vtable loads are not the bill. The bill is the <em class="hi">indirect
+  branch</em> when the predictor cannot learn the target, and the <em class="hi">inlining you lose</em> because the
+  optimiser cannot see through the call. Numbers are the ones measured in class — one laptop, <code>-O2</code>,
+  10&#8239;M calls — and are order-of-magnitude only: <b>direct/inlined ≈ 0.4&#8239;ns</b>,
+  <b>virtual with one hot target ≈ 2.2&#8239;ns</b>, <b>virtual with four unpredictable targets ≈ 7&#8239;ns</b>,
+  and <code>final</code> with an exact type is back to direct. Measure yours.</p>
+  <div class="split-r">
+    <div class="panel">
+      <h3>Call site</h3>
+      <div class="ctl"><label for="dcN">Distinct targets seen at this call site <b id="dcNV">1</b></label>
+        <input type="range" id="dcN" min="1" max="8" value="1" aria-label="Number of distinct concrete types seen at the call site"/></div>
+      <div class="ctl"><label for="dcP">Predictability of the sequence <b id="dcPV">50%</b></label>
+        <input type="range" id="dcP" min="0" max="100" step="5" value="50" aria-label="How predictable the sequence of targets is, percent"/></div>
+      <div class="ctl"><label for="dcC">Calls per tick <b id="dcCV">200</b></label>
+        <input type="range" id="dcC" min="10" max="2000" step="10" value="200" aria-label="Virtual calls per tick"/></div>
+      <div class="ctl"><label for="dcB">Per-tick budget</label>
+        <select id="dcB" aria-label="Per-tick latency budget">
+          <option value="500">500 ns</option>
+          <option value="1000" selected>1 µs</option>
+          <option value="5000">5 µs</option>
+        </select></div>
+      <div class="row" role="group" aria-label="Devirtualization">
+        <div class="sw" id="dcF">
+          <button type="button" data-f="0" aria-pressed="true">virtual</button>
+          <button type="button" data-f="1" aria-pressed="false"><code>final</code> + exact type</button>
+        </div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn" type="button" id="dcMono">1 hot target</button>
+        <button class="btn" type="button" id="dcMega">4 random targets</button>
+      </div>
+    </div>
+    <div class="stack">
+      <div class="svgwrap" style="padding:14px">
+        <div id="dcBars" style="display:grid;gap:12px"></div>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="sl">ns / call</div><div class="sv acc" id="dcNs">—</div></div>
+        <div class="stat"><div class="sl">vs direct</div><div class="sv warn" id="dcX">—</div></div>
+        <div class="stat"><div class="sl">Mispredict rate</div><div class="sv" id="dcMr">—</div></div>
+        <div class="stat"><div class="sl">Per tick</div><div class="sv" id="dcTick">—</div></div>
+        <div class="stat"><div class="sl">Budget used</div><div class="sv" id="dcBud">—</div></div>
+      </div>
+      <div class="note" id="dcMsg"></div>
+      <p class="sub">Model: <code>ns = 2.2 + mispredict × 6.4</code> for a virtual call, with
+      <code>mispredict = (1 − predictability) × (1 − 1/targets)</code> — four fully random targets give the measured
+      ≈&#8239;7&#8239;ns. Direct is 0.4&#8239;ns. A fitted model, not a law of hardware.</p>
+    </div>
+  </div>
+
+  <!-- ── alternatives map ── -->
+  <h3 style="margin-top:34px" id="poly-alternatives">The alternatives map</h3>
+  <p class="sub" style="margin-bottom:12px">Dynamic dispatch answers one question: <em class="hi">how do I call code I
+  do not know yet?</em> If you do know the type set at build time, there are cheaper answers. Open set = plugins and
+  boundaries; closed set = the handful of message and strategy types you actually ship.</p>
+  <div class="panel"><div class="tablewrap">
+    <table class="t">
+      <thead><tr><th>Mechanism</th><th>Type set</th><th>Cost per call</th><th>Where it belongs</th></tr></thead>
+      <tbody>
+        <tr><td class="n">virtual function</td><td>open</td><td>2 loads + indirect branch, no inlining</td><td>client boundary, config, logging</td></tr>
+        <tr><td class="n">templates / CRTP</td><td>closed</td><td>zero — inlined (weeks 5–6)</td><td>the <code>on_book</code> body, codec, book ops</td></tr>
+        <tr><td class="n">std::variant + std::visit</td><td>closed</td><td>table jump, targets inlined</td><td>the message union off the wire</td></tr>
+        <tr><td class="n">function pointer / std::function</td><td>open</td><td>indirect + type erasure (maybe a heap allocation)</td><td>a callback installed once at startup, never per tick</td></tr>
+        <tr><td class="n">switch on an enum</td><td>closed</td><td>one predictable compare + jump</td><td>the parse boundary: decide the type once, then go static</td></tr>
+      </tbody>
+    </table></div></div>
+  <div class="grid2 gpoly" style="margin-top:14px">
+    <pre class="code">
+<span class="k">using</span> Msg = std::variant&lt;Add, Cancel&gt;;      <span class="c">// closed set, no vptr</span>
+<span class="k">struct</span> Handler {
+  <span class="k">long</span> <span class="k">operator</span>()(<span class="k">const</span> Add&amp; a)    <span class="k">const</span> { <span class="k">return</span> a.px; }
+  <span class="k">long</span> <span class="k">operator</span>()(<span class="k">const</span> Cancel&amp; c) <span class="k">const</span> { <span class="k">return</span> (<span class="k">long</span>)c.id; }
+};
+<span class="k">long</span> h(<span class="k">const</span> Msg&amp; m) { <span class="k">return</span> std::visit(Handler{}, m); }</pre>
+    <div class="note"><b>The stance.</b> Virtuals at the edges — configuration, setup, logging, the boundary a
+    student bot plugs into. Not tick-to-trade. Also: <code>dynamic_cast</code> is a hierarchy walk priced like one
+    (tens of nanoseconds), never a branch; if you reach for it in a hot loop, the type set was closed all along and a
+    <code>variant</code> or a template was the right design. Prefer composition to inheritance, keep interfaces
+    small, write <code>override</code> everywhere and <code>final</code> often.</div>
+  </div>
+
+  <!-- ── widget C: pooled polymorphic object ── -->
+  <h3 style="margin-top:34px" id="poly-pool">Interactive · a polymorphic object living in a pool</h3>
+  <p class="sub" style="margin-bottom:12px">Putting the two halves of the week together. The pool hands out raw
+  bytes; placement <code>new</code> builds a <code>Limit</code> in them; you talk to it through an
+  <code>Order*</code>; and reclaiming it means calling <code>p-&gt;~Order()</code> — which is only correct if that
+  destructor is <em class="hi">virtual</em>. Step through the lifecycle, then flip the switch and watch what leaks.</p>
+  <div class="split">
+    <div class="stack">
+      <div class="panel">
+        <div class="row" style="margin-bottom:12px">
+          <span class="sub"><b style="color:var(--ink)">Order::~Order()</b> is</span>
+          <div class="sw" id="lcV">
+            <button type="button" data-v="1" aria-pressed="true">virtual</button>
+            <button type="button" data-v="0" aria-pressed="false">forgotten (non-virtual)</button>
+          </div>
+        </div>
+        <div id="lcSlots" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px"></div>
+        <div class="stats" style="margin-top:14px">
+          <div class="stat"><div class="sl">Pool slots free</div><div class="sv ok" id="lcFree">4</div></div>
+          <div class="stat"><div class="sl">String buffers live</div><div class="sv" id="lcHeap">0</div></div>
+          <div class="stat"><div class="sl">Leaked (cumulative)</div><div class="sv" id="lcLeak">0 B</div></div>
+        </div>
+        <div class="row" style="margin-top:14px">
+          <button class="btn primary" type="button" id="lcStep">Next step ▸</button>
+          <button class="btn" type="button" id="lcCycles">Run 100 cycles</button>
+          <button class="btn" type="button" id="lcReset">Reset</button>
+        </div>
+        <div class="note" id="lcMsg" style="margin-top:12px"></div>
+      </div>
+      <div class="panel tight"><h3>Lifecycle log · newest first</h3><div class="log" id="lcLog"></div></div>
+    </div>
+    <div class="stack">
+      <pre class="code">
+<span class="k">struct</span> <span class="b">Order</span> {
+  <span class="k">virtual</span> ~Order() = <span class="k">default</span>;      <span class="c">// the switch above</span>
+  <span class="k">int</span> id = <span class="n">0</span>;
+};
+<span class="k">struct</span> <span class="b">Limit</span> : Order {
+  std::string tag = std::string(<span class="n">64</span>, <span class="s">'x'</span>);   <span class="c">// owns a heap buffer</span>
+  ~Limit() <span class="k">override</span> { std::puts(<span class="s">"~Limit"</span>); }
+};
+<span class="k">struct</span> <span class="b">Pool</span> {
+  <span class="k">alignas</span>(std::max_align_t) <span class="k">unsigned char</span> slab[<span class="k">sizeof</span>(Limit)];
+  Order* alloc()          { <span class="k">return new</span> (slab) Limit{}; }  <span class="c">// placement new</span>
+  <span class="k">void</span>   release(Order* p) { p-&gt;~Order(); }              <span class="c">// virtual: ~Limit, then ~Order</span>
+};
+<span class="k">int</span> main() { Pool pl; Order* o = pl.alloc(); pl.release(o); }   <span class="c">// prints ~Limit</span></pre>
+      <div class="note"><b>Two rules, one habit.</b> Construct with placement <code>new</code>, destroy with an
+      explicit destructor call through a base that has a <em class="hi">virtual</em> destructor, then return the slot.
+      Never <code>delete</code> a pool pointer. Better still: hand out a <code>unique_ptr</code> with a pool deleter
+      so the pair cannot be forgotten. A polymorphic type also costs 8 bytes per object for the vptr —
+      budget the pool slot for <code>sizeof(Derived)</code>, the largest one.</div>
+    </div>
+  </div>
+</section>
+
 <!-- ══════════════ PITFALLS ══════════════ -->
 <section id="pitfalls">
-  <div class="kicker">Part 4</div>
-  <h2><span class="secnum">4</span>Five ways this goes wrong</h2>
+  <div class="kicker">Part 5</div>
+  <h2><span class="secnum">5</span>Five ways this goes wrong</h2>
   <p class="lead">These are the five that cost marks on HW4, every time. Open them.</p>
 
   <details class="pit"><summary>Falling back to <code>new</code> when the pool is empty</summary>
@@ -776,9 +1030,9 @@
 
 <!-- ══════════════ CHECK ══════════════ -->
 <section id="check">
-  <div class="kicker">Part 5</div>
-  <h2><span class="secnum">5</span>Check yourself</h2>
-  <p class="lead">Three questions, instant feedback, nothing recorded.</p>
+  <div class="kicker">Part 6</div>
+  <h2><span class="secnum">6</span>Check yourself</h2>
+  <p class="lead">Four questions, instant feedback, nothing recorded.</p>
 
   <div class="mcq" data-a="2" data-exp="<b>Return nullptr and take a policy you wrote down.</b> The pool exists to make the cost of allocation the same on every call. Falling back to <code>new</code> puts a syscall-capable path back into your busiest tick — the fallback fires exactly during the burst that filled the pool, so p99.9 gets worse, not better. Growing the slab is the same mistake with an extra copy. Blocking is the worst of the three: an unbounded wait is precisely what you removed. The right answer is boring — hand back <code>nullptr</code>, increment an exhaustion counter, and let the caller drop, reuse the oldest, or degrade. Then treat any non-zero counter as a sizing defect to fix before the next session.">
     <p class="q"><span>Q1</span>Your <code>ObjectPool&lt;Order,4096&gt;</code> runs dry in the middle of a tick. Which response preserves the latency guarantee you built it for?</p>
@@ -812,12 +1066,22 @@
     </div>
     <div class="fb" role="status"></div>
   </div>
+  <div class="mcq" data-a="0" data-exp="<b>Only <code>~Order()</code> runs, and it is undefined behaviour.</b> A call through a base pointer to a non-virtual destructor is resolved statically, from the pointer's type — exactly the rule that makes <code>delete p</code> through a non-virtual base undefined. In practice the derived destructor is skipped, so the <code>std::string</code> keeps its heap buffer with nothing owning it, the slot is reused normally and every test still passes. The fix is one word: <code>virtual ~Order() = default;</code>. Then <code>p-&gt;~Order()</code> dispatches through the vtable's destructor slot and runs <code>~Limit</code> first. (<code>final</code> on <code>Limit</code> would not save you here: the pointer's static type is <code>Order*</code>.)">
+    <p class="q"><span>Q4</span>A pool hands out <code>Order*</code> pointing at a <code>Limit</code> that owns a <code>std::string</code>. <code>Order</code>'s destructor is not virtual. <code>release()</code> calls <code>p-&gt;~Order()</code>. What runs?</p>
+    <div class="opts">
+      <button class="opt" type="button">Only <code>~Order</code> — the string buffer leaks, and the behaviour is undefined</button>
+      <button class="opt" type="button"><code>~Limit</code> then <code>~Order</code>, because the object is really a <code>Limit</code></button>
+      <button class="opt" type="button">Nothing — a placement-new object is never destroyed</button>
+      <button class="opt" type="button">A compile error, because <code>Order</code> is polymorphic</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
 </section>
 
 <!-- ══════════════ NEXT ══════════════ -->
 <section id="next">
-  <div class="kicker">Part 6</div>
-  <h2><span class="secnum">6</span>Do the work</h2>
+  <div class="kicker">Part 7</div>
+  <h2><span class="secnum">7</span>Do the work</h2>
   <div class="grid2" style="margin-top:14px">
     <div class="panel"><h4>In the lab (~45–60 min)</h4><ul class="plain">
       <li><code>make pool</code> — the stub compiles and every test fails, because <code>alloc()</code>
@@ -827,6 +1091,8 @@
       <li>Green on <code>pool_basic</code>, <code>pool_full</code>, <code>pool_reuse</code>,
       <code>pool_pattern</code>, then read the <code>METRIC|pool_ns_per_op</code> line.</li>
       <li>Sketch the per-tick arena in a scratch file and argue when it beats the free-list pool.</li>
+      <li>Polymorphism drill: write <code>Quoter</code> with a virtual destructor, time a virtual call against a
+      direct one with one target and with four, and confirm <code>final</code> brings it back to direct.</li>
     </ul></div>
     <div class="panel"><h4>HW4 &amp; Project Phase 1</h4><ul class="plain">
       <li><b>HW4:</b> <code>include/pool.hpp</code> — O(1) alloc/free, correct slot size and alignment,
@@ -835,6 +1101,8 @@
       p50, p99, p99.9 and max for both — not the mean — and argue why yours is stable.</li>
       <li><b>Phase 1:</b> every per-tick <code>new</code> in <code>on_book</code> comes from a pool or an
       arena; scratch on a monotonic buffer, <code>release()</code> at tick end.</li>
+      <li><b>Polymorphism:</b> one pooled polymorphic type (placement <code>new</code>, virtual destructor,
+      explicit <code>~Base()</code>) — and a written note on why the tick-to-trade path itself stays non-virtual.</li>
       <li><b>Prove it:</b> re-run the latency replay and show p99.9 down against your Week-2 baseline.</li>
     </ul></div>
   </div>
@@ -853,7 +1121,7 @@
       <div class="nd">RAII told you who frees what. This week decided where it came from.</div></a>
     <a class="nextcard" href="week5.html"><div class="nl">Next</div>
       <div class="nt">Week 5 · Templates &amp; Generic Programming →</div>
-      <div class="nd">You wrote one pool by hand. Now write it once and let the compiler stamp out a version for every type — at zero runtime cost.</div></a>
+      <div class="nd">You priced runtime polymorphism. Now get the same generality at compile time — one pool, written once, stamped out for every type at zero runtime cost.</div></a>
   </div>
 </section>
 
@@ -862,7 +1130,7 @@
 <script>
 "use strict";
 /* ════════════════════════════════════════════════════════════════
-   Week 4 — Custom Allocators & Memory Pools
+   Week 4 — Custom Allocators, Memory Pools & Runtime Polymorphism
    ════════════════════════════════════════════════════════════════ */
 var $ = function (id) { return document.getElementById(id); };
 /* SVG namespace taken from the document so no absolute URL appears in this file */
@@ -1505,6 +1773,251 @@ Array.prototype.forEach.call(document.querySelectorAll("#wnLife,#wnSize,#wnBound
 });
 $("wnGo").addEventListener("click", wnRecommend);
 wnRecommend();
+
+/* ════ 7. RUNTIME POLYMORPHISM ════════════════════════════════ */
+var RM = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+/* ── 7a. vtable explorer ── */
+var VT_CLS = {
+  Passive:    { name: "Passive",    fin: true,  size: 16, size0: 4,
+    lay: [["vptr", 8, 1], ["id", 4, 0], ["pad", 4, 2]],
+    vt: [["~Passive() [complete]", "Passive::~Passive()"], ["~Passive() [deleting]", "Passive::~Passive()"],
+         ["price", "Passive::price"], ["on_fill", "Quoter::on_fill", "inherited, not overridden"]] },
+  Aggressive: { name: "Aggressive", fin: false, size: 16, size0: 8,
+    lay: [["vptr", 8, 1], ["id", 4, 0], ["filled", 4, 0]],
+    vt: [["~Aggressive() [complete]", "Aggressive::~Aggressive()"], ["~Aggressive() [deleting]", "Aggressive::~Aggressive()"],
+         ["price", "Aggressive::price"], ["on_fill", "Aggressive::on_fill"]] },
+  Skew:       { name: "SkewQuoter", fin: false, size: 24, size0: 16,
+    lay: [["vptr", 8, 1], ["id", 4, 0], ["pad", 4, 2], ["skew", 8, 0]],
+    vt: [["~SkewQuoter() [complete]", "SkewQuoter::~SkewQuoter()"], ["~SkewQuoter() [deleting]", "SkewQuoter::~SkewQuoter()"],
+         ["price", "SkewQuoter::price"], ["on_fill", "Quoter::on_fill", "inherited, not overridden"]] }
+};
+var VT_SHORT = ["~dtor [complete]", "~dtor [deleting]", "price", "on_fill"];
+var VT = { step: 0, timer: null };
+function vtStop() { if (VT.timer) { clearInterval(VT.timer); VT.timer = null; $("vtPlay").textContent = "Play"; } }
+function vtDraw() {
+  var c = VT_CLS[$("vtCls").value], slot = +$("vtM").value, st = VT.step;
+  var tgt = c.vt[slot];
+  var svg = $("vtSvg"), i, y; clear(svg);
+  var HL = C.acc2, DIM = C.line;
+  function box(x, yy, w, h, on, fill) {
+    svg.appendChild(mk("rect", { x: x, y: yy, width: w, height: h, rx: 5, fill: fill || C.p2,
+      stroke: on ? HL : "#333a47", "stroke-width": on ? 2 : 1 }));
+  }
+  function arrow(x1, y1, x2, y2, on) {
+    svg.appendChild(mk("line", { x1: x1, y1: y1, x2: x2, y2: y2, stroke: on ? HL : DIM, "stroke-width": on ? 2.2 : 1.4 }));
+    var a = Math.atan2(y2 - y1, x2 - x1), L = 7;
+    svg.appendChild(mk("polygon", { fill: on ? HL : DIM, points: [x2, y2,
+      x2 - L * Math.cos(a - 0.45), y2 - L * Math.sin(a - 0.45),
+      x2 - L * Math.cos(a + 0.45), y2 - L * Math.sin(a + 0.45)].join(",") }));
+  }
+  /* column titles */
+  svg.appendChild(txt(8, 16, "Quoter* p", 10, C.mute, null, "700"));
+  svg.appendChild(txt(126, 16, "object · " + c.name, 10, C.mute, null, "700"));
+  svg.appendChild(txt(330, 16, "vtable for " + c.name + " (.rodata)", 10, C.mute, null, "700"));
+  svg.appendChild(txt(540, 16, "code", 10, C.mute, null, "700"));
+  /* p */
+  box(8, 100, 84, 34, st >= 1, st >= 1 ? "rgba(124,58,237,.3)" : C.p2);
+  svg.appendChild(txt(50, 121, "p", 12, C.ink, "middle", "700"));
+  /* object */
+  var oy = 34, rowH = 28;
+  for (i = 0; i < c.lay.length; i++) {
+    var f = c.lay[i], isV = f[2] === 1, on = isV && st >= 2;
+    svg.appendChild(mk("rect", { x: 126, y: oy + i * rowH, width: 160, height: rowH - 2, rx: 3,
+      fill: isV ? (on ? "rgba(124,58,237,.55)" : "rgba(124,58,237,.25)") : f[2] === 2 ? "#161a21" : C.p2,
+      stroke: on ? HL : "#333a47", "stroke-width": on ? 2 : 1 }));
+    svg.appendChild(txt(134, oy + i * rowH + 17, (f[2] === 2 ? "(padding)" : f[0]), 10.5,
+      f[2] === 2 ? C.dim : C.ink, null, isV ? "700" : "400"));
+    svg.appendChild(txt(278, oy + i * rowH + 17, f[1] + " B", 10, C.mute, "end"));
+  }
+  svg.appendChild(txt(126, oy + c.lay.length * rowH + 12, "sizeof = " + c.size + " B", 10, C.acc2, null, "700"));
+  svg.appendChild(txt(126, oy + c.lay.length * rowH + 25, "(" + c.size0 + " B without the vptr)", 9.5, C.mute));
+  arrow(92, 117, 126, 48, st >= 1);
+  /* vtable */
+  var vy = 34, vh = 30;
+  for (i = 0; i < 4; i++) {
+    var on2 = st >= 3 && i === slot;
+    svg.appendChild(mk("rect", { x: 330, y: vy + i * vh, width: 190, height: vh - 2, rx: 3,
+      fill: on2 ? "rgba(124,58,237,.55)" : C.p2, stroke: on2 ? HL : "#333a47", "stroke-width": on2 ? 2 : 1 }));
+    svg.appendChild(txt(338, vy + i * vh + 19, "[" + i + "] " + VT_SHORT[i], 10, on2 ? "#fff" : C.mute, null, on2 ? "700" : "400"));
+  }
+  svg.appendChild(txt(330, vy + 4 * vh + 12, "one table per class, shared by every object", 9.5, C.dim));
+  arrow(286, oy + 14, 330, vy + slot * vh + 14, st >= 2);
+  /* function */
+  var on3 = st >= 4;
+  box(548, 34 + slot * vh - 6, 104, 44, on3, on3 ? "rgba(63,185,80,.2)" : C.p2);
+  svg.appendChild(txt(600, 34 + slot * vh + 12, tgt[1].split("::")[0] + "::", 9, on3 ? C.ok : C.dim, "middle", "700"));
+  svg.appendChild(txt(600, 34 + slot * vh + 26, tgt[1].split("::").slice(1).join("::"), 9, on3 ? C.ok : C.dim, "middle", "700"));
+  arrow(520, vy + slot * vh + 14, 548, 34 + slot * vh + 16, st >= 3);
+  /* footer */
+  var y2 = 200;
+  var msgs = ["1  static type is Quoter* — the compiler knows only the slot number, not the target",
+    "2  load the vptr from offset 0 of the object  (load #1)",
+    "3  load slot [" + slot + "] from the vtable  (load #2, depends on #1)",
+    "4  indirect call to " + tgt[1] + "  — target unknown until now"];
+  for (i = 0; i < 4; i++) {
+    svg.appendChild(txt(8, y2 + i * 15, (st === i + 1 ? "▶ " : "  ") + msgs[i], 10, st === i + 1 ? C.acc2 : (st > i + 1 ? C.mute : C.dim), null, st === i + 1 ? "700" : "400"));
+  }
+  $("vtSz").textContent = c.size + " B";
+  $("vtSz0").textContent = c.size0 + " B";
+  $("vtSlot").textContent = "[" + slot + "] +" + (slot * 8);
+  $("vtDv").textContent = c.fin ? "yes (final)" : "no";
+  $("vtDv").className = "sv " + (c.fin ? "ok" : "warn");
+  $("vtMsg").innerHTML = (c.fin
+    ? "<b>Passive is <code>final</code>.</b> If the call site holds a <code>Passive&amp;</code> — or the compiler can see the exact type — no other body is possible, so it emits a direct call and can inline it. Through a <code>Quoter&amp;</code> it still goes via the vtable unless the optimiser can prove the dynamic type."
+    : "<b>Not final.</b> A <code>Quoter*</code> could point at any subclass, including ones not written yet, so the compiler must emit the two loads and the indirect call.") +
+    (tgt[2] ? " Slot [" + slot + "] is <em class='hi'>" + tgt[2] + "</em>: the derived vtable simply copies the base's function address." : "") +
+    (slot === 1 ? " Deleting through a base pointer picks the derived destructor only because the destructor is virtual." : "") +
+    " Adding the first virtual function grew every object by 8 B (plus padding); with a 4-byte <code>id</code> alone the object was " + c.size0 + " B.";
+  var lg = $("vtLog"), h = "";
+  for (i = 1; i <= st; i++) h = "<div class='" + (i === st ? "hl" : "") + "'>" + esc(msgs[i - 1]) + "</div>" + h;
+  lg.innerHTML = h || "<div>Press Step to start the call.</div>";
+  $("vtStep").disabled = st >= 4;
+}
+function vtStep() { if (VT.step < 4) { VT.step++; vtDraw(); } if (VT.step >= 4) vtStop(); }
+$("vtStep").addEventListener("click", function () { vtStop(); vtStep(); });
+$("vtPlay").addEventListener("click", function () {
+  if (VT.timer) { vtStop(); return; }
+  if (RM) { VT.step = 4; vtDraw(); return; }   /* reduced motion: jump to the result */
+  if (VT.step >= 4) VT.step = 0;
+  vtDraw();
+  $("vtPlay").textContent = "Pause";
+  VT.timer = setInterval(vtStep, 900);
+});
+$("vtReset").addEventListener("click", function () { vtStop(); VT.step = 0; vtDraw(); });
+$("vtCls").addEventListener("change", function () { vtStop(); VT.step = 0; vtDraw(); });
+$("vtM").addEventListener("change", function () { vtStop(); VT.step = 0; vtDraw(); });
+vtDraw();
+
+/* ── 7b. dispatch-cost simulator ── */
+var DC = { n: 1, p: 50, calls: 200, budget: 1000, fin: 0 };
+var NS_DIRECT = 0.4, NS_VIRT = 2.2, NS_MISS = 6.4;
+function dcModel() {
+  if (DC.fin) return { ns: NS_DIRECT, miss: 0, virt: false };
+  var miss = (1 - DC.p / 100) * (1 - 1 / DC.n);
+  return { ns: NS_VIRT + miss * NS_MISS, miss: miss, virt: true };
+}
+function dcBar(label, ns, max, color, note) {
+  return "<div><div class='sub' style='display:flex;justify-content:space-between;gap:10px'><b style='color:var(--ink)'>" + label +
+    "</b><span class='mono'>" + ns.toFixed(2) + " ns</span></div>" +
+    "<div style='height:16px;background:var(--panel);border:1px solid var(--line);border-radius:5px;overflow:hidden;margin-top:4px'>" +
+    "<div style='height:100%;width:" + Math.max(1.5, ns / max * 100) + "%;background:" + color + ";transition:width .25s'></div></div>" +
+    (note ? "<div class='sub' style='font-size:11px;margin-top:3px'>" + note + "</div>" : "") + "</div>";
+}
+function dcDraw() {
+  var m = dcModel(), max = 7.2;
+  $("dcNV").textContent = DC.fin ? "1 (exact type)" : DC.n;
+  $("dcPV").textContent = DC.p + "%";
+  $("dcCV").textContent = DC.calls;
+  $("dcN").disabled = !!DC.fin;
+  $("dcP").disabled = !!DC.fin || DC.n === 1;
+  var base = NS_VIRT, extra = m.ns - NS_VIRT;
+  $("dcBars").innerHTML =
+    dcBar("direct call (inlined)", NS_DIRECT, max, "var(--ok)", "the optimiser sees the body: constants fold, arguments stay in registers") +
+    dcBar(m.virt ? "virtual call at this site" : "<code>final</code> + exact type → devirtualised", m.ns, max,
+      m.virt ? (m.miss > 0.15 ? "var(--bad)" : m.miss > 0.02 ? "var(--warn)" : "var(--accent-2)") : "var(--ok)",
+      m.virt ? "2.2 ns floor: two loads, one predicted indirect branch, no inlining" + (extra > 0.01 ? " + " + extra.toFixed(2) + " ns mispredicts" : "")
+             : "the compiler proved the only possible target and emitted a direct call");
+  var per = m.ns * DC.calls, pct = per / DC.budget * 100;
+  $("dcNs").textContent = m.ns.toFixed(2) + " ns";
+  $("dcX").textContent = (m.ns / NS_DIRECT).toFixed(1) + "×";
+  $("dcMr").textContent = (m.miss * 100).toFixed(0) + "%";
+  $("dcTick").textContent = per < 1000 ? per.toFixed(0) + " ns" : (per / 1000).toFixed(2) + " µs";
+  $("dcBud").textContent = pct.toFixed(0) + "%";
+  $("dcBud").className = "sv " + (pct > 60 ? "bad" : pct > 25 ? "warn" : "ok");
+  var saved = (m.ns - NS_DIRECT) * DC.calls;
+  $("dcMsg").innerHTML = DC.fin
+    ? "<b>Devirtualised.</b> <code>final</code> only helps where the compiler can see the exact type at the call site — a <code>Passive&amp;</code>, not a <code>Quoter&amp;</code> that merely happens to hold one. Cost is the direct-call cost."
+    : (DC.n === 1
+      ? "<b>Monomorphic site.</b> The predictor gets the target right every time, so the branch is nearly free — and virtual is still " + (m.ns / NS_DIRECT).toFixed(1) + "× a direct call, because the body cannot be inlined. This is the case people mean when they say virtual is cheap, and it is still " + saved.toFixed(0) + " ns per tick on the table."
+      : (m.miss > 0.15
+        ? "<b>Unpredictable targets.</b> Each mispredict costs roughly 15–20 cycles (about 6 ns here). " + DC.calls + " calls now consume " + pct.toFixed(0) + "% of a " + (DC.budget >= 1000 ? DC.budget / 1000 + " µs" : DC.budget + " ns") + " tick. Sort by type, batch by type, or make the set closed and use a template or <code>std::variant</code>."
+        : "<b>Several targets, but predictable.</b> Sorted or repeating sequences let the predictor learn the pattern, so the mispredict term stays small. The moment the mix becomes data-dependent, it will not."));
+}
+Array.prototype.forEach.call($("dcF").querySelectorAll("button"), function (b) {
+  b.addEventListener("click", function () {
+    DC.fin = +b.getAttribute("data-f");
+    Array.prototype.forEach.call($("dcF").querySelectorAll("button"), function (x) {
+      x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+    dcDraw();
+  });
+});
+$("dcN").addEventListener("input", function () { DC.n = +this.value; dcDraw(); });
+$("dcP").addEventListener("input", function () { DC.p = +this.value; dcDraw(); });
+$("dcC").addEventListener("input", function () { DC.calls = +this.value; dcDraw(); });
+$("dcB").addEventListener("change", function () { DC.budget = +this.value; dcDraw(); });
+function dcSet(n, p) { DC.n = n; DC.p = p; $("dcN").value = n; $("dcP").value = p; dcDraw(); }
+$("dcMono").addEventListener("click", function () { dcSet(1, 100); });
+$("dcMega").addEventListener("click", function () { dcSet(4, 0); });
+dcDraw();
+
+/* ── 7c. pooled polymorphic object lifecycle ── */
+var LC = { virt: 1, step: 0, leaked: 0, log: [] };
+var LC_STEPS = ["pool.alloc(): pop a raw slot", "new (slab) Limit{}: build the object; the string allocates 64 B",
+  "o->id = 7 through Order*", "pool.release(o): p->~Order()", "slot goes back on the free list"];
+function lcLog(msg, cls) { LC.log.unshift([msg, cls || ""]); if (LC.log.length > 12) LC.log.pop(); }
+function lcDraw() {
+  var s = LC.step, i;
+  var cells = "";
+  var used = s >= 1 && s <= 4;               /* slot 0 in use between alloc and free */
+  var built = s >= 2 && s <= 3;
+  for (i = 0; i < 4; i++) {
+    var u = i === 0 && used;
+    var inner = i === 0 && u ? (built ? "<b>Limit</b><br><span class='mono' style='font-size:10.5px'>vptr · id · string→heap</span>"
+      : "<b>raw bytes</b><br><span class='mono' style='font-size:10.5px'>no object yet</span>")
+      : (i === 0 && s === 4 ? "<b>destroyed</b><br><span class='mono' style='font-size:10.5px'>bytes remain</span>" : "<span class='mono' style='font-size:10.5px'>free</span>");
+    cells += "<div style='min-height:58px;padding:8px;border-radius:8px;font-size:11.5px;color:var(--ink);border:1px solid " +
+      (u ? "var(--accent-2)" : "var(--line)") + ";background:" + (u ? "rgba(124,58,237,.28)" : "var(--panel2)") + "'>slot " + i + "<br>" + inner + "</div>";
+  }
+  $("lcSlots").innerHTML = cells;
+  var heapLive = (s >= 2 && s <= 3) ? 1 : 0;
+  if (s >= 4 && !LC.virt) heapLive = 1;      /* the buffer outlived the object */
+  $("lcFree").textContent = used ? 3 : 4;
+  $("lcHeap").textContent = heapLive;
+  $("lcHeap").className = "sv " + (heapLive && s >= 4 ? "bad" : "");
+  $("lcLeak").textContent = LC.leaked + " B";
+  $("lcLeak").className = "sv " + (LC.leaked ? "bad" : "ok");
+  var h = "", j;
+  for (j = 0; j < LC.log.length; j++) h += "<div class='" + LC.log[j][1] + "'>" + LC.log[j][0] + "</div>";
+  $("lcLog").innerHTML = h || "<div>Press Next step to allocate a slot.</div>";
+  $("lcStep").textContent = s >= 5 ? "Again ▸" : "Next step ▸";
+  $("lcMsg").innerHTML = s === 0 ? "Idle. The pool has four free slots; nothing has been constructed."
+    : s === 4 && !LC.virt ? "<b>The destructor call goes to <code>~Order</code> only.</b> <code>~Limit</code> never runs, so the <code>std::string</code> keeps its 64-byte buffer with no owner. Strictly this is undefined behaviour, just like <code>delete</code> through a non-virtual base; in practice the derived part is skipped. Tests pass, the slot is reused, and the leak grows every cycle."
+    : s === 4 ? "<b>The vtable's destructor slot runs <code>~Limit</code> first</b> (freeing the string buffer), then <code>~Order</code>. The slot's bytes are still there, but there is no object in them."
+    : s === 5 ? "Slot returned in O(1). Live string buffers: " + (LC.virt ? "0" : "one more leaked (" + LC.leaked + " B total)") + "."
+    : "<b>Step " + s + " of 5.</b> " + LC_STEPS[s - 1] + ".";
+}
+function lcStep() {
+  if (LC.step >= 5) LC.step = 0;
+  LC.step++;
+  var s = LC.step;
+  lcLog(esc(LC_STEPS[s - 1]), s === 4 && !LC.virt ? "bad" : s === 4 ? "ok" : "hl");
+  if (s === 4) {
+    if (LC.virt) lcLog("virtual dispatch: ~Limit runs, then ~Order. string buffer freed.", "ok");
+    else { lcLog("non-virtual: only ~Order runs. ~Limit skipped, 64 B leaked (UB).", "bad"); LC.leaked += 64; }
+  }
+  lcDraw();
+}
+function lcReset() { LC.step = 0; LC.leaked = 0; LC.log = []; lcDraw(); }
+$("lcStep").addEventListener("click", lcStep);
+$("lcReset").addEventListener("click", lcReset);
+$("lcCycles").addEventListener("click", function () {
+  var n = 100;
+  if (!LC.virt) LC.leaked += 64 * n;
+  LC.step = 0;
+  lcLog("ran " + n + " alloc/construct/release cycles: " + (LC.virt ? "0 B leaked" : (64 * n) + " B leaked (" + n + " orphaned buffers)"), LC.virt ? "ok" : "bad");
+  lcDraw();
+});
+Array.prototype.forEach.call($("lcV").querySelectorAll("button"), function (b) {
+  b.addEventListener("click", function () {
+    LC.virt = +b.getAttribute("data-v");
+    Array.prototype.forEach.call($("lcV").querySelectorAll("button"), function (x) {
+      x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+    lcReset();
+  });
+});
+lcDraw();
 
 /* ── MCQ engine (shared across week pages) ───────────────────── */
 Array.prototype.forEach.call(document.querySelectorAll(".mcq"), function (q) {
