@@ -372,9 +372,9 @@
   <div class="kicker">The learning path</div>
   <h2>Fifteen topics, two tracks, identical content</h2>
   <p class="lead">The material is taught in two formats. A <strong>15-week track</strong> gives each topic
-  its own session; a condensed <strong>9-session track</strong> pairs adjacent topics into one longer
-  meeting. Nothing is dropped and nothing is reordered — the pairs are exactly the ones that share a lab.
-  Flip the switch and watch the fifteen cards regroup.</p>
+  its own session; a condensed <strong>9-session track</strong> groups them into nine longer meetings,
+  following the order the language is taught in: pointers, then classes, then polymorphism, then templates.
+  Nothing is dropped. Flip the switch and watch the fifteen cards regroup.</p>
 
   <div class="row" style="margin-top:16px" role="group" aria-label="Choose which track to view the map in">
     <div class="sw" id="trackSw">
@@ -386,11 +386,13 @@
 
   <div id="mapHost"></div>
 
-  <div class="note" style="margin-top:18px"><b>Reading the pairs.</b> Weeks 2+3 are one cost-model story
-  (what an operation costs, then who owns the memory); 4+5 are the two halves of “stop calling the
-  allocator”; 6+7 turn compile-time machinery into a real order book; 8+9 are the O(1) data structures and
-  the memory model they need; 11+12 are the wire and the I/O that carries it; 13+14 are the last
-  microseconds and the tail they hide in. Weeks 1, 10 and 15 stand alone in both tracks.</div>
+  <div class="note" style="margin-top:18px"><b>Reading the 9-session track.</b> Two pages are split
+  across sessions. Week 3 serves Session 3 (classes, RAII, the Rule of Five) and Session 4 (smart
+  pointers). Week 4 serves Session 4 (runtime polymorphism, its second half) and Session 6 (allocators and
+  pools, its first half). Otherwise the groups run in order: 5+6 are templates and compile-time design;
+  4+7+8 are the pool, the order book built on it and the O(1) structures around it; 9+10 are the memory
+  model and the lock-free ring; 11+12+13 are the wire, the I/O and the machine; 14+15 are the tail and the
+  tournament.</div>
 </section>
 
 <!-- ══════════════ TIME SCALES ══════════════ -->
@@ -663,15 +665,15 @@ var WEEKS = [
     g: ["cross-venue", "stale quotes", "message budget", "tournament"] }
 ];
 var SESSIONS = [
-  { s: 1, w: [1],     n: "The market and the race",          d: "What you are trading in, and what “fast” buys you." },
-  { s: 2, w: [2, 3],  n: "Cost model and ownership",         d: "What an operation costs, then who owns the memory it touches." },
-  { s: 3, w: [4, 5],  n: "Allocators, polymorphism and generic code", d: "Stop calling the allocator, price the virtual call, then write it once for every type." },
-  { s: 4, w: [6, 7],  n: "Compile-time design and the book", d: "Push work to compile time, then build the order book with it." },
-  { s: 5, w: [8, 9],  n: "Complexity and the memory model",  d: "O(1) per tick, and what one core promises another." },
-  { s: 6, w: [10],    n: "Lock-free pipelines",              d: "The SPSC ring that carries every tick in your system." },
-  { s: 7, w: [11, 12],n: "The wire and the I/O",             d: "Market data on the network, and orders back out of it." },
-  { s: 8, w: [13, 14],n: "Bypass, SIMD and the tail",        d: "The last microseconds, and how to prove you found them." },
-  { s: 9, w: [15],    n: "Multi-venue and the tournament",   d: "Races across venues, under exchange constraints." }
+  { s: 1, w: [1],          n: "The market and the race",               d: "What you are trading in, and what “fast” buys you." },
+  { s: 2, w: [2],          n: "Pointers and the cost of memory",       d: "What an operation costs, and what a pointer really points at." },
+  { s: 3, w: [3],          n: "Classes, RAII and the Rule of Five",     d: "Encapsulation and inheritance, and who owns the memory." },
+  { s: 4, w: ["4#poly", 3], n: "Polymorphism and smart ownership",     d: "Price the virtual call, then hand ownership to a smart pointer." },
+  { s: 5, w: [5, 6],       n: "Templates, compile-time and CRTP",      d: "Write it once for every type, then push the work to compile time." },
+  { s: 6, w: [4, 7, 8],    n: "Memory pools and the order book",       d: "Stop calling the allocator, then build an O(1) book on top of the pool." },
+  { s: 7, w: [9, 10],      n: "Concurrency, from atomics to lock-free", d: "What one core promises another, and the SPSC ring that carries every tick." },
+  { s: 8, w: [11, 12, 13], n: "The wire and the machine",              d: "Market data on the network, orders back out, and the last microseconds." },
+  { s: 9, w: [14, 15],     n: "The tail and the tournament",           d: "Prove where the tail is, then race across venues." }
 ];
 
 function artSvg(kind) {
@@ -748,9 +750,9 @@ function artSvg(kind) {
   return s;
 }
 
-function card(w) {
+function card(w, anchor) {
   var a = document.createElement("a");
-  a.className = "wk"; a.href = "week" + w.n + ".html";
+  a.className = "wk"; a.href = "week" + w.n + ".html" + (anchor ? "#" + anchor : "");
   var art = document.createElement("div"); art.className = "art"; art.appendChild(artSvg(w.art));
   var bd = document.createElement("div"); bd.className = "bd";
   var n = document.createElement("div"); n.className = "n"; n.textContent = "Week " + w.n;
@@ -782,13 +784,17 @@ function mapDraw(track) {
       var an = document.createElement("span"); an.className = "an";
       an.textContent = "Session " + S.s + " · " + S.n;
       var ad = document.createElement("span"); ad.className = "ad";
-      ad.textContent = S.d + "  (covers week" + (S.w.length > 1 ? "s " : " ") + S.w.join(" + ") + ")";
+      var nums = S.w.map(function (x) { return parseInt(x, 10); });
+      ad.textContent = S.d + "  (covers week" + (nums.length > 1 ? "s " : " ") + nums.join(" + ") + ")";
       band.appendChild(an); band.appendChild(ad); host.appendChild(band);
       var grid = document.createElement("div"); grid.className = "weeks";
-      S.w.forEach(function (n) { grid.appendChild(card(WEEKS[n - 1])); });
+      S.w.forEach(function (x) {
+        var parts = String(x).split("#");
+        grid.appendChild(card(WEEKS[parseInt(parts[0], 10) - 1], parts[1]));
+      });
       host.appendChild(grid);
     });
-    $("trackCount").textContent = "9 sessions · 6 of them cover two topics";
+    $("trackCount").textContent = "9 sessions · weeks 3 and 4 are split across two";
   }
 }
 Array.prototype.forEach.call($("trackSw").querySelectorAll("button"), function (b) {
