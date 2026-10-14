@@ -20,26 +20,27 @@ mean but the **tail**: p50, p99, and above all **p99.9** of tick-to-trade.
 The material is taught in two formats. The 15-week track gives each topic its
 own session. The condensed 9-session track groups them into nine longer
 meetings in the taught order (pointers → classes → polymorphism → templates);
-nothing is dropped, and weeks 3 and 4 are split across two sessions. Every topic page
+nothing is dropped, session 5 is the midterm, and weeks 3 and 4 are split across two sessions. Every topic page
 shows both positions in its hero, and the course map on `index.html` regroups
 the fifteen cards into the nine sessions at the flick of a switch.
 
 | Week | Topic | Session (9-session track) |
 |------|-------|---------------------------|
-| 1 | HFT Landscape & Market Microstructure | 1 |
-| 2 | C++ Performance Foundations | 2 |
-| 3 | Memory Management & Smart Pointers | 3 (classes, RAII) · 4 (smart pointers) |
-| 4 | Custom Allocators, Memory Pools & Runtime Polymorphism | 4 (polymorphism) · 6 (allocators, pools) |
-| 5 | Templates & Generic Programming | 5 |
-| 6 | Compile-Time & Policy-Based Design | 5 |
-| 7 | Data Structures for HFT — The Order Book | 6 |
+| 1 | HFT Landscape & Market Microstructure | 1 (Sep 28) |
+| 2 | C++ Performance Foundations | 2 (Oct 5) |
+| 3 | Memory Management & Smart Pointers | 2 (classes, RAII) · 3 (smart pointers) |
+| 4 | Custom Allocators, Memory Pools & Runtime Polymorphism | 3 (polymorphism) · 6 (allocators, pools) |
+| 5 | Templates & Generic Programming | 4 (Oct 19) |
+| 6 | Compile-Time & Policy-Based Design | 4 |
+| — | Midterm, no new material | 5 (Oct 26) |
+| 7 | Data Structures for HFT — The Order Book | 6 (Nov 2) |
 | 8 | Algorithmic Complexity & Time-Series | 6 |
-| 9 | Concurrency I — Atomics & Memory Models | 7 |
+| 9 | Concurrency I — Atomics & Memory Models | 7 (Nov 9) |
 | 10 | Concurrency II — Lock-Free Pipelines | 7 |
-| 11 | Network Protocols & Market Data | 8 |
+| 11 | Network Protocols & Market Data | 8 (Nov 16) |
 | 12 | Async I/O & Serialization | 8 |
 | 13 | Low-Latency Design — SIMD & Kernel Bypass | 8 |
-| 14 | Profiling, the Tail & Production | 9 |
+| 14 | Profiling, the Tail & Production | 9 (Nov 30, with a short part on pre-trade risk) |
 | 15 | Latency Arbitrage, Multi-Venue & the Tournament | 9 |
 
 Nothing is thrown away: the order book of week 1 is the data structure of week

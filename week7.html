@@ -227,6 +227,18 @@
   .bar{height:20px;border-radius:4px;background:var(--panel2);position:relative;overflow:hidden}
   .bar i{position:absolute;left:0;top:0;bottom:0;border-radius:4px;display:block}
   .bar span{position:absolute;right:6px;top:1px;font-family:var(--mono);font-size:10.5px;color:var(--ink)}
+  .togs{display:grid;gap:6px}
+  .togs label{display:flex;align-items:flex-start;gap:9px;cursor:pointer;background:var(--panel2);
+    border:1px solid var(--line);border-radius:8px;padding:8px 11px;font-size:12.5px;line-height:1.45}
+  .togs label:hover{border-color:var(--accent-2)}
+  .togs label input{margin-top:3px;flex-shrink:0;width:14px;height:14px;accent-color:var(--accent)}
+  .togs label .sn{font-family:var(--mono);font-size:11.5px;color:var(--accent-2)}
+  .togs label .sd{display:block;color:var(--muted);font-size:11px}
+  .grid2>*,.grid3>*,.split>*,.split-r>*{min-width:0}
+  table.t td.ok{color:var(--ok)} table.t td.warn{color:var(--warn)} table.t td.bad{color:var(--bad)}
+  table.t td .sub{font-family:var(--sans);font-size:10px;color:var(--dim)}
+  .qtag{display:inline-block;font-family:var(--mono);font-size:10.5px;font-weight:700;color:#fff;
+    background:rgba(var(--accent-rgb),.45);border:1px solid var(--accent-2);border-radius:5px;padding:0 6px;margin-right:6px}
   /* ── mobile guard (identical on every page): single column under 720px,
         no horizontal overflow. Must stay last in the sheet. ───────────── */
   @media (prefers-reduced-motion: reduce){
@@ -256,21 +268,24 @@
 
 <!-- ══════════════ HERO ══════════════ -->
 <section id="hero">
-  <div class="wk">WEEK 7 · 15-WEEK TRACK  ·  SESSION 6 · 9-SESSION TRACK</div>
+  <div class="wk">WEEK 7 · 15-WEEK TRACK (COLUMBIA SESSION 6, OCT 14, WITH WEEK 8)  ·  SESSION 6 · 9-SESSION TRACK</div>
   <h1>Data Structures for HFT — The Order Book</h1>
   <p class="promise">The order book is not a container you look things up in. It is a structure you read
   <em class="hi">thousands of times per tick</em> from one hot loop — so its memory layout, not its big-O,
   decides your p99.9. This week you build the flat, price-indexed mirror that makes the best bid a single load.</p>
   <ul class="you">
-    <li>Name the six operations a book must support — add, cancel, modify, match, best-of-book, queue position — and the cost each one is allowed.</li>
-    <li>Beat <code>std::map</code> with a flat price-indexed array of levels plus intrusive FIFO lists, and say <em>why</em> in cache terms.</li>
+    <li>Name the six operations a book must support and reduce them to <em class="hi">three questions</em>: Q1 find an order by id, Q2 find a level by price, Q3 know the best prices.</li>
+    <li>Say what <code>std::vector</code>, <code>std::list</code> and <code>std::forward_list</code> each answer well, in nanoseconds, and why no sequence answers all three.</li>
+    <li>Price a <code>std::map</code> lookup, a chained versus open-addressing hash probe and a heap <code>top()</code> in pointer hops and cache lines.</li>
+    <li>Pick the C++ container for each question, then beat <code>std::map</code> with the production book: flat price-indexed levels, intrusive FIFOs from the week-4 pool, and an id table.</li>
     <li>Size a price band, decide what to do when the market walks out of it, and know when sparsity kills the array.</li>
     <li>Consume a snapshot-plus-delta feed and refuse to apply a delta after a sequence gap.</li>
   </ul>
   <div class="row" style="margin-top:22px">
-    <span class="pill acc">HW7 · <code>include/order_book.hpp</code> — O(1) <code>best_bid()</code> / <code>best_ask()</code></span>
+    <span class="pill acc">HW7 · <code>include/order_book.hpp</code> — O(1) <code>best_bid()</code> / <code>best_ask()</code> · due Oct 24</span>
+    <span class="pill acc">HW8 · <code>include/rolling_counter.hpp</code> (week 8) · due Oct 31</span>
     <span class="pill">Lab · <code>make book</code> green, plus a benchmark against <code>std::map</code></span>
-    <span class="pill">Week 8 computes signals on top of this book</span>
+    <span class="pill warn">Columbia 15-week track: this page and week 8 are one session, Oct 14</span>
   </div>
 </section>
 
@@ -315,13 +330,13 @@
     <div class="panel">
       <h3>Six operations, six budgets</h3>
       <table class="t">
-        <tr><th>Operation</th><th>Frequency</th><th>Budget you should hold</th></tr>
-        <tr><td class="n">best_bid / best_ask</td><td>every read</td><td>O(1), ~1 ns, one L1 load</td></tr>
-        <tr><td class="n">add</td><td>per message</td><td>O(1), one indexed store</td></tr>
-        <tr><td class="n">cancel</td><td>per message</td><td>O(1) common case</td></tr>
-        <tr><td class="n">modify</td><td>per message</td><td>O(1) if size-down, else re-queue</td></tr>
-        <tr><td class="n">match / walk</td><td>on a trade</td><td>O(levels consumed), sequential</td></tr>
-        <tr><td class="n">queue position</td><td>on your ack</td><td>O(orders at your level)</td></tr>
+        <tr><th>Operation</th><th>Frequency</th><th>Asks</th><th>Budget you should hold</th></tr>
+        <tr><td class="n">best_bid / best_ask</td><td>every read</td><td>Q3</td><td>O(1), ~1 ns, one L1 load</td></tr>
+        <tr><td class="n">add</td><td>per message</td><td>Q2 · Q3</td><td>O(1), one indexed store</td></tr>
+        <tr><td class="n">cancel</td><td>per message</td><td>Q1 → Q2</td><td>O(1) common case</td></tr>
+        <tr><td class="n">modify</td><td>per message</td><td>Q1 → Q2</td><td>O(1) if size-down, else re-queue</td></tr>
+        <tr><td class="n">match / walk</td><td>on a trade</td><td>Q3 → Q2</td><td>O(levels consumed), sequential</td></tr>
+        <tr><td class="n">queue position</td><td>on your ack</td><td>Q1</td><td>O(orders at your level)</td></tr>
       </table>
       <div class="note" style="margin-top:14px"><b>Only one of these is allowed to scan</b> — and it is
       <code>cancel</code>, and only when the cancel empties the inside level so the touch has to move. Keep
@@ -336,6 +351,33 @@
       pointer hop that misses to DRAM costs ninety times what the arithmetic around it costs — which is why
       layout beats asymptotics at the depths a real book runs at.</p>
     </div>
+  </div>
+
+  <div class="panel" style="margin-top:22px">
+    <h3>Six operations, three questions</h3>
+    <p class="sub">Reduce the six operations to their memory accesses and the book only ever asks three
+    questions. Every container on this page is graded on these three, in this order.</p>
+    <div class="grid3" style="margin-top:12px">
+      <div class="panel tight"><h4><span class="qtag">Q1</span>Find an order by id</h4>
+        <p class="sub">Cancel, modify and every execution report name the order by its <code>id</code>, never by
+        its price. The key is a 64-bit integer, unordered and sparse.</p>
+        <div class="kv" style="margin-top:8px"><b>asked by</b><span>cancel · modify · fill · queue position</span>
+          <b>rate</b><span>per message</span></div></div>
+      <div class="panel tight"><h4><span class="qtag">Q2</span>Find a level by price</h4>
+        <p class="sub">Add or remove size at a price, and walk the levels in order when a trade eats through
+        the book. The key is a price on a fixed tick grid, and it is ordered.</p>
+        <div class="kv" style="margin-top:8px"><b>asked by</b><span>add · cancel · match</span>
+          <b>rate</b><span>per message</span></div></div>
+      <div class="panel tight"><h4><span class="qtag">Q3</span>Know the best prices</h4>
+        <p class="sub">Best bid and best ask, read by the strategy thousands of times per tick. There is no key
+        here, only the extremum of each side.</p>
+        <div class="kv" style="margin-top:8px"><b>asked by</b><span>every read · every match</span>
+          <b>rate</b><span>many times per message</span></div></div>
+    </div>
+    <div class="note" style="margin-top:12px"><b>The problem the rest of the page solves.</b> Q1 needs the
+    orders organised by <b>id</b>. Q2 and Q3 need them organised by <b>price</b>. One container cannot be sorted
+    two ways at once, so the book you ship is <b>three structures pointing at the same orders</b>. Parts 2–4
+    reach that design one container at a time.</div>
   </div>
 
   <!-- ── WIDGET 1 ─────────────────────────────────────────── -->
@@ -397,12 +439,480 @@
   </div>
 </section>
 
+<!-- ══════════════ SEQUENCES ══════════════ -->
+<section id="seq">
+  <div class="kicker">Part 2</div>
+  <h2><span class="secnum">2</span>Sequences first, and why we switched</h2>
+  <p class="lead">The first containers anyone reaches for are the sequences: <code>std::vector</code>,
+  <code>std::list</code>, <code>std::forward_list</code>. Grade each one on the three questions. Each one
+  answers one of them well. None of them answers all three.</p>
+
+  <div class="grid3" style="margin-top:16px">
+    <div class="panel tight"><h4>std::vector&lt;T&gt;</h4>
+      <p class="sub">One contiguous block. <code>v[i]</code> is O(1). <code>push_back</code> is amortised O(1),
+      but when the capacity runs out it allocates a block twice the size (×2 in libstdc++ and libc++, ×1.5 in
+      MSVC) and copies everything across. That is a <em>latency spike</em> on one unlucky message.
+      Inserting or erasing in the middle is an O(n) <code>memmove</code>. A walk is what the prefetcher was
+      built for.</p>
+      <div class="kv" style="margin-top:8px"><b>Q1 id</b><span>O(n) scan</span>
+        <b>Q2 price</b><span>O(log n) if sorted by price</span><b>Q3 best</b><span>O(1) front / back if sorted</span>
+        <b>overhead</b><span>none · 24 B header total</span></div></div>
+    <div class="panel tight"><h4>std::list&lt;T&gt;</h4>
+      <p class="sub">Doubly linked. Every element is its own heap node with two pointers. Insert and erase
+      are O(1) <em>given an iterator</em>, and iterators stay valid while other elements come and go. So store
+      one per order and a cancel never has to search. Any search, though, is O(n) <em>pointer chasing</em>:
+      each hop is a dependent load the prefetcher cannot see coming, about 100&nbsp;ns when it misses.</p>
+      <div class="kv" style="margin-top:8px"><b>Q1 id</b><span>O(1) given a stored iterator</span>
+        <b>Q2 price</b><span>O(n) chase</span><b>Q3 best</b><span>O(1) front / back</span>
+        <b>overhead</b><span>2 pointers + malloc header</span></div></div>
+    <div class="panel tight"><h4>std::forward_list&lt;T&gt;</h4>
+      <p class="sub">Singly linked, one pointer per node: the smallest possible node. The price is the API:
+      no <code>size()</code>, no <code>back()</code>, no <code>push_back</code>, only <code>insert_after</code>
+      and <code>erase_after</code>. To erase a node you need its <em>predecessor</em>, and a stored iterator
+      to the predecessor goes stale the moment that neighbour is erased. So a cancel is a search again.</p>
+      <div class="kv" style="margin-top:8px"><b>Q1 id</b><span>O(n), find the predecessor</span>
+        <b>Q2 price</b><span>O(n) chase</span><b>Q3 best</b><span>O(1) front only</span>
+        <b>overhead</b><span>1 pointer + malloc header</span></div></div>
+  </div>
+
+  <div class="grid2" style="margin-top:16px">
+    <div>
+      <p>The <strong>sorted vector</strong> is the strongest sequence for the read path. Binary search answers
+      Q2, and the best price sits at <code>front()</code>. But it is sorted by <em>price</em>, and a cancel
+      names an <em>id</em>. You cannot be sorted by price and by id at the same time, so Q1 falls back to a
+      linear scan over every resting order.</p>
+      <pre class="code"><span class="c">// sorted std::vector of levels: Q2 and Q3 are good, Q1 is a scan</span>
+<span class="k">struct</span> <span class="b">Level</span> { int64_t px, qty; };  <span class="k">struct</span> <span class="b">Order</span> { uint64_t id; int64_t px, qty; };
+std::vector&lt;Level&gt; asks;                       <span class="c">// sorted ascending by price</span>
+std::vector&lt;Order&gt; orders;                     <span class="c">// arrival order</span>
+
+Level* find_level(int64_t px) {                <span class="c">// Q2: binary search, O(log n)</span>
+    <span class="k">auto</span> it = std::lower_bound(asks.begin(), asks.end(), px,
+                               [](<span class="k">const</span> Level&amp; L, int64_t p) { <span class="k">return</span> L.px &lt; p; });
+    <span class="k">return</span> (it != asks.end() &amp;&amp; it-&gt;px == px) ? &amp;*it : <span class="k">nullptr</span>;
+}
+<span class="k">const</span> Level&amp; best_ask() { <span class="k">return</span> asks.front(); }   <span class="c">// Q3: O(1), one load</span>
+Order* find_order(uint64_t id) {               <span class="c">// Q1: linear scan, O(n)</span>
+    <span class="k">for</span> (<span class="k">auto</span>&amp; o : orders) <span class="k">if</span> (o.id == id) <span class="k">return</span> &amp;o;
+    <span class="k">return</span> <span class="k">nullptr</span>;
+}</pre>
+    </div>
+    <div>
+      <p>The <strong>list</strong> solves Q1, but only by moving the problem. The cancel is O(1) once you hold
+      the iterator. Turning an id into that iterator needs a lookup by id, which is Q1 again. The snippet
+      quietly uses a hash map for it. That hash map is the subject of the next section.</p>
+      <pre class="code"><span class="c">// std::list FIFO at one level + a stored iterator per order: Q1 cancel is O(1)</span>
+<span class="k">struct</span> <span class="b">Order</span> { uint64_t id; int64_t qty; };
+std::list&lt;Order&gt; fifo;                                     <span class="c">// one price level, time order</span>
+std::unordered_map&lt;uint64_t, std::list&lt;Order&gt;::iterator&gt; where;
+
+<span class="k">void</span> add(uint64_t id, int64_t qty) {
+    fifo.push_back({id, qty});                             <span class="c">// heap node: malloc</span>
+    where[id] = std::prev(fifo.end());                     <span class="c">// iterators stay valid</span>
+}
+<span class="k">void</span> cancel(uint64_t id) {
+    <span class="k">auto</span> h = where.find(id);
+    <span class="k">if</span> (h == where.end()) <span class="k">return</span>;
+    fifo.erase(h-&gt;second);                                 <span class="c">// O(1) unlink, no search</span>
+    where.erase(h);
+}</pre>
+    </div>
+  </div>
+  <p style="margin-top:12px">The <strong>forward list</strong> saves one pointer per node and pays for it with
+  a search on every cancel:</p>
+  <pre class="code"><span class="c">// std::forward_list: one pointer per node, but you can only act AFTER a node</span>
+<span class="k">struct</span> <span class="b">Order</span> { uint64_t id; int64_t qty; };
+std::forward_list&lt;Order&gt; fifo;                    <span class="c">// no size(), no back(), no push_back</span>
+
+<span class="k">bool</span> cancel(uint64_t id) {                        <span class="c">// must find the PREDECESSOR: O(n)</span>
+    <span class="k">for</span> (<span class="k">auto</span> prev = fifo.before_begin(), it = fifo.begin(); it != fifo.end(); prev = it++)
+        <span class="k">if</span> (it-&gt;id == id) { fifo.erase_after(prev); <span class="k">return</span> <span class="k">true</span>; }
+    <span class="k">return</span> <span class="k">false</span>;
+}
+<span class="k">void</span> insert_after_first(<span class="k">const</span> Order&amp; o) {        <span class="c">// insert_after, never insert_before</span>
+    <span class="k">if</span> (!fifo.empty()) fifo.insert_after(fifo.begin(), o);
+}</pre>
+
+  <!-- ── WIDGET 2 ─────────────────────────────────────────── -->
+  <div class="panel" style="margin-top:22px">
+    <h3>Widget 2 · three questions × four sequences</h3>
+    <p class="sub" style="margin-bottom:14px">Pick the book size and the element size. The scorecard prices
+    each question with the cache ladder from Part 1: about 1&nbsp;ns per compare, a full miss per dependent
+    pointer hop, 64-byte lines, and the prefetcher streaming contiguous walks after the first two lines.
+    <em>Cold</em> means other work has evicted the book, which is the realistic case between bursts. Press
+    <em>walk</em> to watch eight elements being reached in each layout, with time drawn to scale.</p>
+
+    <div class="split-r">
+      <div>
+        <div class="ctl"><label for="sqN">book size n · resting elements<b id="vsqN">1 024</b></label>
+          <input type="range" id="sqN" min="3" max="16" step="1" value="10"
+                 aria-label="Number of elements in the container, logarithmic" /></div>
+        <div class="ctl"><label for="sqSz">element size · bytes of payload<b id="vsqSz">32 B</b></label>
+          <input type="range" id="sqSz" min="8" max="256" step="8" value="32"
+                 aria-label="Bytes of payload per element" /></div>
+        <div class="row" style="margin-bottom:12px">
+          <span class="sw" role="group" aria-label="Cache state of the container">
+            <button id="sqCold" type="button" aria-pressed="true">cold · every miss is DRAM</button>
+            <button id="sqWarm" type="button" aria-pressed="false">warm · footprint decides</button>
+          </span>
+        </div>
+        <div class="stats">
+          <div class="stat"><div class="sl">elements / line</div><div class="sv" id="sqPer">—</div></div>
+          <div class="stat"><div class="sl">vector bytes</div><div class="sv acc" id="sqVecB">—</div></div>
+          <div class="stat"><div class="sl">list bytes</div><div class="sv warn" id="sqLstB">—</div></div>
+        </div>
+        <div class="stats" style="margin-top:1px">
+          <div class="stat"><div class="sl">next push_back</div><div class="sv bad" id="sqSpike">—</div></div>
+          <div class="stat"><div class="sl">typical push_back</div><div class="sv ok">~2 ns</div></div>
+        </div>
+        <p class="sub" style="margin-top:10px">At n = 2<sup>k</sup> a doubling vector is exactly full, so the
+        next <code>push_back</code> allocates, copies all n elements and page-faults the new block in. The
+        cost is amortised O(1) and still lands on one message.</p>
+      </div>
+      <div>
+        <div class="tablewrap" style="overflow-x:auto">
+          <table class="t" id="sqTable">
+            <tr><th>container</th><th>Q1 · by id</th><th>Q2 · by price</th><th>Q3 · best</th><th>new level</th><th>bytes / elt</th></tr>
+          </table>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <button class="btn primary" id="sqWalk" type="button">Walk 8 elements</button>
+          <span class="sub" id="sqWalkNote">time to reach the 8th element, drawn to scale</span>
+        </div>
+        <div class="svgwrap" style="margin-top:10px">
+          <svg id="sqSvg" viewBox="0 0 720 262" role="img"
+               aria-label="Memory layout: a vector as one contiguous block of cells, a list and a forward list as nodes scattered across the heap joined by arrows"></svg>
+        </div>
+      </div>
+    </div>
+    <div class="note" id="sqVerdict" style="margin-top:14px"></div>
+  </div>
+</section>
+
+<!-- ══════════════ TREES, HASH MAPS, HEAPS ══════════════ -->
+<section id="assoc">
+  <div class="kicker">Part 3</div>
+  <h2><span class="secnum">3</span>Trees, hash maps, heaps</h2>
+  <p class="lead">Each of these was invented to answer one of the questions. The <strong>tree</strong> keeps
+  keys ordered, which gives Q2 and Q3. The <strong>hash map</strong> forgets order and answers Q1 in a probe
+  or two. The <strong>heap</strong> answers only Q3. Count the pointer hops and the cache lines, and the
+  nanoseconds follow.</p>
+
+  <!-- ── WIDGET 3 ─────────────────────────────────────────── -->
+  <div class="panel" style="margin-top:18px">
+    <h3>Widget 3 · a tree of price levels: find, begin, rbegin</h3>
+    <p class="sub" style="margin-bottom:14px"><code>std::map</code> and <code>std::set</code> are red-black
+    trees: one heap node per key, three pointers and a colour bit each, and a height of at most
+    2·log<sub>2</sub>(n+1). The drawing is a <em>perfectly balanced</em> tree over the same keys, which is the
+    best case. Every node on a highlighted path is one dependent load.</p>
+    <div class="split">
+      <div>
+        <div class="svgwrap">
+          <svg id="trSvg" viewBox="0 0 720 290" role="img"
+               aria-label="A balanced binary search tree of ask price levels, with the path walked by the last operation highlighted"></svg>
+        </div>
+        <div class="legend">
+          <span><i style="background:#7c3aed"></i>node on the walked path</span>
+          <span><i style="background:#3fb950"></i>the node returned</span>
+          <span><i style="background:#d29922"></i>libc++ <code>rbegin()</code> walk</span>
+        </div>
+      </div>
+      <div>
+        <div class="ctl"><label for="trTarget">price to find · ask side</label>
+          <select id="trTarget" aria-label="Price level to look up in the tree"></select></div>
+        <div class="ctl"><label for="trLat">where the nodes live</label>
+          <select id="trLat" aria-label="Cache level the tree nodes are found in">
+            <option value="L1">hot · L1 · ~1 ns per hop</option>
+            <option value="L2">L2 · ~4 ns per hop</option>
+            <option value="LLC">LLC · ~14 ns per hop</option>
+            <option value="DRAM" selected>cold · DRAM · ~90 ns per hop</option>
+          </select></div>
+        <div class="bookbtns" style="margin-bottom:12px">
+          <button class="btn primary" id="trFind" type="button">find(price) · Q2</button>
+          <button class="btn" id="trBegin" type="button">begin() · best ask · Q3</button>
+          <button class="btn" id="trRbegin" type="button">rbegin() · worst ask</button>
+          <button class="btn" id="trIns" type="button">Insert a level</button>
+          <button class="btn" id="trIns8" type="button">Insert 8 levels</button>
+          <button class="btn" id="trErase" type="button">erase(begin())</button>
+          <button class="btn" id="trReset" type="button">Reset</button>
+        </div>
+        <div class="stats">
+          <div class="stat"><div class="sl">levels n</div><div class="sv" id="trN">—</div></div>
+          <div class="stat"><div class="sl">height</div><div class="sv" id="trH">—</div></div>
+          <div class="stat"><div class="sl">hops · last op</div><div class="sv acc" id="trHops">—</div></div>
+          <div class="stat"><div class="sl">ns · last op</div><div class="sv warn" id="trNs">—</div></div>
+        </div>
+        <div class="note" id="trVerdict" style="margin-top:12px"></div>
+      </div>
+    </div>
+    <h3 style="margin-top:16px">operation log</h3>
+    <div class="log" id="trLog" role="status" aria-label="Tree operation log"></div>
+  </div>
+
+  <!-- ── WIDGET 4 ─────────────────────────────────────────── -->
+  <div class="panel" style="margin-top:22px">
+    <h3>Widget 4 · id → order: chained buckets versus one flat table</h3>
+    <p class="sub" style="margin-bottom:14px">Both tables answer Q1 in O(1) on average, but they lay memory
+    out differently. <code>std::unordered_map</code> <em>must</em> be node-based: the standard promises that
+    references survive a rehash and exposes a bucket interface, so every entry is a separately allocated
+    node on a chain. An <em>open-addressing</em> table stores the entries in one flat array, takes
+    <code>hash &amp; (capacity − 1)</code> as the home slot, and on a collision tries the next slot. A delete
+    leaves a <em>tombstone</em> so that later probes keep walking past it. Insert order ids and watch the
+    probe lengths, the cache lines, and the rehash spike.</p>
+    <div class="split">
+      <div>
+        <div class="row" style="margin-bottom:12px">
+          <span class="sw" role="group" aria-label="Hash table layout">
+            <button id="hsOA" type="button" aria-pressed="true">open addressing · linear probe</button>
+            <button id="hsCH" type="button" aria-pressed="false">chained · std::unordered_map</button>
+          </span>
+        </div>
+        <div class="svgwrap">
+          <svg id="hsSvg" viewBox="0 0 720 262" role="img"
+               aria-label="The hash table drawn slot by slot or bucket by bucket, with the slots touched by the last operation outlined"></svg>
+        </div>
+        <div class="svgwrap" style="margin-top:10px">
+          <svg id="hsSpark" viewBox="0 0 720 96" role="img"
+               aria-label="Nanoseconds per insert for the last sixty inserts, log scale, with rehash spikes in red"></svg>
+        </div>
+      </div>
+      <div>
+        <div class="ctl"><label for="hsLoad">max load factor before a rehash<b id="vhsLoad">0.75</b></label>
+          <input type="range" id="hsLoad" min="50" max="95" step="5" value="75"
+                 aria-label="Maximum load factor of the open addressing table before it rehashes" /></div>
+        <div class="ctl"><label for="hsLat">where the table lives</label>
+          <select id="hsLat" aria-label="Cache level the hash table is found in">
+            <option value="L1">hot · L1</option>
+            <option value="L2">L2</option>
+            <option value="LLC" selected>LLC · ~14 ns</option>
+            <option value="DRAM">cold · DRAM · ~90 ns</option>
+          </select></div>
+        <div class="bookbtns" style="margin-bottom:12px">
+          <button class="btn primary" id="hsIns1" type="button">Insert 1 order</button>
+          <button class="btn" id="hsIns16" type="button">Insert 16 orders</button>
+          <button class="btn" id="hsFind" type="button">find(live id) · Q1</button>
+          <button class="btn" id="hsMiss" type="button">find(absent id)</button>
+          <button class="btn" id="hsDel" type="button">erase(id) · cancel</button>
+          <button class="btn" id="hsReset" type="button">Reset</button>
+        </div>
+        <div class="stats">
+          <div class="stat"><div class="sl">live ids</div><div class="sv" id="hsN">—</div></div>
+          <div class="stat"><div class="sl">capacity</div><div class="sv" id="hsCap">—</div></div>
+          <div class="stat"><div class="sl">load</div><div class="sv" id="hsLd">—</div></div>
+          <div class="stat"><div class="sl">tombstones</div><div class="sv warn" id="hsTomb">—</div></div>
+        </div>
+        <div class="stats" style="margin-top:1px">
+          <div class="stat"><div class="sl">probe length</div><div class="sv acc" id="hsProbe">—</div></div>
+          <div class="stat"><div class="sl">lines touched</div><div class="sv" id="hsLines">—</div></div>
+          <div class="stat"><div class="sl">ns · last op</div><div class="sv" id="hsNs">—</div></div>
+          <div class="stat"><div class="sl">rehashes</div><div class="sv bad" id="hsRe">0</div></div>
+        </div>
+        <div class="note" id="hsVerdict" style="margin-top:12px"></div>
+      </div>
+    </div>
+    <h3 style="margin-top:16px">operation log</h3>
+    <div class="log" id="hsLog" role="status" aria-label="Hash table operation log"></div>
+  </div>
+
+  <!-- ── WIDGET 5 ─────────────────────────────────────────── -->
+  <div class="panel" style="margin-top:22px">
+    <h3>Widget 5 · a binary heap: top() in one load, and nothing else</h3>
+    <p class="sub" style="margin-bottom:14px"><code>std::priority_queue</code> (and <code>std::make_heap</code>
+    / <code>push_heap</code> / <code>pop_heap</code>) keeps a tree in a plain array: the children of slot
+    <code>i</code> are <code>2i+1</code> and <code>2i+2</code>, and every parent is ≥ its children. The best
+    bid is always slot 0. Push sifts up and pop sifts down, each O(log n). The heap has no
+    <code>find</code> and no <code>erase(x)</code>. A cancelled level can only be marked dead and thrown away
+    when it eventually reaches the top.</p>
+    <div class="split">
+      <div>
+        <div class="svgwrap">
+          <svg id="hpSvg" viewBox="0 0 720 300" role="img"
+               aria-label="A max-heap of bid prices drawn as a tree and as the array that stores it, with the last sift highlighted"></svg>
+        </div>
+        <div class="legend">
+          <span><i style="background:#3fb950"></i>top() · slot 0</span>
+          <span><i style="background:#7c3aed"></i>swapped in the last sift step</span>
+          <span><i style="background:#3a3f4b"></i>tombstone · cancelled, still in the array</span>
+          <span><i style="background:#c4b5fd"></i>scanned by find</span>
+        </div>
+      </div>
+      <div>
+        <div class="ctl"><label for="hpTarget">price to find</label>
+          <select id="hpTarget" aria-label="Bid price to look for in the heap"></select></div>
+        <div class="bookbtns" style="margin-bottom:12px">
+          <button class="btn primary" id="hpPush" type="button">push(new bid)</button>
+          <button class="btn" id="hpTop" type="button">top() · Q3</button>
+          <button class="btn" id="hpPop" type="button">pop() · best traded away</button>
+          <button class="btn" id="hpCancel" type="button">cancel a level</button>
+          <button class="btn" id="hpFind" type="button">find(price) · Q2?</button>
+          <button class="btn" id="hpReset" type="button">Reset</button>
+        </div>
+        <div class="stats">
+          <div class="stat"><div class="sl">size</div><div class="sv" id="hpN">—</div></div>
+          <div class="stat"><div class="sl">top() · best bid</div><div class="sv ok" id="hpBest">—</div></div>
+          <div class="stat"><div class="sl">tombstones</div><div class="sv warn" id="hpDead">—</div></div>
+        </div>
+        <div class="stats" style="margin-top:1px">
+          <div class="stat"><div class="sl">swaps · last op</div><div class="sv acc" id="hpSw">—</div></div>
+          <div class="stat"><div class="sl">ns · last op</div><div class="sv" id="hpNs">—</div></div>
+        </div>
+        <div class="note" id="hpVerdict" style="margin-top:12px"></div>
+      </div>
+    </div>
+    <h3 style="margin-top:16px">operation log</h3>
+    <div class="log" id="hpLog" role="status" aria-label="Heap operation log"></div>
+  </div>
+</section>
+
+<!-- ══════════════ THE C++ CONTAINERS ══════════════ -->
+<section id="cpp">
+  <div class="kicker">Part 4</div>
+  <h2><span class="secnum">4</span>The C++ data structures that answer the questions</h2>
+  <p class="lead">No single container answers all three questions. The book you ship is three structures
+  that point at the <em>same</em> orders, each one chosen for one question.</p>
+
+  <div class="panel" style="margin-top:16px">
+    <h3>Question → container</h3>
+    <div class="tablewrap" style="overflow-x:auto">
+      <table class="t">
+        <tr><th>question</th><th>container</th><th>complexity</th><th>cache behaviour</th><th>when to use it</th></tr>
+        <tr><td class="n">Q1 · order by id</td><td class="n">std::unordered_map&lt;id, Order*&gt;</td><td>O(1) avg · rehash O(n)</td>
+          <td>bucket line, then one node hop per chain entry; node-based by mandate</td><td>correctness-first code, unknown sizes, off the hot path</td></tr>
+        <tr><td class="n">Q1 · order by id</td><td class="n">open-addressing table, power-of-two mask</td><td>O(1) avg · probe ≈ ½(1 + 1/(1−α))</td>
+          <td>one or two contiguous lines, no pointer chase</td><td>the hot path: sized once at start-up, never rehashes, tombstones on cancel</td></tr>
+        <tr><td class="n">Q2 · level by price</td><td class="n">std::map&lt;price, Level&gt;</td><td>O(log n)</td>
+          <td>log<sub>2</sub> n dependent misses, a malloc per new level</td><td>sparse or unbounded prices, the far tail of the book</td></tr>
+        <tr><td class="n">Q2 · level by price</td><td class="n">std::vector&lt;Level&gt; indexed by (px − base) / tick</td><td>O(1)</td>
+          <td>one line; walking levels on a match is a prefetched stream</td><td>prices live on a tick grid: the band around the touch</td></tr>
+        <tr><td class="n">Q3 · best prices</td><td class="n">cached best index</td><td>O(1) read · updated on writes</td>
+          <td>one hot scalar in L1</td><td>with the flat vector: improve on add, walk on the cancel that empties the touch</td></tr>
+        <tr><td class="n">Q3 · best prices</td><td class="n">map.begin() / map.rbegin()</td><td>O(1)</td>
+          <td>one node load: libstdc++ caches leftmost and rightmost, libc++ caches begin only</td><td>with a tree book</td></tr>
+        <tr><td class="n">Q3 · best prices</td><td class="n">priority_queue::top()</td><td>O(1) · pop O(log n)</td>
+          <td>slot 0 of a contiguous array</td><td>when you only need the extremum; cancels need lazy deletion</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="grid2" style="margin-top:16px">
+    <div><h4>std::map · Q2 and Q3 in one ordered tree</h4><pre class="code"><span class="c">// std::map: a red-black tree of levels. Ordered, any price, O(log n) per lookup</span>
+<span class="k">struct</span> <span class="b">Level</span> { int64_t qty = <span class="n">0</span>; };
+std::map&lt;int64_t, Level, std::greater&lt;int64_t&gt;&gt; bids;    <span class="c">// best bid = begin()</span>
+std::map&lt;int64_t, Level&gt;                         asks;    <span class="c">// best ask = begin()</span>
+
+<span class="k">void</span> add(int64_t px, int64_t qty) { bids[px].qty += qty; }  <span class="c">// Q2: O(log n) + maybe malloc</span>
+<span class="k">void</span> remove(int64_t px, int64_t qty) {
+    <span class="k">auto</span> it = bids.find(px);                                <span class="c">// Q2: log2(n) dependent hops</span>
+    <span class="k">if</span> (it != bids.end() &amp;&amp; (it-&gt;second.qty -= qty) &lt;= <span class="n">0</span>) bids.erase(it);
+}
+int64_t best_bid() { <span class="k">return</span> bids.empty() ? <span class="n">0</span> : bids.begin()-&gt;first; } <span class="c">// Q3: header caches leftmost</span></pre></div>
+    <div><h4>std::unordered_map · Q1 with chained nodes</h4><pre class="code"><span class="c">// std::unordered_map: chained buckets, one heap node per entry (the standard requires it)</span>
+<span class="k">struct</span> <span class="b">Order</span> { uint64_t id; int64_t px, qty; };
+std::unordered_map&lt;uint64_t, Order*&gt; by_id;
+
+<span class="k">void</span> setup() {
+    by_id.max_load_factor(<span class="n">1</span>.<span class="n">0f</span>);
+    by_id.reserve(<span class="n">1</span> &lt;&lt; <span class="n">20</span>);            <span class="c">// pre-size the buckets: no rehash mid-session</span>
+}
+Order* lookup(uint64_t id) {           <span class="c">// Q1: hash, bucket, then chase the chain</span>
+    <span class="k">auto</span> it = by_id.find(id);
+    <span class="k">return</span> it == by_id.end() ? <span class="k">nullptr</span> : it-&gt;second;
+}</pre></div>
+    <div><h4>open addressing · Q1 in one flat array</h4><pre class="code"><span class="c">// open addressing: one flat array, power-of-two mask, linear probe</span>
+<span class="k">struct</span> <span class="b">IdTable</span> {
+    <span class="k">struct</span> <span class="b">Slot</span> { uint64_t id = <span class="n">0</span>; Order* p = <span class="k">nullptr</span>; };   <span class="c">// id 0 = empty, ~0 = tombstone</span>
+    std::vector&lt;Slot&gt; s; uint64_t mask;
+    <span class="k">explicit</span> IdTable(std::size_t pow2) : s(pow2), mask(pow2 - <span class="n">1</span>) {}  <span class="c">// sized once</span>
+    <span class="k">static</span> uint64_t h(uint64_t x) { <span class="k">return</span> (x * <span class="n">0x9E3779B97F4A7C15ull</span>) &gt;&gt; <span class="n">32</span>; }
+    Order* find(uint64_t id) <span class="k">const</span> {                         <span class="c">// Q1: one or two cache lines</span>
+        <span class="k">for</span> (uint64_t i = h(id) &amp; mask; ; i = (i + <span class="n">1</span>) &amp; mask) {
+            <span class="k">if</span> (s[i].id == id) <span class="k">return</span> s[i].p;                <span class="c">// hit</span>
+            <span class="k">if</span> (s[i].id == <span class="n">0</span>)  <span class="k">return</span> <span class="k">nullptr</span>;               <span class="c">// empty slot ends the probe</span>
+        }                                                    <span class="c">// tombstone: keep probing</span>
+    }
+};</pre></div>
+    <div><h4>std::priority_queue · Q3 only, cancels are lazy</h4><pre class="code"><span class="c">// a binary heap: top() is one load, but there is no find and no erase(x)</span>
+std::priority_queue&lt;int64_t&gt; bids;            <span class="c">// max-heap: best bid on top</span>
+std::unordered_multiset&lt;int64_t&gt; cancelled;   <span class="c">// lazy deletion: tombstones on the side</span>
+
+int64_t best_bid() {                          <span class="c">// Q3: O(1) if the top is live</span>
+    <span class="k">while</span> (!bids.empty()) {
+        <span class="k">auto</span> t = cancelled.find(bids.top());
+        <span class="k">if</span> (t == cancelled.end()) <span class="k">return</span> bids.top();
+        cancelled.erase(t); bids.pop();       <span class="c">// tombstoned pop: O(log n), sift-down</span>
+    }
+    <span class="k">return</span> <span class="n">0</span>;
+}
+<span class="k">void</span> cancel_level(int64_t px) { cancelled.insert(px); }   <span class="c">// cannot reach it in the heap</span></pre></div>
+  </div>
+  <div class="split" style="margin-top:16px">
+    <div><h4>the flat price-indexed vector · Q2 is one load</h4><pre class="code"><span class="c">// prices live on a tick grid, so a price IS an index: Q2 becomes one load</span>
+<span class="k">struct</span> <span class="b">Level</span> { int64_t qty = <span class="n">0</span>; };
+<span class="k">struct</span> <span class="b">Side</span> {
+    int64_t base_tick;                       <span class="c">// lowest price in the band, in ticks</span>
+    std::vector&lt;Level&gt; lv;                   <span class="c">// lv[i] is price base_tick + i</span>
+    int64_t best = -<span class="n">1</span>;                       <span class="c">// Q3: cached index of the best level</span>
+
+    Side(int64_t base, std::size_t ticks) : base_tick(base), lv(ticks) {}
+    Level&amp; at(int64_t px_ticks) { <span class="k">return</span> lv[px_ticks - base_tick]; }   <span class="c">// Q2: O(1)</span>
+    <span class="k">void</span> add(int64_t px_ticks, int64_t q) {
+        at(px_ticks).qty += q;
+        best = std::max(best, px_ticks - base_tick);    <span class="c">// bid side: higher is better</span>
+    }
+};</pre></div>
+    <div class="note" style="align-self:center"><b>Why the vector beats the map for Q2.</b> The map has to
+    support any key, so it compares its way down the tree. A price is not any key: it is an integer number of
+    ticks inside a band. Subtracting the base turns the price into its own array index. The ordering that
+    Q3 needs comes free from the index, and walking levels on a match becomes <code>++i</code> over
+    contiguous memory. Part 6 covers what this costs (memory for the whole band) and what happens when the
+    market leaves the band.</div>
+  </div>
+
+  <div class="panel" style="margin-top:22px">
+    <h3>The production book: three answers, one set of orders</h3>
+    <p class="sub" style="margin-bottom:12px">A flat price-indexed <code>vector&lt;Level&gt;</code> per side
+    answers Q2. A cached best index answers Q3. Each level holds an <em>intrusive</em> doubly linked FIFO:
+    the <code>prev</code>/<code>next</code> pointers live inside the <code>Order</code>, so linking costs no
+    extra allocation, and the order nodes come from the week-4 pool. An open-addressing
+    <code>id → Order*</code> table answers Q1. A cancel probes the table once, unlinks in O(1), and moves the
+    touch only if it emptied the best level.</p>
+    <div class="split">
+      <div class="svgwrap">
+        <svg id="pbkSvg" viewBox="0 0 720 324" role="img"
+             aria-label="The production book: an id table on the left pointing into order nodes, which hang in FIFO lists under a flat array of price levels with a cached best bid and best ask index"></svg>
+      </div>
+      <div>
+        <pre class="code"><span class="c">// the production book: the three answers in one struct</span>
+<span class="k">struct</span> <span class="b">Order</span> { uint64_t id; int64_t qty; int32_t tick; <span class="k">char</span> side; Order *prev, *next; };
+<span class="k">struct</span> <span class="b">Level</span> { int64_t qty = <span class="n">0</span>; Order *head = <span class="k">nullptr</span>, *tail = <span class="k">nullptr</span>; };
+<span class="k">struct</span> <span class="b">Book</span> {
+    std::vector&lt;Level&gt; bid, ask;   int32_t base, best_bid = -<span class="n">1</span>, best_ask = INT32_MAX;
+    Pool&lt;Order&gt; pool;              IdTable by_id;                     <span class="c">// nodes + Q1</span>
+    Level&amp; level(<span class="k">const</span> Order* o) { <span class="k">return</span> (o-&gt;side == <span class="s">'B'</span> ? bid : ask)[o-&gt;tick - base]; } <span class="c">// Q2</span>
+    <span class="k">void</span> cancel(uint64_t id) {
+        Order* o = by_id.take(id);  <span class="k">if</span> (!o) <span class="k">return</span>;                  <span class="c">// Q1: one probe</span>
+        Level&amp; L = level(o);
+        (o-&gt;prev ? o-&gt;prev-&gt;next : L.head) = o-&gt;next;                <span class="c">// O(1) unlink:</span>
+        (o-&gt;next ? o-&gt;next-&gt;prev : L.tail) = o-&gt;prev;                <span class="c">//  doubly linked</span>
+        L.qty -= o-&gt;qty;  pool.free(o);   <span class="c">// if L emptied the touch, walk to the next (Q3)</span>
+    }
+};</pre>
+        <p class="sub" style="margin-top:8px"><code>Pool&lt;Order&gt;</code> is the week-4 pool;
+        <code>IdTable</code> is the open-addressing table above. The reference code at the end of Part 6 is
+        the minimal HW7 shape, with a singly linked FIFO over a reserved vector. This version adds
+        <code>prev</code> so that a cancel unlinks in O(1) without a walk.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- ══════════════ HOW ══════════════ -->
 <section id="how">
-  <div class="kicker">Part 2</div>
-  <h2><span class="secnum">2</span>How does it work? Three layouts, one op stream</h2>
-  <p class="lead">Prices are not arbitrary doubles — they live on a fixed tick grid. That single fact turns
-  "look up a price" into "index an array", and takes the whole ordered-container problem off the table.</p>
+  <div class="kicker">Part 5</div>
+  <h2><span class="secnum">5</span>How does it work? Three layouts, one op stream</h2>
+  <p class="lead">Parts 2–4 tested the containers one question at a time. Here the three candidates for the
+  price side race on one op stream. Prices are not arbitrary doubles: they live on a fixed tick grid, so
+  "look up a price" becomes "index an array".</p>
 
   <p>Here are the three candidates, and the honest version of each. A <strong>tree of levels</strong>
   (<code>std::map&lt;int, Level&gt;</code>) is the obvious answer: sorted, handles any price, O(log n).
@@ -432,9 +942,9 @@
         <b>bbo</b><span>O(1), one L1 load</span><b>layout</b><span>contiguous + pooled</span></div></div>
   </div>
 
-  <!-- ── WIDGET 2 ─────────────────────────────────────────── -->
+  <!-- ── WIDGET 6 ─────────────────────────────────────────── -->
   <div class="panel" style="margin-top:22px">
-    <h3>Widget 2 · the data-structure race</h3>
+    <h3>Widget 6 · the data-structure race</h3>
     <p class="sub" style="margin-bottom:14px">The same op stream through all three layouts. Costs are modelled
     from the cache ladder above: each structure's hot footprint decides which level it lives in, and the number
     of distinct cache lines an operation touches decides what it pays. Drag <em>book depth</em> and watch the
@@ -475,9 +985,9 @@
     <div class="note" id="dsVerdict" style="margin-top:14px"></div>
   </div>
 
-  <!-- ── WIDGET 3 ─────────────────────────────────────────── -->
+  <!-- ── WIDGET 7 ─────────────────────────────────────────── -->
   <div class="panel" style="margin-top:22px">
-    <h3>Widget 3 · pointer chasing versus contiguity, one cache line at a time</h3>
+    <h3>Widget 7 · pointer chasing versus contiguity, one cache line at a time</h3>
     <p class="sub" style="margin-bottom:14px">Walk <em>k</em> price levels — what a match does when it eats
     through the book. Memory comes in 64-byte lines whatever you asked for, so the question is never "how many
     levels" but "how many lines, and could the prefetcher see them coming".</p>
@@ -520,14 +1030,14 @@
 
 <!-- ══════════════ WHY ══════════════ -->
 <section id="why">
-  <div class="kicker">Part 3</div>
-  <h2><span class="secnum">3</span>Why it is harder than it looks: bands, sparsity, and gaps</h2>
+  <div class="kicker">Part 6</div>
+  <h2><span class="secnum">6</span>Why it is harder than it looks: bands, sparsity, and gaps</h2>
   <p class="lead">The flat array is not free and it is not universal. It buys O(1) with memory, and it assumes
   the market stays inside the band you allocated. Both assumptions have a bill.</p>
 
-  <!-- ── WIDGET 4 ─────────────────────────────────────────── -->
+  <!-- ── WIDGET 8 ─────────────────────────────────────────── -->
   <div class="panel" style="margin-top:18px">
-    <h3>Widget 4 · sizing the price band, and the day the market leaves it</h3>
+    <h3>Widget 8 · sizing the price band, and the day the market leaves it</h3>
     <p class="sub" style="margin-bottom:14px">The array must span every price you might see. Widen the band or
     shrink the tick and the array grows linearly; the occupied levels do not. Push the reference price past the
     edge and you pay a rebase.</p>
@@ -575,9 +1085,9 @@
     only ones that pay for a pointer.</div>
   </div>
 
-  <!-- ── WIDGET 5 ─────────────────────────────────────────── -->
+  <!-- ── WIDGET 9 ─────────────────────────────────────────── -->
   <div class="panel" style="margin-top:22px">
-    <h3>Widget 5 · snapshot, delta, and the sequence gap</h3>
+    <h3>Widget 9 · snapshot, delta, and the sequence gap</h3>
     <p class="sub" style="margin-bottom:14px">A feed hands you one full snapshot and then a stream of deltas
     identified by a monotonic sequence number. Deltas are only meaningful <em>in order</em>. Choose what to do
     when one goes missing, then read how far your book drifts from the exchange's.</p>
@@ -695,8 +1205,8 @@
 
 <!-- ══════════════ PITFALLS ══════════════ -->
 <section id="pitfalls">
-  <div class="kicker">Part 4</div>
-  <h2><span class="secnum">4</span>Five ways a fast book turns out to be wrong or slow</h2>
+  <div class="kicker">Part 7</div>
+  <h2><span class="secnum">7</span>Five ways a fast book turns out to be wrong or slow</h2>
   <p class="lead">Every one of these passes a unit test. Open them.</p>
 
   <details class="pit"><summary>Computing the BBO by scanning, on the read path</summary>
@@ -759,7 +1269,7 @@
       <p>This is the one failure on this page that costs money rather than microseconds, and it is the reason
       the sequence number exists. A book that is fast and wrong is worse than one that is slow and honest,
       because you will size positions against it.</p>
-      <p class="fix">Fix: on a gap, mark the book stale, stop quoting, and re-request a snapshot. Widget 5 is
+      <p class="fix">Fix: on a gap, mark the book stale, stop quoting, and re-request a snapshot. Widget 9 is
       the ledger for each policy — read the "book wrong by" number for <em>apply it anyway</em> and compare it
       to the "time stale" cost of doing it properly.</p>
     </div></details>
@@ -767,17 +1277,17 @@
 
 <!-- ══════════════ CHECK ══════════════ -->
 <section id="check">
-  <div class="kicker">Part 5</div>
-  <h2><span class="secnum">5</span>Check yourself</h2>
+  <div class="kicker">Part 8</div>
+  <h2><span class="secnum">8</span>Check yourself</h2>
   <p class="lead">Instant feedback, no grading. Pick the answer you would defend in a design review.</p>
 
-  <div class="mcq" data-a="2" data-exp="<b>One cached scalar versus a chain of pointer hops.</b> The flat book does not search for the touch at all — <code>best_bid_tick</code> is an integer kept up to date on the write path, so the read is a compare and a multiply out of L1: about 1&nbsp;ns. <code>std::map</code> has to reach the extremal node, and at 64 levels that is roughly six hops through nodes the allocator scattered across the heap. Each hop is a dependent load that the prefetcher cannot anticipate, so it is a likely miss — six of them at LLC-to-DRAM latency is hundreds of nanoseconds. The big-O of both reads is fine; only one of them is fast.">
+  <div class="mcq" data-a="2" data-exp="<b>One cached scalar versus a chain of pointer hops.</b> The flat book does not search for the touch at all — <code>best_bid_tick</code> is an integer kept up to date on the write path, so the read is a compare and a multiply out of L1: about 1&nbsp;ns. <code>std::map</code> keeps a pointer to its extremal node in the header, but that node is a heap allocation placed anywhere, reached by a dependent load the prefetcher cannot anticipate, and every insert or erase near the touch walks about six more such nodes at 64 levels (and libc++ <code>rbegin()</code> walks the right spine). Each of those is a likely miss, at LLC-to-DRAM latency. The big-O of both reads is fine; only one of them is fast.">
     <p class="q"><span>Q1</span>Your book has 64 occupied levels per side. Reading the best bid: why is the flat
     price-indexed array roughly two orders of magnitude faster than <code>std::map</code>?</p>
     <div class="opts">
       <button class="opt" type="button">Because O(1) is asymptotically better than O(log n), and 64 is large enough for that to matter</button>
       <button class="opt" type="button">Because <code>std::map</code> has to rebalance the tree on every read</button>
-      <button class="opt" type="button">Because the flat book reads one cached integer from L1, while the map chases ~6 dependent pointers the prefetcher cannot see coming</button>
+      <button class="opt" type="button">Because the flat book reads one cached integer from L1, while the map reaches its levels through dependent pointer loads into scattered heap nodes the prefetcher cannot see coming</button>
       <button class="opt" type="button">Because <code>std::map</code> stores prices as doubles and the comparison is slower</button>
     </div>
     <div class="fb" role="status"></div>
@@ -806,12 +1316,24 @@
     </div>
     <div class="fb" role="status"></div>
   </div>
+
+  <div class="mcq" data-a="1" data-exp="<b>A cancel names an id, and the flat array is indexed by price.</b> The exchange sends you <code>cancel(id)</code>. To find which level and which FIFO node that id lives in, you need Q1, a lookup by id. The flat array answers Q2 and the cached index answers Q3, but neither can find an id without scanning every resting order. The open-addressing table is the third structure: one probe gives you the <code>Order*</code>, the node carries its own tick and <code>prev</code>/<code>next</code>, and the unlink is O(1). Rehashing is not the reason (you size the table once), and a price-sorted container cannot also be sorted by id.">
+    <p class="q"><span>Q4</span>The production book already has a flat price-indexed array and a cached best index.
+    Why does it also need an <code>id → Order*</code> table?</p>
+    <div class="opts">
+      <button class="opt" type="button">Because the flat array has to be rehashed whenever the market moves</button>
+      <button class="opt" type="button">Because cancels and fills name an order by id, and without a table keyed by id finding that order is a scan of the whole book</button>
+      <button class="opt" type="button">Because <code>best_bid()</code> reads the id table to find the touch</button>
+      <button class="opt" type="button">It does not: sort each level's FIFO by id and binary-search it</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
 </section>
 
 <!-- ══════════════ NEXT ══════════════ -->
 <section id="next">
-  <div class="kicker">Part 6</div>
-  <h2><span class="secnum">6</span>Do the work</h2>
+  <div class="kicker">Part 9</div>
+  <h2><span class="secnum">9</span>Do the work</h2>
   <div class="grid2" style="margin-top:14px">
     <div class="panel"><h4>In class</h4><ul class="plain">
       <li>Fill in <code>include/order_book.hpp</code>: flat price-indexed levels, cached touch, O(1)
@@ -861,7 +1383,7 @@
 "use strict";
 /* ════════════════════════════════════════════════════════════════
    Week 7 — Data Structures for HFT: The Order Book
-   Five widgets, no dependencies, no network, everything drawn from data.
+   Nine widgets, no dependencies, no network, everything drawn from data.
    ════════════════════════════════════════════════════════════════ */
 var $ = function (id) { return document.getElementById(id); };
 
@@ -1180,7 +1702,7 @@ function bkRender() {
 })();
 
 /* ══════════════════════════════════════════════════════════════
-   WIDGET 2 — the data-structure race
+   WIDGET 6 — the data-structure race
    Cost model: hot footprint decides the residency level; the number of
    DISTINCT cache lines an op touches decides what it pays at that level.
    ══════════════════════════════════════════════════════════════ */
@@ -1318,8 +1840,895 @@ function dsRender() {
 });
 dsRender();
 
+/* ═══ Parts 2–4: sequences, trees, hash maps, heaps (widgets 2–5) ═══ */
+/* reduced-motion guard for the animated widgets: jump straight to the result */
+var RM = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+function lcgR(seed) { var s = seed >>> 0; return function () { s = (1664525 * s + 1013904223) >>> 0; return s / 4294967296; }; }
+function pxOf(t) { return (100 + t / 100).toFixed(2); }
+function latOf(nm) { return LAT[nm]; }
+function arrow(svg, x1, y1, x2, y2, col, o) {
+  o = o || {};
+  var mx = (x1 + x2) / 2, my = (y1 + y2) / 2 + (o.bend || 0);
+  var a = { d: "M" + x1 + " " + y1 + " Q" + mx + " " + my + " " + x2 + " " + y2, fill: "none",
+    stroke: col, "stroke-width": o.w || 1.3 };
+  if (o.dash) a["stroke-dasharray"] = o.dash;
+  if (o.op !== undefined) a.opacity = o.op;
+  svg.appendChild(mk("path", a));
+  /* arrowhead along the tangent at the end of the quadratic */
+  var dx = x2 - mx, dy = y2 - my, L = Math.sqrt(dx * dx + dy * dy) || 1, ux = dx / L, uy = dy / L, s = 5;
+  svg.appendChild(mk("path", {
+    d: "M" + x2 + " " + y2 + " L" + (x2 - ux * s - uy * s * 0.6) + " " + (y2 - uy * s + ux * s * 0.6) +
+      " L" + (x2 - ux * s + uy * s * 0.6) + " " + (y2 - uy * s - ux * s * 0.6) + " Z",
+    fill: col, opacity: o.op !== undefined ? o.op : 1
+  }));
+}
+function logTo(boxId, rows, s, cls) {
+  rows.unshift({ s: s, c: cls || "" });
+  if (rows.length > 8) rows.pop();
+  var box = $(boxId);
+  clear(box);
+  rows.forEach(function (r) {
+    var d = document.createElement("div");
+    if (r.c) d.className = r.c;
+    d.textContent = r.s;
+    box.appendChild(d);
+  });
+}
+
 /* ══════════════════════════════════════════════════════════════
-   WIDGET 3 — pointer chasing versus contiguity, one cache line at a time
+   WIDGET 2 — three questions × four sequences
+   Cost model: ~1 ns per compare, a full miss per dependent pointer hop,
+   64-byte lines, contiguous walks streamed after the first two lines.
+   ══════════════════════════════════════════════════════════════ */
+var sqCold = true, sqRaf = null, SQ_MALLOC = 20, SQ_WALK = 8;
+/* glibc malloc: 8-byte chunk header, 16-byte rounding, 32-byte minimum chunk */
+function sqChunk(payload) { return Math.max(32, Math.ceil((payload + 8) / 16) * 16); }
+function sqScan(k, s, m) {
+  if (k <= 0) return 0;
+  var lines = Math.ceil(k * s / LINE);
+  return Math.min(2, lines) * m + Math.max(0, lines - 2) * Math.min(m, 1.6) + k * 1.0;
+}
+function sqChase(k, m) { return k * (m + 1.0); }
+function sqBsearch(n, s, m) {
+  var probes = Math.max(1, Math.ceil(Math.log(n + 1) / Math.LN2));
+  var perLine = Math.max(1, Math.floor(LINE / s));
+  /* the last probes of a binary search fall inside one line; the first ones are dependent misses */
+  var cold = Math.max(1, probes - Math.floor(Math.log(perLine) / Math.LN2));
+  return cold * m + probes * 1.0;
+}
+function sqModel(n, s, cold) {
+  var lstB = sqChunk(s + 16), flB = sqChunk(s + 8);
+  var foot = { vec: n * s, lst: n * lstB, fl: n * flB };
+  var mv = cold ? LAT.DRAM : residency(foot.vec).ns;
+  var ml = cold ? LAT.DRAM : residency(foot.lst).ns;
+  var mf = cold ? LAT.DRAM : residency(foot.fl).ns;
+  var half = Math.max(1, Math.round(n / 2));
+  var bs = sqBsearch(n, s, mv);
+  var memmove = half * s / 16;                          /* ~16 B/ns */
+  var spike = n * s / 16 + SQ_MALLOC + Math.ceil(n * s / 4096) * 250;  /* copy + first-touch page faults */
+  return {
+    n: n, s: s, foot: foot, m: { vec: mv, lst: ml, fl: mf }, spike: spike,
+    rows: [
+      { key: "vec", nm: "std::vector · arrival order", q1: sqScan(half, s, mv), q2: sqScan(half, s, mv),
+        q3: sqScan(n, s, mv), ins: 2, b: s, o: ["O(n) scan", "O(n) scan", "O(n) scan", "O(1) amortised"] },
+      { key: "svec", nm: "sorted std::vector · by price", q1: sqScan(half, s, mv), q2: bs, q3: LAT.L1,
+        ins: bs + memmove, b: s, o: ["O(n) scan", "O(log n)", "O(1) front", "O(n) memmove"] },
+      { key: "lst", nm: "std::list · by price + iterators", q1: 2 * ml + 2, q2: sqChase(half, ml), q3: LAT.L1,
+        ins: sqChase(half, ml) + SQ_MALLOC + 2 * ml, b: lstB, o: ["O(1) via iterator", "O(n) chase", "O(1) front", "O(n) find + link"] },
+      { key: "fl", nm: "std::forward_list · by price", q1: sqChase(half, mf), q2: sqChase(half, mf), q3: LAT.L1,
+        ins: sqChase(half, mf) + SQ_MALLOC + mf, b: flB, o: ["O(n) find pred.", "O(n) chase", "O(1) front", "O(n) find + link"] }
+    ]
+  };
+}
+function sqCls(ns) { return ns < 20 ? "ok" : ns < 600 ? "warn" : "bad"; }
+/* fixed scatter so the picture is stable: where malloc happened to put each node */
+var SQ_LX = [430, 92, 566, 250, 30, 340, 640, 170], SQ_LY = [98, 130, 102, 134, 100, 128, 132, 100];
+var SQ_FX = [300, 560, 40, 470, 190, 640, 110, 380], SQ_FY = [196, 226, 222, 198, 230, 200, 198, 228];
+function sqDraw(m, t) {
+  var svg = $("sqSvg");
+  clear(svg);
+  var s = m.s, i, perLine = Math.floor(LINE / s);
+  /* --- vector: one contiguous block */
+  tx(svg, 14, 16, "std::vector · one block, cut into 64-byte lines", { fill: C.ink, size: 10.5, weight: 700 });
+  var cw = 41, x0 = 18, y0 = 24;
+  for (i = 0; i < 16; i++) {
+    var at = sqScan(i + 1, s, m.m.vec), lit = t !== null && i < SQ_WALK && t >= at;
+    svg.appendChild(mk("rect", { x: x0 + i * cw, y: y0, width: cw - 3, height: 26, rx: 3,
+      fill: lit ? C.acc : "#12151c", stroke: lit ? C.acc2 : C.line, "stroke-width": 1 }));
+    tx(svg, x0 + i * cw + (cw - 3) / 2, y0 + 17, "[" + i + "]", { fill: lit ? "#fff" : C.dim, size: 9, anchor: "middle" });
+  }
+  if (perLine >= 1) {
+    for (i = perLine; i < 16; i += perLine) {
+      svg.appendChild(mk("line", { x1: x0 + i * cw - 1.5, y1: y0 - 4, x2: x0 + i * cw - 1.5, y2: y0 + 30,
+        stroke: C.warn, "stroke-width": 1, "stroke-dasharray": "3 2" }));
+    }
+  }
+  tx(svg, 14, 66, perLine >= 1 ? ("dashed = line boundary · " + perLine + " element" + (perLine === 1 ? "" : "s") + " per line · the prefetcher streams ahead")
+    : ("each element spans " + Math.ceil(s / LINE) + " lines · still one stream the prefetcher can follow"), { fill: C.dim, size: 9.5 });
+
+  /* --- list: scattered nodes, two pointers each */
+  tx(svg, 14, 88, "std::list · nodes wherever malloc put them · prev + next", { fill: C.ink, size: 10.5, weight: 700 });
+  function nodes(X, Y, mm, dbl, col) {
+    for (i = 0; i < 8; i++) {
+      var at2 = sqChase(i + 1, mm), lit2 = t !== null && t >= at2;
+      if (i < 7) {
+        arrow(svg, X[i] + 50, Y[i] + 9, X[i + 1] + (X[i + 1] > X[i] ? 0 : 50), Y[i + 1] + 9, lit2 ? col : "#3a4150", { bend: -14 });
+        if (dbl) arrow(svg, X[i + 1] + (X[i + 1] > X[i] ? 0 : 50), Y[i + 1] + 15, X[i] + 50, Y[i] + 15, "#3a4150", { bend: 14, dash: "3 3", op: 0.7 });
+      }
+      svg.appendChild(mk("rect", { x: X[i], y: Y[i], width: 50, height: 22, rx: 4,
+        fill: lit2 ? col : "#12151c", stroke: lit2 ? C.acc2 : C.line, "stroke-width": 1, opacity: lit2 ? 0.9 : 1 }));
+      tx(svg, X[i] + 25, Y[i] + 15, "node " + i, { fill: lit2 ? "#0b0e14" : C.dim, size: 9, anchor: "middle", weight: lit2 ? 700 : 400 });
+    }
+  }
+  nodes(SQ_LX, SQ_LY, m.m.lst, true, C.warn);
+  tx(svg, 14, 182, "std::forward_list · one pointer, forward only", { fill: C.ink, size: 10.5, weight: 700 });
+  nodes(SQ_FX, SQ_FY, m.m.fl, false, C.bad);
+
+  /* timers */
+  var tv = t === null ? 0 : t;
+  var done = [sqScan(SQ_WALK, s, m.m.vec), sqChase(SQ_WALK, m.m.lst), sqChase(SQ_WALK, m.m.fl)];
+  [["vector", 16, done[0], C.acc2], ["list", 88, done[1], C.warn], ["forward_list", 182, done[2], C.bad]].forEach(function (p) {
+    tx(svg, 706, p[1], (t === null ? "8 elements: " + fmtNs(p[2]) : "t = " + fmtNs(Math.min(tv, p[2]))),
+      { fill: p[3], size: 10, anchor: "end", weight: 700 });
+  });
+}
+function sqRender() {
+  var n = Math.pow(2, +$("sqN").value), s = +$("sqSz").value;
+  $("vsqN").textContent = n.toLocaleString();
+  $("vsqSz").textContent = s + " B";
+  var m = sqModel(n, s, sqCold);
+  $("sqPer").textContent = s <= LINE ? String(Math.floor(LINE / s)) : "1/" + Math.ceil(s / LINE);
+  $("sqVecB").textContent = fmtBytes(m.foot.vec);
+  $("sqLstB").textContent = fmtBytes(m.foot.lst);
+  $("sqSpike").textContent = fmtNs(m.spike);
+  var t = $("sqTable");
+  while (t.rows.length > 1) t.deleteRow(1);
+  m.rows.forEach(function (r) {
+    var row = t.insertRow(-1);
+    var c0 = row.insertCell(-1); c0.className = "n"; c0.textContent = r.nm;
+    [r.q1, r.q2, r.q3, r.ins].forEach(function (v, k) {
+      var c = row.insertCell(-1);
+      c.className = sqCls(v);
+      c.innerHTML = fmtNs(v) + "<br><span class=\"sub\">" + r.o[k] + "</span>";
+    });
+    var cb = row.insertCell(-1); cb.textContent = r.b + " B";
+  });
+  if (sqRaf === null) sqDraw(m, null);
+  var R = {}; m.rows.forEach(function (r) { R[r.key] = r; });
+  $("sqVerdict").innerHTML = "<b>Each sequence answers one question well, and none answers all three.</b> " +
+    "At n = " + n.toLocaleString() + " the sorted vector answers Q2 in " + fmtNs(R.svec.q2) + " and Q3 in " +
+    fmtNs(R.svec.q3) + ", but it is sorted by price, so a cancel by id scans: " + fmtNs(R.svec.q1) +
+    ". The list answers Q1 in " + fmtNs(R.lst.q1) + ", but only if someone hands it the iterator, and " +
+    "turning an id into that iterator is Q1 all over again. Finding a level in the list costs " + fmtNs(R.lst.q2) +
+    " of pointer chasing, " + (R.lst.q2 / Math.max(0.01, R.svec.q2)).toFixed(0) + "× the binary search. The forward list " +
+    "saves 8 bytes a node (" + R.fl.b + " B against " + R.lst.b + " B once malloc's header and rounding are counted) and " +
+    "loses Q1. And the vector's amortised O(1) <code>push_back</code> still hands one message a " +
+    fmtNs(m.spike) + " reallocation. Q1 needs a structure keyed by id, and Q2 needs one keyed by price.";
+}
+function sqWalk() {
+  var n = Math.pow(2, +$("sqN").value), s = +$("sqSz").value, m = sqModel(n, s, sqCold);
+  var T = Math.max(sqChase(SQ_WALK, m.m.lst), sqChase(SQ_WALK, m.m.fl), sqScan(SQ_WALK, s, m.m.vec));
+  if (sqRaf !== null) { cancelAnimationFrame(sqRaf); sqRaf = null; }
+  if (RM || !window.requestAnimationFrame) { sqDraw(m, T); return; }
+  var dur = 2600, t0 = null;
+  function step(ts) {
+    if (t0 === null) t0 = ts;
+    var f = Math.min(1, (ts - t0) / dur);
+    sqDraw(m, f * T);
+    if (f < 1) sqRaf = requestAnimationFrame(step);
+    else { sqRaf = null; }
+  }
+  sqRaf = requestAnimationFrame(step);
+}
+["sqN", "sqSz"].forEach(function (id) {
+  $(id).addEventListener("input", sqRender);
+  $(id).addEventListener("change", sqRender);
+});
+$("sqCold").addEventListener("click", function () { sqCold = true; setSw(["sqCold", "sqWarm"], "sqCold"); sqRender(); });
+$("sqWarm").addEventListener("click", function () { sqCold = false; setSw(["sqCold", "sqWarm"], "sqWarm"); sqRender(); });
+$("sqWalk").addEventListener("click", sqWalk);
+sqRender();
+
+/* ══════════════════════════════════════════════════════════════
+   WIDGET 3 — a tree of price levels (ask side: best = lowest = begin())
+   Drawn perfectly balanced; std::map is a red-black tree (height ≤ 2·log2(n+1)).
+   ══════════════════════════════════════════════════════════════ */
+var TR_MAX = 24, trKeys = [], trT = null, trHi = null, trRows = [], trTimer = null, trRnd = lcgR(20261014);
+function trBuild() {
+  var nodes = [];
+  function b(lo, hi, d) {
+    if (lo > hi) return -1;
+    var mid = (lo + hi + 1) >> 1, id = nodes.length;
+    nodes.push({ k: trKeys[mid], idx: mid, d: d, l: -1, r: -1 });
+    nodes[id].l = b(lo, mid - 1, d + 1);
+    nodes[id].r = b(mid + 1, hi, d + 1);
+    return id;
+  }
+  var root = b(0, trKeys.length - 1, 0), h = 0;
+  nodes.forEach(function (nd) { h = Math.max(h, nd.d + 1); });
+  trT = { nodes: nodes, root: root, h: h };
+}
+/* std::map::find runs lower_bound to the bottom, then compares once: it does not stop on a match */
+function trLower(k) {
+  var x = trT.root, y = -1, path = [];
+  while (x >= 0) {
+    path.push(x);
+    var nd = trT.nodes[x];
+    if (!(nd.k < k)) { y = x; x = nd.l; } else { x = nd.r; }
+  }
+  return { path: path, hit: (y >= 0 && trT.nodes[y].k === k) ? y : -1 };
+}
+function trSpine(dir) {
+  var x = trT.root, path = [];
+  while (x >= 0) { path.push(x); var nx = dir < 0 ? trT.nodes[x].l : trT.nodes[x].r; if (nx < 0) break; x = nx; }
+  return path;
+}
+function trFresh() {
+  var g = 0, t;
+  do { t = Math.round(trRnd() * 120) - 60; } while (trKeys.indexOf(t) >= 0 && g++ < 500);
+  return t;
+}
+function trInsertKey(t) { trKeys.push(t); trKeys.sort(function (a, b) { return a - b; }); }
+function trTargets() {
+  var sel = $("trTarget"), keep = sel.value;
+  clear(sel);
+  trKeys.forEach(function (k) {
+    var o = document.createElement("option"); o.value = String(k); o.textContent = pxOf(k); sel.appendChild(o);
+  });
+  var ab = document.createElement("option"); ab.value = "absent"; ab.textContent = "a price with no level"; sel.appendChild(ab);
+  if (keep) sel.value = keep;
+  if (sel.selectedIndex < 0) sel.selectedIndex = Math.floor(trKeys.length / 3);
+}
+function trDraw(shown) {
+  var svg = $("trSvg");
+  clear(svg);
+  var n = trKeys.length;
+  if (!n) { tx(svg, 360, 140, "empty tree · insert a level", { fill: C.dim, size: 12, anchor: "middle" }); return; }
+  var X = function (nd) { return n === 1 ? 360 : 36 + nd.idx * (648 / (n - 1)); };
+  var Y = function (nd) { return 26 + nd.d * 50; };
+  var onPath = {}, i, hiCol = trHi && trHi.libcxx ? C.warn : C.acc;
+  if (trHi) for (i = 0; i < Math.min(shown, trHi.path.length); i++) onPath[trHi.path[i]] = i + 1;
+  trT.nodes.forEach(function (nd, id) {
+    [nd.l, nd.r].forEach(function (c) {
+      if (c < 0) return;
+      var ch = trT.nodes[c], both = onPath[id] && onPath[c];
+      svg.appendChild(mk("line", { x1: X(nd), y1: Y(nd) + 9, x2: X(ch), y2: Y(ch) - 9,
+        stroke: both ? hiCol : "#3a4150", "stroke-width": both ? 2.4 : 1.2, "stroke-dasharray": both && trHi.libcxx ? "5 3" : "0" }));
+    });
+  });
+  trT.nodes.forEach(function (nd, id) {
+    var p = onPath[id], ret = trHi && trHi.ret === id && shown >= trHi.path.length;
+    svg.appendChild(mk("rect", { x: X(nd) - 17, y: Y(nd) - 9, width: 34, height: 18, rx: 4,
+      fill: ret ? C.ok : p ? hiCol : "#12151c", stroke: ret ? C.ok : p ? C.acc2 : C.line, "stroke-width": 1 }));
+    tx(svg, X(nd), Y(nd) + 3.5, pxOf(nd.k), { fill: (ret || p) ? "#fff" : C.muted, size: 8, anchor: "middle", weight: (ret || p) ? 700 : 400 });
+    if (p) tx(svg, X(nd) + 19, Y(nd) - 8, String(p), { fill: C.acc2, size: 8 });
+  });
+  tx(svg, 14, 282, "ask levels · numbers = hop order · height " + trT.h + " · log2(n+1) = " +
+    (Math.log(n + 1) / Math.LN2).toFixed(2) + " · a red-black tree may be up to " + Math.floor(2 * Math.log(n + 1) / Math.LN2) + " deep",
+    { fill: C.dim, size: 9.5 });
+}
+function trAnimate() {
+  if (trTimer) { clearInterval(trTimer); trTimer = null; }
+  if (!trHi || RM) { trDraw(99); return; }
+  var k = 0;
+  trDraw(0);
+  trTimer = setInterval(function () {
+    k++; trDraw(k);
+    if (k >= trHi.path.length) { clearInterval(trTimer); trTimer = null; }
+  }, 320);
+}
+function trStats(hops, ns, verdict) {
+  $("trN").textContent = trKeys.length;
+  $("trH").textContent = trT.h;
+  $("trHops").textContent = hops === null ? "—" : String(hops);
+  $("trNs").textContent = ns === null ? "—" : fmtNs(ns);
+  if (verdict) $("trVerdict").innerHTML = verdict;
+}
+function trHop() { return latOf($("trLat").value) + 1; }
+function trReset() {
+  trKeys = []; trRows = []; trRnd = lcgR(20261014); trHi = null;
+  var i;
+  for (i = 0; i < 12; i++) trInsertKey(trFresh());
+  trBuild(); trTargets(); trDraw(99);
+  logTo("trLog", trRows, "12 ask levels inserted · best ask " + pxOf(trKeys[0]));
+  trStats(null, null, "<b>Twelve levels, height " + trT.h + ".</b> Pick a price and press <em>find</em>. " +
+    "Count the highlighted nodes: each one is a separate heap allocation, and you only learn the address of the " +
+    "next one when the load of the current one returns.");
+}
+$("trFind").addEventListener("click", function () {
+  if (!trKeys.length) return;
+  var v = $("trTarget").value, k = v === "absent" ? trFresh() : +v;
+  var r = trLower(k);
+  trHi = { path: r.path, ret: r.hit, libcxx: false };
+  var ns = r.path.length * trHop() + 1;
+  trAnimate();
+  logTo("trLog", trRows, "find(" + pxOf(k) + "): " + r.path.length + " dependent hops → " +
+    (r.hit >= 0 ? "found" : "end(), no level at this price") + " · " + fmtNs(ns), r.hit >= 0 ? "hl" : "bad");
+  trStats(r.path.length, ns, "<b>find(" + pxOf(k) + ") walked " + r.path.length + " nodes</b>, every one a " +
+    "dependent load at " + latOf($("trLat").value).toFixed(0) + " ns: " + fmtNs(ns) + " for Q2. " +
+    "<code>std::map::find</code> is <code>lower_bound</code> followed by one compare, so it walks to the bottom of the " +
+    "tree even when it passes the key on the way. O(log n) is a small number of hops, and with cold nodes each hop " +
+    "costs a full miss. The flat vector of Part 4 answers the same question with one indexed load.");
+});
+$("trBegin").addEventListener("click", function () {
+  if (!trKeys.length) return;
+  var sp = trSpine(-1), leaf = sp[sp.length - 1];
+  trHi = { path: [leaf], ret: leaf, libcxx: false };
+  var ns = trHop();
+  trAnimate();
+  logTo("trLog", trRows, "begin() = best ask " + pxOf(trT.nodes[leaf].k) + ": 1 hop · the header caches the leftmost node · " + fmtNs(ns), "hl");
+  trStats(1, ns, "<b>begin() is one hop.</b> Both libstdc++ and libc++ keep a pointer to the leftmost node in " +
+    "the tree's header and update it on insert and erase, so the best ask costs one load, " + fmtNs(ns) +
+    " with cold nodes. That load lands on a heap node the allocator placed anywhere. Compare a cached " +
+    "<code>best_ask_tick</code>, which sits in L1 because it is read thousands of times per tick.");
+});
+$("trRbegin").addEventListener("click", function () {
+  if (!trKeys.length) return;
+  var sp = trSpine(1);
+  trHi = { path: sp, ret: sp[sp.length - 1], libcxx: true };
+  var ns1 = trHop(), nsC = sp.length * trHop();
+  trAnimate();
+  logTo("trLog", trRows, "rbegin() = " + pxOf(trT.nodes[sp[sp.length - 1]].k) + ": libstdc++ 1 hop (" + fmtNs(ns1) +
+    ") · libc++ --end() walks root → rightmost, " + sp.length + " hops (" + fmtNs(nsC) + ")");
+  trStats(sp.length, nsC, "<b>rbegin() depends on the library.</b> libstdc++ caches the rightmost node as well, " +
+    "so it is one hop (" + fmtNs(ns1) + "). libc++ caches only <code>begin()</code>, and <code>--end()</code> " +
+    "walks from the root down the right spine: " + sp.length + " hops, " + fmtNs(nsC) + ". The fix in either " +
+    "library is the same: key the bid side with <code>std::greater</code> so that the best price is " +
+    "<code>begin()</code> on both sides.");
+});
+function trIns(t) {
+  var r = trLower(t);
+  trInsertKey(t); trBuild();
+  var ns = r.path.length * trHop() + SQ_MALLOC + 2 * trHop();
+  logTo("trLog", trRows, "insert " + pxOf(t) + ": walked " + r.path.length + " nodes, malloc'd one (~" + SQ_MALLOC +
+    " ns), recolour/rotate on the way up · " + fmtNs(ns));
+  return { r: r, ns: ns };
+}
+$("trIns").addEventListener("click", function () {
+  if (trKeys.length >= TR_MAX) { logTo("trLog", trRows, "the drawing holds " + TR_MAX + " levels: erase or reset first", "bad"); return; }
+  var t = trFresh(), o = trIns(t), id = -1;
+  trT.nodes.forEach(function (nd, i) { if (nd.k === t) id = i; });
+  trHi = { path: [id], ret: id, libcxx: false };
+  trTargets(); trDraw(99);
+  trStats(o.r.path.length, o.ns, "<b>Insert " + pxOf(t) + ": " + o.r.path.length + " hops to find the slot, then a " +
+    "<code>malloc</code> for the new node and some recolouring.</b> " + fmtNs(o.ns) + ". The tree is redrawn " +
+    "perfectly balanced; a red-black tree performs at most two rotations per insert and is only approximately balanced.");
+});
+$("trIns8").addEventListener("click", function () {
+  var k, tot = 0, c = 0;
+  for (k = 0; k < 8 && trKeys.length < TR_MAX; k++) { tot += trIns(trFresh()).ns; c++; }
+  trHi = null; trTargets(); trDraw(99);
+  trStats(null, c ? tot / c : null, "<b>" + c + " inserts, " + fmtNs(c ? tot / c : 0) + " each on average.</b> Height is now " +
+    trT.h + " for " + trKeys.length + " levels. Doubling n adds one hop to every lookup, and with cold nodes " +
+    "one hop is about one DRAM miss.");
+});
+$("trErase").addEventListener("click", function () {
+  if (!trKeys.length) return;
+  var old = trKeys.shift();
+  trBuild(); trTargets();
+  var ns = trHop() + 15 + 2 * trHop();
+  trHi = trKeys.length ? { path: [trSpine(-1).pop()], ret: trSpine(-1).pop(), libcxx: false } : null;
+  trDraw(99);
+  logTo("trLog", trRows, "erase(begin()) " + pxOf(old) + " traded away: unlink + rebalance + free() · new best ask " +
+    (trKeys.length ? pxOf(trKeys[0]) : "none") + " · " + fmtNs(ns), "bad");
+  trStats(3, ns, "<b>The best level traded away.</b> Erasing it unlinks the node, rebalances (at most three " +
+    "rotations), frees the node, and moves the cached leftmost pointer to the successor, which is another " +
+    "scattered node. A flat book does the same work by clearing one slot and stepping the best index to the next " +
+    "non-empty tick, a scan over contiguous memory.");
+});
+$("trReset").addEventListener("click", trReset);
+$("trLat").addEventListener("change", function () { trStats(null, null, "<b>Node residency changed.</b> Re-run an operation: the hop count stays the same and the cost of each hop changes."); });
+trReset();
+
+/* ══════════════════════════════════════════════════════════════
+   WIDGET 4 — id → order: chained vs open addressing
+   16-byte slots (id + Order*), 4 per cache line; capacity a power of two.
+   ══════════════════════════════════════════════════════════════ */
+var HS = null, hsRows = [], HS_MAXN = 120;
+function hsMix(x) {     /* murmur3 fmix32: a well-mixed hash so collisions look realistic */
+  x = x >>> 0;
+  x ^= x >>> 16; x = Math.imul(x, 0x85ebca6b) >>> 0;
+  x ^= x >>> 13; x = Math.imul(x, 0xc2b2ae35) >>> 0;
+  x ^= x >>> 16; return x >>> 0;
+}
+function hsNew(mode) {
+  HS = { mode: mode, cap: 16, slots: [], chains: [], live: [], tomb: 0, next: 70001, hist: [], re: 0,
+    rnd: lcgR(70001), last: null };
+  hsAlloc();
+}
+function hsAlloc() {
+  var i;
+  HS.slots = []; HS.chains = [];
+  for (i = 0; i < HS.cap; i++) { HS.slots.push(0); HS.chains.push([]); }
+}
+function hsMaxLoad() { return HS.mode === "oa" ? (+$("hsLoad").value) / 100 : 1.0; }
+function hsM() { return latOf($("hsLat").value); }
+function hsLinesCost(lines) { var m = hsM(); return lines <= 0 ? 0 : m + (lines - 1) * Math.min(m, 4); }
+function hsPlace(id) {     /* insert without rehash checks; returns probe info */
+  var h = hsMix(id), mask = HS.cap - 1;
+  if (HS.mode === "ch") {
+    var b = h & mask;
+    HS.chains[b].unshift(id);                   /* new nodes go to the front of their bucket */
+    return { idx: [b], b: b, probes: 1 };
+  }
+  var i = h & mask, firstT = -1, idx = [];
+  for (;;) {
+    idx.push(i);
+    if (HS.slots[i] === 0) break;
+    if (HS.slots[i] === -1 && firstT < 0) firstT = i;
+    i = (i + 1) & mask;
+  }
+  var at = firstT >= 0 ? firstT : i;
+  if (HS.slots[at] === -1) HS.tomb--;
+  HS.slots[at] = id;
+  return { idx: idx, at: at, probes: idx.length };
+}
+function hsLinesOf(idx) {
+  var seen = {}, c = 0;
+  idx.forEach(function (i) { var l = i >> 2; if (!seen[l]) { seen[l] = 1; c++; } });
+  return c;
+}
+function hsRehash(newCap) {
+  var ids = HS.live.slice(), oldCap = HS.cap, m = hsM();
+  HS.cap = newCap; HS.tomb = 0; hsAlloc();
+  ids.forEach(function (id) { hsPlace(id); });
+  HS.re++;
+  if (HS.mode === "oa") return newCap * 16 / 16 + Math.ceil(newCap * 16 / 4096) * 250 + ids.length * 4 + oldCap;
+  return newCap * 8 / 16 + Math.ceil(newCap * 8 / 4096) * 250 + ids.length * (m + 2);   /* relink every node: a chase */
+}
+function hsInsert() {
+  if (HS.live.length >= HS_MAXN) return null;
+  var id = HS.next; HS.next += 1 + Math.floor(HS.rnd() * 9);
+  var spike = 0, grew = false, ml = hsMaxLoad();
+  if (HS.mode === "oa") {
+    if (HS.live.length + HS.tomb + 1 > ml * HS.cap) {
+      /* mostly tombstones? rebuild in place; otherwise double */
+      var nc = (HS.live.length + 1 > ml * HS.cap / 2) ? HS.cap * 2 : HS.cap;
+      spike = hsRehash(nc); grew = true;
+    }
+  } else if (HS.live.length + 1 > ml * HS.cap) { spike = hsRehash(HS.cap * 2); grew = true; }
+  var p = hsPlace(id);
+  HS.live.push(id);
+  var lines = HS.mode === "oa" ? hsLinesOf(p.idx) : 1;
+  var ns = HS.mode === "oa" ? hsLinesCost(lines) + p.probes * 1 + 1 : hsM() + SQ_MALLOC + 2;
+  HS.hist.push({ ns: ns + spike, re: grew });
+  if (HS.hist.length > 60) HS.hist.shift();
+  HS.last = { kind: "insert", id: id, idx: p.idx, at: HS.mode === "oa" ? p.at : -1, b: p.b, probes: p.probes, lines: lines, ns: ns + spike, spike: spike, grew: grew };
+  return HS.last;
+}
+function hsFindId(id) {
+  var h = hsMix(id), mask = HS.cap - 1, m = hsM();
+  if (HS.mode === "ch") {
+    var b = h & mask, ch = HS.chains[b], k, visited = 0, hit = false;
+    for (k = 0; k < ch.length; k++) { visited++; if (ch[k] === id) { hit = true; break; } }
+    /* bucket line + one hop to the node before the bucket's first + one hop per chain node */
+    var ns = m + (1 + visited) * (m + 1);
+    return { kind: "find", id: id, idx: [b], b: b, probes: visited, lines: 2 + visited, ns: ns, hit: hit, chainPos: hit ? k : -1 };
+  }
+  var i = h & mask, idx = [];
+  for (;;) {
+    idx.push(i);
+    if (HS.slots[i] === id) return { kind: "find", id: id, idx: idx, at: i, probes: idx.length, lines: hsLinesOf(idx), ns: hsLinesCost(hsLinesOf(idx)) + idx.length, hit: true };
+    if (HS.slots[i] === 0) return { kind: "find", id: id, idx: idx, at: -1, probes: idx.length, lines: hsLinesOf(idx), ns: hsLinesCost(hsLinesOf(idx)) + idx.length, hit: false };
+    i = (i + 1) & mask;
+    if (idx.length > HS.cap) return { kind: "find", id: id, idx: idx, at: -1, probes: idx.length, lines: hsLinesOf(idx), ns: hsLinesCost(hsLinesOf(idx)) + idx.length, hit: false };
+  }
+}
+function hsDraw() {
+  var svg = $("hsSvg");
+  clear(svg);
+  var L = HS.last, mark = {}, cols = 32, cw = 20.5, ch = 16, x0 = 12, y0 = 30, i;
+  if (L) L.idx.forEach(function (k) { mark[k] = 1; });
+  var rows = Math.ceil(HS.cap / cols);
+  tx(svg, 12, 16, HS.mode === "oa"
+    ? "flat table · " + HS.cap + " slots of 16 B · 4 slots per cache line (gaps mark the lines)"
+    : "bucket array · " + HS.cap + " buckets of 8 B · the number is the chain length", { fill: C.ink, size: 10.5, weight: 700 });
+  for (i = 0; i < HS.cap; i++) {
+    var c = i % cols, r = Math.floor(i / cols);
+    var x = x0 + c * cw + Math.floor(c / 4) * 3, y = y0 + r * (ch + 6);
+    var fill = "#12151c", label = "", lc = C.dim;
+    if (HS.mode === "oa") {
+      var v = HS.slots[i];
+      if (v === -1) { fill = "rgba(210,153,34,.35)"; label = "†"; lc = C.warn; }
+      else if (v !== 0) { fill = "rgba(124,58,237,.55)"; }
+      if (L && L.at === i) { fill = L.hit === false ? fill : C.ok; }
+    } else {
+      var n = HS.chains[i].length;
+      if (n) { fill = n === 1 ? "rgba(124,58,237,.45)" : n === 2 ? "rgba(124,58,237,.8)" : "rgba(210,153,34,.7)"; label = String(n); lc = "#fff"; }
+    }
+    svg.appendChild(mk("rect", { x: x, y: y, width: cw - 2.5, height: ch, rx: 2, fill: fill,
+      stroke: mark[i] ? C.acc2 : C.line, "stroke-width": mark[i] ? 2 : 1 }));
+    if (label) tx(svg, x + (cw - 2.5) / 2, y + 11.5, label, { fill: lc, size: 8.5, anchor: "middle", weight: 700 });
+  }
+  var by = y0 + rows * (ch + 6) + 18;
+  if (HS.mode === "ch" && L && L.b !== undefined) {
+    var chn = HS.chains[L.b];
+    tx(svg, 12, by, "bucket " + L.b + " →", { fill: C.acc2, size: 10, weight: 700 });
+    var nx = 92, k;
+    for (k = 0; k < Math.min(chn.length, 5); k++) {
+      var hitNode = L.kind === "find" && L.chainPos === k;
+      var seen = L.kind === "find" && k < L.probes;
+      svg.appendChild(mk("rect", { x: nx, y: by - 13, width: 92, height: 20, rx: 4,
+        fill: hitNode ? C.ok : seen ? "rgba(124,58,237,.6)" : "#12151c", stroke: C.line }));
+      tx(svg, nx + 46, by + 1, "node id " + chn[k], { fill: (hitNode || seen) ? "#fff" : C.muted, size: 9, anchor: "middle" });
+      if (k < Math.min(chn.length, 5) - 1) arrow(svg, nx + 92, by - 3, nx + 112, by - 3, C.muted);
+      nx += 114;
+    }
+    if (chn.length > 5) tx(svg, nx, by, "+" + (chn.length - 5), { fill: C.dim, size: 10 });
+    if (!chn.length) tx(svg, 92, by, "empty bucket", { fill: C.dim, size: 10 });
+    tx(svg, 12, by + 24, "each node is a separate malloc: every arrow is a dependent load into a different line",
+      { fill: C.dim, size: 9.5 });
+  } else if (HS.mode === "oa" && L) {
+    tx(svg, 12, by, "probe: " + L.idx.slice(0, 14).join(" → ") + (L.idx.length > 14 ? " → …" : "") +
+      (L.kind === "find" && !L.hit ? "  · stopped at an empty slot" : ""), { fill: C.acc2, size: 10, weight: 700 });
+    tx(svg, 12, by + 18, "home slot = hash & " + (HS.cap - 1) + " · step +1 · tombstones (†) keep a probe walking, empty slots end it",
+      { fill: C.dim, size: 9.5 });
+  }
+  svg.setAttribute("viewBox", "0 0 720 " + Math.max(150, by + 34));
+  /* sparkline of insert costs */
+  var sp = $("hsSpark");
+  clear(sp);
+  tx(sp, 12, 14, "ns per insert, last " + HS.hist.length + " · log scale · red = this insert triggered a rehash", { fill: C.muted, size: 10, weight: 700 });
+  var mx = 1;
+  HS.hist.forEach(function (h) { mx = Math.max(mx, h.ns); });
+  var bw = 696 / 60;
+  HS.hist.forEach(function (h, j) {
+    var hh = Math.max(2, 64 * Math.log(1 + h.ns) / Math.log(1 + mx));
+    sp.appendChild(mk("rect", { x: 12 + j * bw, y: 88 - hh, width: Math.max(1, bw - 2), height: hh, rx: 1.5,
+      fill: h.re ? C.bad : C.acc2, opacity: h.re ? 0.95 : 0.6 }));
+  });
+  tx(sp, 708, 14, "max " + fmtNs(mx), { fill: C.bad, size: 10, anchor: "end", weight: 700 });
+}
+function hsRender(verdict) {
+  var load = (HS.live.length + (HS.mode === "oa" ? HS.tomb : 0)) / HS.cap, L = HS.last;
+  $("vhsLoad").textContent = (+$("hsLoad").value / 100).toFixed(2) + (HS.mode === "ch" ? " (unused: chained = 1.0)" : "");
+  $("hsN").textContent = HS.live.length;
+  $("hsCap").textContent = HS.cap;
+  $("hsLd").textContent = load.toFixed(2);
+  $("hsLd").className = "sv " + (load > 0.85 ? "bad" : load > 0.7 ? "warn" : "ok");
+  $("hsTomb").textContent = HS.mode === "oa" ? HS.tomb : "n/a";
+  $("hsProbe").textContent = L ? String(L.probes) : "—";
+  $("hsLines").textContent = L ? String(L.lines) : "—";
+  $("hsNs").textContent = L ? fmtNs(L.ns) : "—";
+  $("hsNs").className = "sv " + (L && L.spike ? "bad" : "");
+  $("hsRe").textContent = HS.re;
+  hsDraw();
+  if (verdict) $("hsVerdict").innerHTML = verdict;
+}
+function hsVerdictFor(L) {
+  var a = HS.live.length / HS.cap, exp = 0.5 * (1 + 1 / Math.max(0.05, 1 - a));
+  if (!L) return "";
+  if (L.kind === "insert" && L.grew) {
+    return "<b>This insert paid for a rehash: " + fmtNs(L.ns) + "</b>, against a few nanoseconds for a normal one. The table " +
+      "grew to " + HS.cap + (HS.mode === "oa" ? " slots and every live id was re-placed in the new array."
+        : " buckets and every node was relinked, a pointer chase through all " + HS.live.length + " of them.") +
+      " Amortised O(1) is a promise about the average; the spike in the sparkline is what one message sees. " +
+      "On the hot path the table is sized once at start-up (<code>reserve</code>) so that this never happens.";
+  }
+  if (HS.mode === "oa") {
+    return "<b>" + (L.kind === "insert" ? "Insert" : L.hit ? "Hit" : "Miss") + " after " + L.probes + " probe" + (L.probes === 1 ? "" : "s") +
+      ", " + L.lines + " cache line" + (L.lines === 1 ? "" : "s") + ".</b> At load " + a.toFixed(2) + " theory expects about " +
+      exp.toFixed(1) + " probes for a hit. A miss is worse because it walks until it reaches an empty slot, and " +
+      "tombstones never end a probe, so a table full of cancels gets slower even when its live count is small. " +
+      "Neighbouring slots share a line, so a probe of 3 usually costs one miss, not three.";
+  }
+  return "<b>" + (L.kind === "insert" ? "Insert" : L.hit ? "Hit" : "Miss") + ": bucket, then " + L.probes + " node" + (L.probes === 1 ? "" : "s") +
+    ", " + L.lines + " lines.</b> Each node of a chain is its own allocation, so every step is a dependent load into a " +
+    "different line. libstdc++ also stores in each bucket a pointer to the node <em>before</em> its first entry, " +
+    "which adds one more hop. The average chain is short (load " + a.toFixed(2) + "), but each link costs a miss where " +
+    "open addressing pays a compare inside a line it has already loaded.";
+}
+function hsSetMode(mode) {
+  setSw(["hsOA", "hsCH"], mode === "oa" ? "hsOA" : "hsCH");
+  hsRows = [];
+  hsNew(mode);
+  var k;
+  for (k = 0; k < 10; k++) hsInsert();
+  HS.last = null;
+  logTo("hsLog", hsRows, (mode === "oa" ? "open addressing" : "chained") + " · 10 order ids inserted");
+  hsRender("<b>" + (mode === "oa" ? "One flat array." : "An array of bucket heads, each a chain of heap nodes.") +
+    "</b> Insert orders until the load crosses the threshold and watch the sparkline for the rehash. Then delete a few " +
+    "and probe for an absent id" + (mode === "oa" ? " to see tombstones lengthen the walk." : "."));
+}
+$("hsOA").addEventListener("click", function () { hsSetMode("oa"); });
+$("hsCH").addEventListener("click", function () { hsSetMode("ch"); });
+$("hsIns1").addEventListener("click", function () {
+  var L = hsInsert();
+  if (!L) { logTo("hsLog", hsRows, "the drawing holds " + HS_MAXN + " ids: reset first", "bad"); return; }
+  logTo("hsLog", hsRows, "insert id " + L.id + ": " + L.probes + " probe(s), " + fmtNs(L.ns) + (L.grew ? " · REHASH to " + HS.cap : ""), L.grew ? "bad" : "");
+  hsRender(hsVerdictFor(L));
+});
+$("hsIns16").addEventListener("click", function () {
+  var k, L = null, grew = null;
+  for (k = 0; k < 16; k++) { var r = hsInsert(); if (!r) break; L = r; if (r.grew) grew = r; }
+  if (!L) { logTo("hsLog", hsRows, "the drawing holds " + HS_MAXN + " ids: reset first", "bad"); return; }
+  logTo("hsLog", hsRows, "16 inserts · capacity " + HS.cap + (grew ? " · one of them rehashed: " + fmtNs(grew.ns) : ""), grew ? "bad" : "");
+  if (grew) HS.last = grew.grew ? HS.last : HS.last;
+  hsRender(hsVerdictFor(grew || L));
+});
+$("hsFind").addEventListener("click", function () {
+  if (!HS.live.length) return;
+  var id = HS.live[Math.floor(HS.rnd() * HS.live.length)], L = hsFindId(id);
+  HS.last = L;
+  logTo("hsLog", hsRows, "find(" + id + "): " + L.probes + " probe(s), " + L.lines + " line(s), " + fmtNs(L.ns), "hl");
+  hsRender(hsVerdictFor(L));
+});
+$("hsMiss").addEventListener("click", function () {
+  var id = HS.next + 100000 + Math.floor(HS.rnd() * 1000), L = hsFindId(id);
+  HS.last = L;
+  logTo("hsLog", hsRows, "find(" + id + "), not present: " + L.probes + " probe(s) before giving up, " + fmtNs(L.ns), "bad");
+  hsRender(hsVerdictFor(L));
+});
+$("hsDel").addEventListener("click", function () {
+  if (!HS.live.length) return;
+  var j = Math.floor(HS.rnd() * HS.live.length), id = HS.live[j], L = hsFindId(id);
+  HS.live.splice(j, 1);
+  if (HS.mode === "oa") { HS.slots[L.at] = -1; HS.tomb++; }
+  else { var cc = HS.chains[L.b]; cc.splice(cc.indexOf(id), 1); }
+  L.kind = "erase"; HS.last = L;
+  logTo("hsLog", hsRows, "erase(" + id + ") · " + (HS.mode === "oa" ? "slot " + L.at + " becomes a tombstone †" : "node unlinked and freed"), "");
+  hsRender(HS.mode === "oa"
+    ? "<b>Cancel " + id + ": the slot becomes a tombstone, not empty.</b> If it were emptied, a later probe for an id " +
+      "that collided past this slot would stop here and report a false miss. Tombstones count toward the load, so a " +
+      "day of cancels eventually forces a rebuild, which happens on an insert. " + HS.tomb + " tombstone" + (HS.tomb === 1 ? "" : "s") + " now."
+    : "<b>Cancel " + id + ": unlink the node and <code>free()</code> it.</b> Chaining needs no tombstones, but every cancel " +
+      "is a call into the allocator unless the table uses a pool allocator.");
+});
+$("hsReset").addEventListener("click", function () { hsSetMode(HS.mode); });
+$("hsLoad").addEventListener("input", function () { $("vhsLoad").textContent = (+$("hsLoad").value / 100).toFixed(2); });
+$("hsLoad").addEventListener("change", function () { hsRender(); });
+$("hsLat").addEventListener("change", function () { hsRender(); });
+hsSetMode("oa");
+
+/* ══════════════════════════════════════════════════════════════
+   WIDGET 5 — a binary max-heap of bid prices
+   ══════════════════════════════════════════════════════════════ */
+var HP_MAX = 15, hp = [], hpRows = [], hpTimer = null, hpRnd = lcgR(31415), hpHi = { sw: [], scan: [], at: -1 };
+function hpLive(t) { return hp.some(function (e) { return e.t === t && !e.dead; }); }
+function hpFresh() {
+  var g = 0, t;
+  do { t = -Math.round(hpRnd() * 40); } while (hp.some(function (e) { return e.t === t; }) && g++ < 400);
+  return t;
+}
+function hpCopy() { return hp.map(function (e) { return { t: e.t, dead: e.dead }; }); }
+/* each frame: a snapshot of the array and the pair just swapped */
+function hpPushFrames(t) {
+  var frames = [];
+  hp.push({ t: t, dead: false });
+  var i = hp.length - 1;
+  frames.push({ a: hpCopy(), sw: [i] });
+  while (i > 0) {
+    var p = (i - 1) >> 1;
+    if (hp[p].t >= hp[i].t) break;
+    var tmp = hp[p]; hp[p] = hp[i]; hp[i] = tmp;
+    frames.push({ a: hpCopy(), sw: [p, i] });
+    i = p;
+  }
+  return frames;
+}
+function hpPopFrames() {
+  var frames = [], n = hp.length;
+  if (!n) return frames;
+  var last = hp.pop();
+  if (n === 1) { frames.push({ a: hpCopy(), sw: [] }); return frames; }
+  hp[0] = last;
+  frames.push({ a: hpCopy(), sw: [0] });
+  var i = 0;
+  for (;;) {
+    var l = 2 * i + 1, r = l + 1, b = i;
+    if (l < hp.length && hp[l].t > hp[b].t) b = l;
+    if (r < hp.length && hp[r].t > hp[b].t) b = r;
+    if (b === i) break;
+    var tmp = hp[b]; hp[b] = hp[i]; hp[i] = tmp;
+    frames.push({ a: hpCopy(), sw: [i, b] });
+    i = b;
+  }
+  return frames;
+}
+function hpDraw(a, hi) {
+  var svg = $("hpSvg");
+  clear(svg);
+  var n = a.length, i;
+  function pos(k) {
+    var d = Math.floor(Math.log(k + 1) / Math.LN2), p = k - (Math.pow(2, d) - 1), w = 672 / Math.pow(2, d);
+    return { x: 24 + (p + 0.5) * w, y: 22 + d * 48 };
+  }
+  for (i = 1; i < n; i++) {
+    var a1 = pos(i), a0 = pos((i - 1) >> 1);
+    svg.appendChild(mk("line", { x1: a0.x, y1: a0.y + 9, x2: a1.x, y2: a1.y - 9, stroke: "#3a4150", "stroke-width": 1.2 }));
+  }
+  for (i = 0; i < n; i++) {
+    var q = pos(i), e = a[i], sw = hi.sw.indexOf(i) >= 0, sc = hi.scan.indexOf(i) >= 0, at = hi.at === i;
+    var fill = e.dead ? "#3a3f4b" : at ? C.ok : sw ? C.acc : sc ? C.acc2 : i === 0 ? "rgba(63,185,80,.35)" : "#12151c";
+    svg.appendChild(mk("rect", { x: q.x - 22, y: q.y - 9, width: 44, height: 18, rx: 4, fill: fill,
+      stroke: i === 0 ? C.ok : sw ? C.acc2 : C.line, "stroke-width": i === 0 ? 1.6 : 1 }));
+    tx(svg, q.x, q.y + 3.5, pxOf(e.t) + (e.dead ? " ✕" : ""), { fill: e.dead ? C.dim : (sw || at) ? "#fff" : sc ? "#0b0e14" : C.ink, size: 9, anchor: "middle", weight: (sw || at) ? 700 : 400 });
+  }
+  /* the array that actually holds it */
+  var y = 236, cw = 44.8;
+  tx(svg, 12, y - 10, "the storage · one contiguous array · children of i at 2i+1, 2i+2 · top() reads slot 0", { fill: C.muted, size: 10, weight: 700 });
+  for (i = 0; i < HP_MAX; i++) {
+    var x = 12 + i * cw, has = i < n, e2 = has ? a[i] : null;
+    var sw2 = hi.sw.indexOf(i) >= 0, sc2 = hi.scan.indexOf(i) >= 0, at2 = hi.at === i;
+    svg.appendChild(mk("rect", { x: x, y: y, width: cw - 3, height: 24, rx: 3,
+      fill: !has ? "#0f1218" : e2.dead ? "#3a3f4b" : at2 ? C.ok : sw2 ? C.acc : sc2 ? C.acc2 : i === 0 ? "rgba(63,185,80,.35)" : "#12151c",
+      stroke: C.line }));
+    tx(svg, x + (cw - 3) / 2, y + 16, has ? pxOf(e2.t) : "", { fill: has && (sw2 || at2) ? "#fff" : has && sc2 ? "#0b0e14" : C.muted, size: 8.5, anchor: "middle" });
+    tx(svg, x + (cw - 3) / 2, y + 38, "[" + i + "]", { fill: C.dim, size: 8.5, anchor: "middle" });
+  }
+}
+function hpPlay(frames, done) {
+  if (hpTimer) { clearInterval(hpTimer); hpTimer = null; }
+  if (!frames.length) { hpDraw(hp, hpHi); if (done) done(); return; }
+  if (RM) { var f = frames[frames.length - 1]; hpDraw(f.a, { sw: f.sw, scan: [], at: -1 }); if (done) done(); return; }
+  var k = 0;
+  hpDraw(frames[0].a, { sw: frames[0].sw, scan: [], at: -1 });
+  hpTimer = setInterval(function () {
+    k++;
+    if (k >= frames.length) { clearInterval(hpTimer); hpTimer = null; if (done) done(); return; }
+    hpDraw(frames[k].a, { sw: frames[k].sw, scan: [], at: -1 });
+  }, 420);
+}
+function hpTargets() {
+  var sel = $("hpTarget"), keep = sel.value;
+  clear(sel);
+  hp.filter(function (e) { return !e.dead; }).map(function (e) { return e.t; }).sort(function (a, b) { return b - a; }).forEach(function (t) {
+    var o = document.createElement("option"); o.value = String(t); o.textContent = pxOf(t); sel.appendChild(o);
+  });
+  if (keep) sel.value = keep;
+  if (sel.selectedIndex < 0 && sel.options.length) sel.selectedIndex = sel.options.length - 1;
+}
+function hpStats(swaps, ns, verdict) {
+  var dead = hp.filter(function (e) { return e.dead; }).length;
+  $("hpN").textContent = hp.length;
+  $("hpBest").textContent = hp.length ? pxOf(hp[0].t) + (hp[0].dead ? " ✕" : "") : "—";
+  $("hpBest").className = "sv " + (hp.length && hp[0].dead ? "bad" : "ok");
+  $("hpDead").textContent = dead;
+  $("hpSw").textContent = swaps === null ? "—" : String(swaps);
+  $("hpNs").textContent = ns === null ? "—" : fmtNs(ns);
+  if (verdict) $("hpVerdict").innerHTML = verdict;
+  hpTargets();
+}
+/* top() with lazy deletion: discard tombstones that reached the root */
+function hpClean() {
+  var frames = [], popped = [];
+  while (hp.length && hp[0].dead) { popped.push(hp[0].t); frames = frames.concat(hpPopFrames()); }
+  return { frames: frames, popped: popped };
+}
+function hpReset() {
+  hp = []; hpRows = []; hpRnd = lcgR(31415); hpHi = { sw: [], scan: [], at: -1 };
+  var k;
+  for (k = 0; k < 9; k++) hpPushFrames(hpFresh());
+  hpDraw(hp, hpHi);
+  logTo("hpLog", hpRows, "9 bid levels pushed · top() = " + pxOf(hp[0].t));
+  hpStats(null, null, "<b>The best bid is slot 0 of an array, so top() is one load.</b> That is the only question a heap " +
+    "answers. Try <em>find</em> and <em>cancel a level</em> to see what it cannot do.");
+}
+$("hpPush").addEventListener("click", function () {
+  if (hp.length >= HP_MAX) { logTo("hpLog", hpRows, "the drawing holds " + HP_MAX + ": pop first", "bad"); return; }
+  var t = hpFresh(), fr = hpPushFrames(t), sw = fr.length - 1;
+  hpHi = { sw: [], scan: [], at: -1 };
+  logTo("hpLog", hpRows, "push(" + pxOf(t) + "): appended at slot " + (hp.length - 1 - 0) + ", sifted up " + sw + " level(s)", sw ? "hl" : "");
+  hpPlay(fr);
+  hpStats(sw, 2 + sw * 3, "<b>push(" + pxOf(t) + "): " + sw + " swap" + (sw === 1 ? "" : "s") + " on the way up.</b> " +
+    "The new element goes into the next free slot and swaps with its parent while it is the larger. At most log<sub>2</sub> n " +
+    "swaps, all inside one small contiguous array, about " + fmtNs(2 + sw * 3) + ".");
+});
+$("hpTop").addEventListener("click", function () {
+  if (!hp.length) return;
+  var c = hpClean();
+  hpHi = { sw: [], scan: [], at: hp.length ? 0 : -1 };
+  if (c.popped.length) {
+    logTo("hpLog", hpRows, "top(): slot 0 was a tombstone (" + c.popped.map(pxOf).join(", ") + ") · tombstoned pop × " + c.popped.length + " · now " + (hp.length ? pxOf(hp[0].t) : "empty"), "bad");
+    hpPlay(c.frames, function () { hpDraw(hp, hpHi); });
+    hpStats(c.frames.length, c.popped.length * 12 + 1, "<b>Tombstoned pop.</b> The best level had been cancelled, but the heap only " +
+      "learned this when it reached the top. Each dead root costs a full <code>pop()</code>, O(log n), on the read path. " +
+      "This is the price of lazy deletion: cancels are cheap, and the cost is paid later, at the worst possible moment.");
+  } else {
+    logTo("hpLog", hpRows, "top() = " + pxOf(hp[0].t) + " · one load of slot 0", "ok");
+    hpDraw(hp, hpHi);
+    hpStats(0, LAT.L1, "<b>top() = " + pxOf(hp[0].t) + " in one load.</b> Q3 answered. That is all a heap does well.");
+  }
+});
+$("hpPop").addEventListener("click", function () {
+  if (!hp.length) return;
+  var old = hp[0].t, fr = hpPopFrames(), sw = Math.max(0, fr.length - 1);
+  hpHi = { sw: [], scan: [], at: -1 };
+  logTo("hpLog", hpRows, "pop(): " + pxOf(old) + " traded away · last slot moved to the root · sifted down " + sw + " level(s)");
+  hpPlay(fr);
+  hpStats(sw, 3 + sw * 4, "<b>pop(): the last element jumps to the root and sifts down " + sw + " level" + (sw === 1 ? "" : "s") +
+    ".</b> Each step compares both children and swaps with the larger. O(log n), contiguous, branchy.");
+});
+$("hpCancel").addEventListener("click", function () {
+  var cand = [], i;
+  for (i = 1; i < hp.length; i++) if (!hp[i].dead) cand.push(i);
+  if (!cand.length) return;
+  var j = cand[Math.floor(hpRnd() * cand.length)];
+  if (hp.length > 2 && hpRnd() < 0.35 && !hp[0].dead) j = 0;   /* sometimes the best level itself is cancelled */
+  hp[j].dead = true;
+  hpHi = { sw: [], scan: [], at: -1 };
+  hpDraw(hp, hpHi);
+  logTo("hpLog", hpRows, "cancel " + pxOf(hp[j].t) + ": no erase(x) · marked dead in a side set (lazy deletion), still in slot " + j, "bad");
+  hpStats(0, 25, "<b>The heap cannot erase " + pxOf(hp[j].t) + ".</b> <code>std::priority_queue</code> has no " +
+    "<code>find</code> and no <code>erase</code>, and heap order says nothing about where a value sits. So the level " +
+    "goes into a side set of cancelled prices (itself a hash map, Q1 again) and stays in the array until it reaches the " +
+    "top. " + (j === 0 ? "This one is the top: press <em>top()</em> to see the tombstoned pop." : "Pop down to it to see the tombstoned pop."));
+});
+$("hpFind").addEventListener("click", function () {
+  if (!hp.length) return;
+  var t = +$("hpTarget").value, scan = [], at = -1, i;
+  for (i = 0; i < hp.length; i++) { scan.push(i); if (hp[i].t === t && !hp[i].dead) { at = i; break; } }
+  hpHi = { sw: [], scan: scan, at: at };
+  hpDraw(hp, hpHi);
+  var ns = sqScan(scan.length, 8, LAT.L1);
+  logTo("hpLog", hpRows, "find(" + pxOf(t) + "): linear scan of the array, " + scan.length + " slot(s) · " + (at >= 0 ? "found at [" + at + "]" : "absent"));
+  hpStats(0, ns, "<b>find(" + pxOf(t) + ") scanned " + scan.length + " of " + hp.length + " slots.</b> Heap order only " +
+    "says each parent is ≥ its children, so there is no path to follow, and Q2 falls back to O(n). The heap holds prices, " +
+    "not orders, so Q1 (by id) cannot be asked of it at all. A heap is useful only as a cache for the extremum.");
+});
+$("hpReset").addEventListener("click", hpReset);
+hpReset();
+
+/* ══════════════════════════════════════════════════════════════
+   The production book — static diagram
+   ══════════════════════════════════════════════════════════════ */
+(function pbkDraw() {
+  var svg = $("pbkSvg");
+  clear(svg);
+  /* id table */
+  tx(svg, 14, 18, "id → Order* · open addressing", { fill: C.acc2, size: 10, weight: 700 });
+  var ids = [70114, 0, 70031, 70087, 0, 70102, 0, 70059, 70120, 0], i;
+  for (i = 0; i < ids.length; i++) {
+    svg.appendChild(mk("rect", { x: 14, y: 28 + i * 25, width: 100, height: 21, rx: 3,
+      fill: ids[i] ? "rgba(124,58,237,.35)" : "#12151c", stroke: C.line }));
+    tx(svg, 64, 42 + i * 25, ids[i] ? "id " + ids[i] : "empty", { fill: ids[i] ? C.ink : C.dim, size: 9, anchor: "middle" });
+  }
+  /* flat levels */
+  var L0 = 210, LW = 62, ticks = [-3, -2, -1, 0, 1, 2, 3, 4];
+  tx(svg, L0, 18, "vector<Level> · index = (px − base) / tick", { fill: C.acc2, size: 10, weight: 700 });
+  ticks.forEach(function (t, k) {
+    var bid = t <= 0, x = L0 + k * LW;
+    svg.appendChild(mk("rect", { x: x, y: 28, width: LW - 4, height: 24, rx: 3,
+      fill: bid ? "rgba(63,185,80,.22)" : "rgba(248,81,73,.22)", stroke: t === 0 || t === 1 ? C.acc2 : C.line, "stroke-width": t === 0 || t === 1 ? 1.8 : 1 }));
+    tx(svg, x + (LW - 4) / 2, 44, pxOf(t), { fill: C.ink, size: 9.5, anchor: "middle" });
+  });
+  /* FIFO nodes under some levels: [level index, count] */
+  var fifo = [[1, 1], [2, 2], [3, 3], [4, 2], [5, 1], [6, 2]], nodePos = {};
+  var orderIds = { "3,0": 70031, "3,1": 70059, "3,2": 70102, "4,0": 70087, "4,1": 70114, "2,1": 70120 };
+  fifo.forEach(function (f) {
+    var k = f[0], x = L0 + k * LW + 5, j;
+    for (j = 0; j < f[1]; j++) {
+      var y = 74 + j * 46;
+      svg.appendChild(mk("rect", { x: x, y: y, width: LW - 14, height: 26, rx: 4,
+        fill: ticks[k] <= 0 ? "rgba(63,185,80,.5)" : "rgba(248,81,73,.5)", stroke: C.line }));
+      var oid = orderIds[k + "," + j];
+      tx(svg, x + (LW - 14) / 2, y + 16, oid ? String(oid).slice(-3) : "ord", { fill: "#0b0e14", size: 9, anchor: "middle", weight: 700 });
+      nodePos[k + "," + j] = { x: x, y: y };
+      if (j === 0) svg.appendChild(mk("line", { x1: x + (LW - 14) / 2, y1: 52, x2: x + (LW - 14) / 2, y2: y, stroke: C.muted, "stroke-width": 1 }));
+      else {
+        arrow(svg, x + 14, y - 20, x + 14, y, C.muted);
+        arrow(svg, x + LW - 28, y, x + LW - 28, y - 20, C.dim, { dash: "3 2" });
+      }
+    }
+  });
+  /* id table → nodes */
+  [[0, "4,1"], [2, "3,0"], [3, "4,0"], [5, "3,2"], [7, "3,1"], [8, "2,1"]].forEach(function (p, k) {
+    var np = nodePos[p[1]];
+    arrow(svg, 114, 38 + p[0] * 25, np.x, np.y + 13, k === 1 ? C.acc2 : "rgba(196,181,253,.45)", { bend: 8, w: k === 1 ? 1.8 : 1 });
+  });
+  /* cached best indices */
+  arrow(svg, L0 + 3 * LW + 29, 280, L0 + 3 * LW + 29, 236, C.ok, { w: 1.8 });
+  tx(svg, L0 + 3 * LW + 22, 292, "best_bid (cached)", { fill: C.ok, size: 9.5, anchor: "end", weight: 700 });
+  arrow(svg, L0 + 4 * LW + 29, 280, L0 + 4 * LW + 29, 236, C.bad, { w: 1.8 });
+  tx(svg, L0 + 4 * LW + 36, 292, "best_ask (cached)", { fill: C.bad, size: 9.5, weight: 700 });
+  tx(svg, 14, 286, "Q1 →", { fill: C.acc2, size: 10, weight: 700 });
+  tx(svg, 50, 286, "probe, then O(1) unlink", { fill: C.dim, size: 9.5 });
+  tx(svg, 14, 314, "one FIFO per level, front fills first · next = solid arrow, prev = dashed · every order node comes from the week-4 pool",
+    { fill: C.dim, size: 9.5 });
+})();
+
+/* ══════════════════════════════════════════════════════════════
+   WIDGET 7 — pointer chasing versus contiguity, one cache line at a time
    ══════════════════════════════════════════════════════════════ */
 function ccModel() {
   var k = +$("ccK").value, sz = +$("ccSz").value, pref = $("ccPref").checked;
@@ -1417,7 +2826,7 @@ $("ccPref").addEventListener("change", ccRender);
 ccRender();
 
 /* ══════════════════════════════════════════════════════════════
-   WIDGET 4 — sizing the price band, and the day the market leaves it
+   WIDGET 8 — sizing the price band, and the day the market leaves it
    ══════════════════════════════════════════════════════════════ */
 var pbTick = 0.01;
 function pbRender() {
@@ -1522,7 +2931,7 @@ function pbRender() {
 pbRender();
 
 /* ══════════════════════════════════════════════════════════════
-   WIDGET 5 — snapshot, delta, and the sequence gap
+   WIDGET 9 — snapshot, delta, and the sequence gap
    ══════════════════════════════════════════════════════════════ */
 var sgMsgs = [], sgState = null;
 function sgSeed() {

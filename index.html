@@ -386,13 +386,13 @@
 
   <div id="mapHost"></div>
 
-  <div class="note" style="margin-top:18px"><b>Reading the 9-session track.</b> Two pages are split
-  across sessions. Week 3 serves Session 3 (classes, RAII, the Rule of Five) and Session 4 (smart
-  pointers). Week 4 serves Session 4 (runtime polymorphism, its second half) and Session 6 (allocators and
-  pools, its first half). Otherwise the groups run in order: 5+6 are templates and compile-time design;
-  4+7+8 are the pool, the order book built on it and the O(1) structures around it; 9+10 are the memory
-  model and the lock-free ring; 11+12+13 are the wire, the I/O and the machine; 14+15 are the tail and the
-  tournament.</div>
+  <div class="note" style="margin-top:18px"><b>Reading the 9-session track.</b> Session 5 (Oct 26) is
+  the midterm and carries no new material. Two pages are split across sessions. Week 3 serves Session 2 (classes,
+  RAII, the Rule of Five, after pointers in week 2) and Session 3 (smart pointers). Week 4 serves Session 3
+  (runtime polymorphism, its second half) and Session 6 (allocators and pools, its first half). Otherwise the
+  groups run in order: 5+6 are templates and compile-time design; 4+7+8 are the pool, the order book built on
+  it and the O(1) structures around it; 9+10 are the memory model and the lock-free ring; 11+12+13 are the
+  wire, the I/O and the machine; 14+15 are the tail and the tournament, with a short part on pre-trade risk.</div>
 </section>
 
 <!-- ══════════════ TIME SCALES ══════════════ -->
@@ -665,15 +665,15 @@ var WEEKS = [
     g: ["cross-venue", "stale quotes", "message budget", "tournament"] }
 ];
 var SESSIONS = [
-  { s: 1, w: [1],          n: "The market and the race",               d: "What you are trading in, and what “fast” buys you." },
-  { s: 2, w: [2],          n: "Pointers and the cost of memory",       d: "What an operation costs, and what a pointer really points at." },
-  { s: 3, w: [3],          n: "Classes, RAII and the Rule of Five",     d: "Encapsulation and inheritance, and who owns the memory." },
-  { s: 4, w: ["4#poly", 3], n: "Polymorphism and smart ownership",     d: "Price the virtual call, then hand ownership to a smart pointer." },
-  { s: 5, w: [5, 6],       n: "Templates, compile-time and CRTP",      d: "Write it once for every type, then push the work to compile time." },
-  { s: 6, w: [4, 7, 8],    n: "Memory pools and the order book",       d: "Stop calling the allocator, then build an O(1) book on top of the pool." },
-  { s: 7, w: [9, 10],      n: "Concurrency, from atomics to lock-free", d: "What one core promises another, and the SPSC ring that carries every tick." },
-  { s: 8, w: [11, 12, 13], n: "The wire and the machine",              d: "Market data on the network, orders back out, and the last microseconds." },
-  { s: 9, w: [14, 15],     n: "The tail and the tournament",           d: "Prove where the tail is, then race across venues." }
+  { s: 1, w: [1],          n: "The market and the race",               d: "Sep 28 · What you are trading in, and what “fast” buys you." },
+  { s: 2, w: [2, 3],       n: "Pointers and classes",                  d: "Oct 5 · What a pointer really points at, then encapsulation, inheritance and RAII." },
+  { s: 3, w: ["4#poly", 3], n: "Polymorphism and smart ownership",     d: "Oct 12 · Price the virtual call, then hand ownership to a smart pointer." },
+  { s: 4, w: [5, 6],       n: "Templates, compile-time and CRTP",      d: "Oct 19 · Write it once for every type, then push the work to compile time." },
+  { s: 5, w: [],           n: "Midterm",                               d: "Oct 26 · Exam only, no new material.", exam: true },
+  { s: 6, w: [4, 7, 8],    n: "Memory pools and the order book",       d: "Nov 2 · Stop calling the allocator, then build an O(1) book on top of the pool." },
+  { s: 7, w: [9, 10],      n: "Concurrency, from atomics to lock-free", d: "Nov 9 · What one core promises another, and the SPSC ring that carries every tick." },
+  { s: 8, w: [11, 12, 13], n: "The wire and the machine",              d: "Nov 16 · Market data on the network, orders back out, and the last microseconds." },
+  { s: 9, w: [14, 15],     n: "The tail and the tournament",           d: "Nov 30 · Prove where the tail is, race across venues, and a short part on pre-trade risk." }
 ];
 
 function artSvg(kind) {
@@ -785,8 +785,9 @@ function mapDraw(track) {
       an.textContent = "Session " + S.s + " · " + S.n;
       var ad = document.createElement("span"); ad.className = "ad";
       var nums = S.w.map(function (x) { return parseInt(x, 10); });
-      ad.textContent = S.d + "  (covers week" + (nums.length > 1 ? "s " : " ") + nums.join(" + ") + ")";
+      ad.textContent = S.exam ? S.d : S.d + "  (covers week" + (nums.length > 1 ? "s " : " ") + nums.join(" + ") + ")";
       band.appendChild(an); band.appendChild(ad); host.appendChild(band);
+      if (S.exam) return;                 /* an exam slot: no week cards */
       var grid = document.createElement("div"); grid.className = "weeks";
       S.w.forEach(function (x) {
         var parts = String(x).split("#");
@@ -794,7 +795,7 @@ function mapDraw(track) {
       });
       host.appendChild(grid);
     });
-    $("trackCount").textContent = "9 sessions · weeks 3 and 4 are split across two";
+    $("trackCount").textContent = "9 sessions · one is the midterm · weeks 3 and 4 are split across two";
   }
 }
 Array.prototype.forEach.call($("trackSw").querySelectorAll("button"), function (b) {
