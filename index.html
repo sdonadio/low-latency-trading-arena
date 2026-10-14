@@ -381,7 +381,7 @@
       <button type="button" data-t="w15" aria-pressed="true">15-week track</button>
       <button type="button" data-t="s9" aria-pressed="false">9-session track</button>
     </div>
-    <span class="pill acc" id="trackCount">15 sessions · one topic each</span>
+    <span class="pill acc" id="trackCount">15 topics · 13 sessions</span>
   </div>
 
   <div id="mapHost"></div>
@@ -750,12 +750,20 @@ function artSvg(kind) {
   return s;
 }
 
-function card(w, anchor) {
+// 15-week track as actually scheduled (Columbia, Wed): week -> [session, date]. Two merges (5+6, 7+8),
+// two more (11+12) and a midterm-only session 8 on Oct 28 mean 15 topics fit in 13 meetings.
+var CU = { 1: [1, "Sep 9"], 2: [2, "Sep 16"], 3: [3, "Sep 23"], 4: [4, "Sep 30"], 5: [5, "Oct 7"], 6: [5, "Oct 7"],
+  7: [6, "Oct 14"], 8: [6, "Oct 14"], 9: [7, "Oct 21"], 10: [9, "Nov 4"], 11: [10, "Nov 11"], 12: [10, "Nov 11"],
+  13: [11, "Nov 18"], 14: [12, "Dec 2"], 15: [13, "Dec 9"] };
+
+function card(w, anchor, showSession) {
   var a = document.createElement("a");
   a.className = "wk"; a.href = "week" + w.n + ".html" + (anchor ? "#" + anchor : "");
   var art = document.createElement("div"); art.className = "art"; art.appendChild(artSvg(w.art));
   var bd = document.createElement("div"); bd.className = "bd";
-  var n = document.createElement("div"); n.className = "n"; n.textContent = "Week " + w.n;
+  var n = document.createElement("div"); n.className = "n";
+  var cu = showSession && CU[w.n];
+  n.textContent = "Week " + w.n + (cu ? " · Session " + cu[0] + " · " + cu[1] : "");
   var h = document.createElement("h3"); h.textContent = w.t;
   var p = document.createElement("p"); p.textContent = w.p;
   var tg = document.createElement("div"); tg.className = "tags";
@@ -772,12 +780,13 @@ function mapDraw(track) {
     var band = document.createElement("div"); band.className = "trackbar";
     var an = document.createElement("span"); an.className = "an"; an.textContent = "15-week track";
     var ad = document.createElement("span"); ad.className = "ad";
-    ad.textContent = "One topic per session, fifteen sessions. Each card is a page on this site.";
+    ad.textContent = "Fifteen topics in thirteen Wednesday meetings: weeks 5+6, 7+8 and 11+12 share a session, " +
+      "and Session 8 (Oct 28) is the midterm with no new material. Each card is a page on this site.";
     band.appendChild(an); band.appendChild(ad); host.appendChild(band);
     var grid = document.createElement("div"); grid.className = "weeks";
-    WEEKS.forEach(function (w) { grid.appendChild(card(w)); });
+    WEEKS.forEach(function (w) { grid.appendChild(card(w, null, true)); });
     host.appendChild(grid);
-    $("trackCount").textContent = "15 sessions · one topic each";
+    $("trackCount").textContent = "15 topics · 13 sessions";
   } else {
     SESSIONS.forEach(function (S) {
       var band = document.createElement("div"); band.className = "trackbar";
