@@ -310,6 +310,7 @@
     <li>Read an ITCH-style binary message, a FIX <code>tag=value</code> message and a JSON message of the same order, and state the bytes and the nanoseconds for each.</li>
     <li>Detect a sequence gap and run the snapshot-plus-replay recovery without ever trading a stale book.</li>
     <li>Write a single-pass, zero-allocation FIX parser, and say what <code>be64toh</code> is for.</li>
+    <li>Write a TCP server and client and a UDP multicast subscriber from the socket calls up, and frame a byte stream correctly.</li>
   </ul>
   <div class="row" style="margin-top:22px">
     <span class="pill acc">Lab: <code>include/fix_parser.hpp</code> — tags 11 / 55 / 54 / 38 / 44</span>
@@ -380,6 +381,67 @@
       snapshot — often on a separate group, often over TCP on request. That is your recovery path when
       arbitration fails, and the reason a feed handler is always two state machines: apply increments,
       or rebuild from a snapshot.</p></div>
+  </div>
+</section>
+
+<!-- ══════════════ SOCKETS ══════════════ -->
+<section id="sock">
+  <div class="kicker">Part 1b</div>
+  <h2><span class="secnum">1b</span>Client and server: the socket calls, and why one recv() is not one message</h2>
+  <p class="lead">Every transport above is reached through the same dozen POSIX calls. A TCP server owns a
+  <strong>listening</strong> socket and gets a <em class="hi">new socket per client</em> from <code>accept()</code>;
+  a TCP client just <code>connect()</code>s. UDP has no connection at all: a <code>sendto()</code> is one datagram,
+  a <code>recvfrom()</code> returns exactly one, and joining a multicast group is a single <code>setsockopt()</code>.
+  Step through both, then send a few messages and watch what <code>recv()</code> actually hands you.</p>
+
+  <div class="split" style="margin-top:18px">
+    <div class="panel">
+      <h3>Walk the lifecycle</h3>
+      <div class="row" style="gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+        <div class="sw" role="group" aria-label="Choose TCP or UDP multicast">
+          <button id="skTcp" type="button" aria-pressed="true">TCP client / server</button>
+          <button id="skUdp" type="button" aria-pressed="false">UDP multicast publisher / subscriber</button>
+        </div>
+        <button class="btn primary" id="skStep" type="button" aria-label="Next socket call">Step →</button>
+        <button class="btn" id="skReset" type="button" aria-label="Reset the walkthrough">Reset</button>
+      </div>
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px">
+        <div><h4 id="skSrvH">Server</h4><pre class="code" id="skSrv" style="margin-top:6px;white-space:pre"></pre></div>
+        <div><h4 id="skCliH">Client</h4><pre class="code" id="skCli" style="margin-top:6px;white-space:pre"></pre></div>
+      </div>
+      <div class="steps" id="skSteps" style="margin-top:13px" aria-live="polite"></div>
+    </div>
+    <div class="stack">
+      <div class="panel tight"><h3>The wire, as the receiver sees it</h3>
+        <div class="ctl"><label for="skChunk">Bytes the kernel hands to one recv() <b id="skChunkV">24</b></label>
+          <input type="range" id="skChunk" min="5" max="160" value="24" aria-label="Maximum bytes returned by one recv call"/></div>
+        <div class="ctl"><label for="skLoss">Datagram loss (UDP only) <b id="skLossV">10 %</b></label>
+          <input type="range" id="skLoss" min="0" max="40" value="10" aria-label="Datagram loss percentage"/></div>
+        <button class="btn" id="skSend" type="button" aria-label="Send eight messages through the chosen transport">Send 8 messages</button>
+        <div class="steps" id="skWire" style="margin-top:12px" aria-live="polite"></div>
+        <div class="stats" style="margin-top:12px">
+          <div class="stat"><div class="sl">recv() calls</div><div class="sv" id="skRecvs">—</div></div>
+          <div class="stat"><div class="sl">Messages framed</div><div class="sv acc" id="skMsgs">—</div></div>
+          <div class="stat"><div class="sl">Leftover bytes</div><div class="sv" id="skLeft">—</div></div>
+          <div class="stat"><div class="sl">Gaps to recover</div><div class="sv" id="skGaps">—</div></div>
+        </div>
+      </div>
+      <div class="note" id="skNote"></div>
+    </div>
+  </div>
+  <div class="grid3" style="margin-top:20px">
+    <div class="panel"><h4>Two sockets, not one</h4>
+      <p class="sub">The server's listening socket never carries data. <code>accept()</code> returns a
+      <em class="hi">second</em> descriptor for that one client; a venue's order gateway holds thousands of them,
+      one per session, and the listening socket just keeps answering handshakes.</p></div>
+    <div class="panel"><h4>Who knows about whom</h4>
+      <p class="sub">TCP: the client knows the server's address; the server learns the client's from <code>accept()</code>.
+      UDP multicast: the publisher knows only the group address and never learns who joined; the switch replicates
+      the packet to every port that sent an IGMP join. That is why the venue's egress does not grow with subscribers.</p></div>
+    <div class="panel"><h4>The trap every first client has</h4>
+      <p class="sub">On localhost the kernel usually hands you whole lines, so <em class="hi">one recv() per message</em>
+      looks right. On a real path the segments are cut at the MSS, coalesced by Nagle, delayed by the receiver:
+      a line arrives in two pieces or six lines arrive at once. Buffer, frame, consume, keep the remainder, always.</p></div>
   </div>
 </section>
 
@@ -772,7 +834,7 @@
 <section id="check">
   <div class="kicker">Part 5</div>
   <h2><span class="secnum">5</span>Check yourself</h2>
-  <p class="lead">Three questions, instant feedback, nothing recorded.</p>
+  <p class="lead">Four questions, instant feedback, nothing recorded.</p>
 
   <div class="mcq" data-a="1" data-exp="<b>Because in-order delivery means one lost segment stalls every byte behind it.</b> TCP will not hand you byte N+1 until byte N has been retransmitted and acknowledged, which costs a full round trip — during which the feed is frozen and then arrives as a burst of stale updates. UDP multicast lets the loss be a visible hole you detect from the sequence number and recover from deliberately, while the newest data keeps flowing. Note that the reasons people usually give are wrong: TCP's per-packet overhead is small, its throughput is fine, and the checksum is not the issue. The single-send fan-out is a real second reason — one send reaching 400 subscribers instead of 400 sends — but head-of-line blocking is the latency argument.">
     <p class="q"><span>Q1</span>Why is TCP a poor transport for a high-rate market-data feed, even though it never loses a message?</p>
@@ -803,6 +865,17 @@
       <button class="opt" type="button">Binary messages are compressed, so fewer bytes reach the CPU</button>
       <button class="opt" type="button">Binary feeds run over UDP and UDP has a smaller header than TCP</button>
       <button class="opt" type="button">Because binary avoids the byte-swap that FIX requires on every field</button>
+    </div>
+    <div class="fb" role="status"></div>
+  </div>
+
+  <div class="mcq" data-a="2" data-exp="<b>TCP is a byte stream: send() boundaries are not preserved.</b> On localhost the kernel usually delivers whole lines, so one recv() per message happens to work. Across a real path segments are cut at the MSS, coalesced by Nagle and delayed ACKs, and retransmitted after loss, so a line arrives in two pieces or six lines arrive in one call. Append to a buffer, frame on the delimiter or length prefix, consume, keep the remainder.">
+    <p class="q"><span>Q4</span>Your TCP client does one recv() per message and passes every test on localhost. What happens in production?</p>
+    <div class="opts">
+      <button class="opt" type="button">Nothing: TCP guarantees that each send() arrives as one recv()</button>
+      <button class="opt" type="button">It fails only if the server uses UDP instead of TCP</button>
+      <button class="opt" type="button">It breaks the first time a message straddles a segment or two messages share one: TCP preserves bytes and order, not boundaries</button>
+      <button class="opt" type="button">It works, but recv() returns an error code when a message is split</button>
     </div>
     <div class="fb" role="status"></div>
   </div>
@@ -1600,6 +1673,162 @@ Object.keys(CK).forEach(function (k) {
 });
 ["ckSkew", "ckJit", "ckTrue"].forEach(function (id) { $(id).addEventListener("input", ckRender); });
 ckRender();
+
+/* ─────────────────────────────────────────────────────────────────
+   1b · Client / server socket walkthrough + the recv() stream demo
+   ───────────────────────────────────────────────────────────────── */
+var SK = {
+  tcp: {
+    srvH: "Server", cliH: "Client",
+    srv: ["int ls = socket(AF_INET, SOCK_STREAM, 0);",
+          "setsockopt(ls, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one);",
+          "sockaddr_in a{}; a.sin_family = AF_INET;",
+          "a.sin_addr.s_addr = htonl(INADDR_ANY); a.sin_port = htons(5555);",
+          "::bind(ls, (sockaddr*)&a, sizeof a);",
+          "listen(ls, 16);",
+          "int c = accept(ls, nullptr, nullptr);   // a NEW socket",
+          "send(c, msg.data(), msg.size(), 0);",
+          "close(c);"],
+    cli: ["int fd = socket(AF_INET, SOCK_STREAM, 0);",
+          "sockaddr_in a{}; a.sin_family = AF_INET;",
+          "inet_pton(AF_INET, \"10.0.0.7\", &a.sin_addr); a.sin_port = htons(5555);",
+          "connect(fd, (sockaddr*)&a, sizeof a);   // SYN, SYN-ACK, ACK",
+          "std::string buf; char tmp[4096];",
+          "for (;;) {",
+          "  ssize_t n = recv(fd, tmp, sizeof tmp, 0);",
+          "  if (n <= 0) break;            // 0 = peer closed",
+          "  buf.append(tmp, n);           // bytes, not messages",
+          "  while (frame(buf, m)) on_msg(m);",
+          "}"],
+    steps: [
+      ["srv", [0], "socket(): the server asks the kernel for a TCP endpoint. Nothing is on the network yet."],
+      ["srv", [1, 2, 3, 4], "bind(): attach the endpoint to port 5555 on every local interface. SO_REUSEADDR first, or a restart waits out TIME_WAIT. Write ::bind — with using namespace std, bind() is std::bind and silently does nothing."],
+      ["srv", [5], "listen(): the kernel now completes handshakes for you and queues up to 16 finished connections."],
+      ["cli", [0, 1, 2], "socket() + address: the client builds its endpoint and fills in the server's address and port, in network byte order."],
+      ["cli", [3], "connect(): three packets, one round trip. SYN out, SYN-ACK back, ACK out. The kernel on the server side did all of that without the server program being involved."],
+      ["srv", [6], "accept(): returns a second descriptor for this client only. The listening socket keeps listening; a gateway holds one accepted socket per session."],
+      ["srv", [7], "send(): bytes go into the server's send buffer. TCP decides how to cut them into segments — your message boundaries are not preserved."],
+      ["cli", [4, 5, 6, 7, 8, 9, 10], "recv() loop: each call returns whatever has arrived, from one byte to the whole buffer. Append, then frame as many complete messages as the buffer holds, and keep the tail."],
+      ["both", [8], "close(): the server closes its end; the client's next recv() returns 0 and the loop ends."]
+    ]
+  },
+  udp: {
+    srvH: "Publisher (the venue)", cliH: "Subscriber (your feed handler)",
+    srv: ["int fd = socket(AF_INET, SOCK_DGRAM, 0);",
+          "sockaddr_in grp{}; grp.sin_family = AF_INET;",
+          "inet_pton(AF_INET, \"239.1.1.1\", &grp.sin_addr);",
+          "grp.sin_port = htons(30001);",
+          "Packet p{seq++, ts, payload};",
+          "sendto(fd, &p, sizeof p, 0, (sockaddr*)&grp, sizeof grp);",
+          "// one send; the switch replicates it"],
+    cli: ["int fd = socket(AF_INET, SOCK_DGRAM, 0);",
+          "sockaddr_in a{}; a.sin_family = AF_INET;",
+          "a.sin_addr.s_addr = htonl(INADDR_ANY); a.sin_port = htons(30001);",
+          "::bind(fd, (sockaddr*)&a, sizeof a);",
+          "ip_mreq m{}; m.imr_multiaddr = grp.sin_addr;",
+          "m.imr_interface.s_addr = htonl(INADDR_ANY);",
+          "setsockopt(fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &m, sizeof m);",
+          "char buf[1500];",
+          "ssize_t n = recvfrom(fd, buf, sizeof buf, 0, nullptr, nullptr);",
+          "if (seq(buf) != expected) gap_fill();   // your only clue"],
+    steps: [
+      ["srv", [0, 1, 2, 3], "The publisher opens a datagram socket and fills in the group address 239.1.1.1 and port. No bind, no listen, no accept: nobody connects to a publisher."],
+      ["cli", [0, 1, 2, 3], "The subscriber opens its own datagram socket and binds to the group's port, so the kernel knows where to deliver."],
+      ["cli", [4, 5, 6], "IP_ADD_MEMBERSHIP: the kernel sends an IGMP join; the switch now copies group traffic to this port. The publisher never learns about it."],
+      ["srv", [4, 5, 6], "sendto(): one datagram with a sequence number. One send, every member receives a copy; no acknowledgement, no retransmission."],
+      ["cli", [7, 8], "recvfrom(): returns exactly one datagram, boundaries intact. No framing loop — but a slow reader simply drops the next one."],
+      ["cli", [9], "The sequence check is the whole reliability layer: a jump means loss or reordering, and the book is stale until you recover (A/B arbitration, retransmission request, snapshot)."]
+    ]
+  }
+};
+var skMode = "tcp", skI = -1;
+function skCode(el, lines, hl) {
+  clear(el);
+  lines.forEach(function (ln, i) {
+    var sp = document.createElement("span");
+    sp.textContent = ln + "\n";
+    if (hl.indexOf(i) >= 0) { sp.style.background = "rgba(var(--accent-rgb),.32)"; sp.style.color = "#fff"; }
+    else if (skI >= 0) sp.style.opacity = ".62";
+    el.appendChild(sp);
+  });
+}
+function skRender() {
+  var d = SK[skMode];
+  $("skTcp").setAttribute("aria-pressed", skMode === "tcp" ? "true" : "false");
+  $("skUdp").setAttribute("aria-pressed", skMode === "udp" ? "true" : "false");
+  $("skSrvH").textContent = d.srvH; $("skCliH").textContent = d.cliH;
+  var cur = skI >= 0 ? d.steps[skI] : null;
+  skCode($("skSrv"), d.srv, cur && (cur[0] === "srv" || cur[0] === "both") ? cur[1] : []);
+  skCode($("skCli"), d.cli, cur && cur[0] === "cli" ? cur[1] : (cur && cur[0] === "both" ? [7] : []));
+  var st = $("skSteps"); clear(st);
+  d.steps.forEach(function (s, i) {
+    var div = document.createElement("div");
+    div.textContent = (i + 1) + ". " + s[2];
+    if (i === skI) div.className = "on"; else if (i < skI) div.className = "past";
+    st.appendChild(div);
+  });
+  $("skStep").disabled = skI >= d.steps.length - 1;
+  $("skStep").textContent = skI < 0 ? "Start →" : (skI >= d.steps.length - 1 ? "Done" : "Step →");
+}
+$("skStep").addEventListener("click", function () { skI = Math.min(skI + 1, SK[skMode].steps.length - 1); skRender(); });
+$("skReset").addEventListener("click", function () { skI = -1; skRender(); });
+$("skTcp").addEventListener("click", function () { skMode = "tcp"; skI = -1; skRender(); skWireNote(); });
+$("skUdp").addEventListener("click", function () { skMode = "udp"; skI = -1; skRender(); skWireNote(); });
+
+/* the stream demo: 8 price lines through TCP (random recv sizes) or 8 datagrams through UDP (random loss) */
+var SK_MSGS = ["price=187.45\n", "price=187.46\n", "price=187.44\n", "price=187.50\n", "price=187.51\n", "price=187.47\n", "price=187.49\n", "price=187.52\n"];
+function skWireNote() {
+  $("skNote").innerHTML = skMode === "tcp"
+    ? "<b>TCP.</b> The eight send() calls become one byte stream. The slider is what the kernel happens to hand each recv(): drag it down and a " +
+      "line arrives in pieces; drag it up and several lines arrive in one call. Either way the framing loop below yields exactly eight messages " +
+      "and zero leftover bytes at the end — because TCP lost nothing, only the boundaries."
+    : "<b>UDP multicast.</b> Each sendto() is its own datagram, so recvfrom() never returns a partial message and never two at once. What it does " +
+      "do is skip: a lost datagram is simply absent, and the only evidence is the sequence number jumping. Framing is free; reliability is yours.";
+}
+function skSend() {
+  var wire = $("skWire"); clear(wire);
+  var recvs = 0, msgs = 0, left = 0, gaps = 0;
+  if (skMode === "tcp") {
+    var stream = SK_MSGS.join(""), pos = 0, buf = "", max = parseInt($("skChunk").value, 10);
+    while (pos < stream.length) {
+      var n = Math.max(1, Math.min(stream.length - pos, Math.floor(1 + Math.random() * max)));
+      var chunk = stream.substr(pos, n); pos += n; recvs++;
+      buf += chunk;
+      var done = [];
+      var nl;
+      while ((nl = buf.indexOf("\n")) >= 0) { done.push(buf.substr(0, nl)); buf = buf.substr(nl + 1); msgs++; }
+      var div = document.createElement("div");
+      div.textContent = "recv() → " + n + " B  \"" + chunk.replace(/\n/g, "\\n") + "\"   " +
+        (done.length ? "framed " + done.length + " message" + (done.length > 1 ? "s" : "") : "no complete message yet") +
+        (buf.length ? "   (keep " + buf.length + " B)" : "");
+      div.className = done.length ? "on" : "";
+      wire.appendChild(div);
+    }
+    left = buf.length;
+  } else {
+    var loss = parseInt($("skLoss").value, 10) / 100, expected = 1;
+    SK_MSGS.forEach(function (m, i) {
+      var seq = i + 1, div = document.createElement("div");
+      if (Math.random() < loss) { div.textContent = "— seq " + seq + " lost on the path (no recvfrom(), no error, nothing)"; div.className = "bad"; wire.appendChild(div); return; }
+      recvs++; msgs++;
+      var gap = seq !== expected;
+      if (gap) gaps++;
+      div.textContent = "recvfrom() → seq " + seq + "  " + m.trim() + (gap ? "   GAP: expected " + expected + " — mark the book stale, recover" : "");
+      div.className = gap ? "bad" : "on";
+      expected = seq + 1;
+      wire.appendChild(div);
+    });
+  }
+  $("skRecvs").textContent = recvs;
+  $("skMsgs").textContent = msgs + " / 8";
+  $("skLeft").textContent = skMode === "tcp" ? left : "n/a";
+  $("skGaps").textContent = gaps;
+  $("skGaps").className = "sv " + (gaps ? "bad" : "ok");
+}
+$("skSend").addEventListener("click", skSend);
+$("skChunk").addEventListener("input", function () { $("skChunkV").textContent = $("skChunk").value; });
+$("skLoss").addEventListener("input", function () { $("skLossV").textContent = $("skLoss").value + " %"; });
+skRender(); skWireNote();
 
 /* ── MCQ engine (shared across week pages) ───────────────────── */
 Array.prototype.forEach.call(document.querySelectorAll(".mcq"), function (q) {
